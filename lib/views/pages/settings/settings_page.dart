@@ -28,6 +28,7 @@ import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
+import 'package:prismhub/utils/exportar_registro.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/controllers/extension/extension_repo_controller.dart';
@@ -1636,27 +1637,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 // se lleva un archivo SIN el fallo — que es justo lo que iba a
                 // reportar. Pasó en vivo: la ultima linea del archivo era de
                 // una semana antes.
+                // Los dos por el mismo camino: ExportarRegistro arma un
+                // archivo agrupado por areas —fallos, reproductor,
+                // extensiones, general— con un resumen arriba, en vez de
+                // mandar el registro crudo donde esta todo mezclado en el
+                // orden en que fue pasando.
                 androidWidget: TextButton(
-                  onPressed: () async {
-                    await PrismLog.flush();
-                    await Share.shareXFiles([XFile(PrismLog.logFilePath)]);
-                  },
+                  onPressed: ExportarRegistro.entregar,
                   child: Text('common.export'.i18n),
                 ),
                 desktopWidget: fluent.FilledButton(
-                  onPressed: () async {
-                    await PrismLog.flush();
-                    final path = await FilePicker.platform.saveFile(
-                      type: FileType.custom,
-                      allowedExtensions: ['log'],
-                      fileName: 'PrismHub.log',
-                    );
-                    // Con await: sin el, la copia quedaba corriendo suelta y
-                    // el archivo podia salir a medio escribir.
-                    if (path != null) {
-                      await File(PrismLog.logFilePath).copy(path);
-                    }
-                  },
+                  onPressed: ExportarRegistro.entregar,
                   child: Text('common.export'.i18n),
                 ),
               ),

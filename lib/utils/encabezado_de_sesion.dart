@@ -25,6 +25,18 @@ import 'package:prismhub/utils/platform_tv.dart';
 class EncabezadoDeSesion {
   EncabezadoDeSesion._();
 
+  /// El aparato en una línea, sin la versión ni el adorno.
+  ///
+  /// La usa el exportador para encabezar el reporte. Va acá y no allá para que
+  /// haya UN solo sitio que decida qué se cuenta del aparato — si mañana se
+  /// suma o se saca un dato, no hay dos textos que se separen.
+  static String resumenDelAparato() {
+    final partes = <String>[_dondeEstamos(), _sistema()];
+    final m = _memoria();
+    if (m != null) partes.add(m);
+    return partes.join(' · ');
+  }
+
   /// Escribe la cabecera. Se llama una vez, cuando ya se sabe qué aparato es.
   static void escribir({required String version}) {
     final linea = StringBuffer()

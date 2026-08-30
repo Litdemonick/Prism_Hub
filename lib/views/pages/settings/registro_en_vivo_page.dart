@@ -8,6 +8,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/tv/desplazable_con_mando.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/utils/exportar_registro.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -122,6 +123,20 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
 
   void _refrescar() {
     if (_pausado || !mounted) return;
+    // ── Leyendo hacia arriba, la lista NO se toca ────────────────────────
+    //
+    // Reportado en vivo: subiendo con el mando «se repite en vez de llegar al
+    // tope». La causa: lo que hay en memoria es un buffer rodante de 1.500
+    // líneas, así que mientras llegan líneas nuevas por abajo se van BORRANDO
+    // por arriba. Con la vista quieta a mitad de camino, el contenido se corre
+    // solo bajo el desplazamiento — lo que se estaba leyendo se va hacia
+    // arriba y aparece otra cosa en su lugar. Desde afuera se ve como que el
+    // texto se repite y nunca llega al principio.
+    //
+    // Mientras se está leyendo hacia atrás la lista se queda como está. Al
+    // volver al fondo se retoma sola, que es donde el seguimiento en vivo sí
+    // es lo que se quiere.
+    if (!_alFinal) return;
     final generacion = PrismLog.generacion;
     if (generacion == _generacion) return;
     setState(() {
@@ -378,6 +393,19 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
             color: _pausado ? HomeTheme.accentPink : HomeTheme.textPrimary,
             onPressed: _alternarPausa,
           ),
+          // Exportar desde acá y no solo desde Ajustes: quien está mirando
+          // el registro porque algo falló ya está en la pantalla correcta —
+          // mandarlo a volver atrás para encontrar el botón es un rodeo.
+          //
+          // En televisor no aparece: ahí no hay a dónde exportar ni con qué
+          // abrir el archivo.
+          if (!PlatformTv.esTelevisionSync)
+            IconButton(
+              tooltip: 'common.export'.i18n,
+              icon: const Icon(Icons.ios_share),
+              color: HomeTheme.textPrimary,
+              onPressed: ExportarRegistro.entregar,
+            ),
           IconButton(
             tooltip: 'common.clear'.i18n,
             icon: const Icon(Icons.delete_outline),
@@ -479,9 +507,14 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
           const SizedBox(height: 14),
           if (_pausado) ...[
             _bandaDePausa(),
-            _barraDeFiltros(),
             const SizedBox(height: 10),
           ],
+          // FUERA del bloque de pausa: la barra de filtros va siempre.
+          // Metida ahí adentro solo aparecía con el registro pausado, que es
+          // justo cuando menos falta hace — filtrar sirve mientras se está
+          // buscando algo, no cuando se congeló la vista.
+          _barraDeFiltros(),
+          const SizedBox(height: 10),
           Expanded(
             child: Container(
               decoration: BoxDecoration(
