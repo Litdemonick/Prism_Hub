@@ -425,7 +425,8 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
         // En «Todo» no sobrevive nada; en una zona concreta sobrevive todo lo
         // que NO sea de esa zona.
         dejar: _filtro == ZonaDelRegistro.todo ? null : (l) => !_filtro.seVe(l),
-        escribirCabecera: () => EncabezadoDeSesion.escribir(version: version),
+        escribirCabecera: () =>
+            EncabezadoDeSesion.escribir(version: version, forzar: true),
       );
     } catch (e) {
       if (!mounted) return;

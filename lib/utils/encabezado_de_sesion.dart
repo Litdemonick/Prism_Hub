@@ -123,13 +123,32 @@ class EncabezadoDeSesion {
   ///
   /// Va la presentación primero y los datos del aparato después, para que
   /// quien abra esta pantalla sin saber qué es entienda antes de leer nada.
-  static void escribir({required String version}) {
+  static void escribir({required String version, bool forzar = false}) {
+    // ── Una sola vez por arranque, pase lo que pase ─────────────────────
+    //
+    // El recuadro es lo que marca dónde empieza una sesión: el historial parte
+    // el archivo justo ahí. Así que escribirlo dos veces no es un renglón
+    // repetido — es una apertura de más en la lista, con las líneas de la
+    // primera cortadas por la mitad.
+    //
+    // Y se escribía desde el `initState` de un widget, o sea que cualquier
+    // cosa que vuelva a montar ese widget lo escribía de nuevo. Reportado en
+    // vivo: «en el historial no se guarda correctamente, o está dividiendo en
+    // varias opciones cuando debe ser una sola».
+    //
+    // [forzar] es para limpiar: ahí sí corresponde empezar una sesión nueva,
+    // y es el único sitio que lo pide a propósito.
+    if (_yaSeEscribio && !forzar) return;
+    _yaSeEscribio = true;
     // Crudo y no `logger.info`: el recuadro es un dibujo, y el encabezado de
     // `logging` delante lo desalinea línea por línea. Ver PrismLog.crudo.
     for (final l in _presentacion(version)) {
       PrismLog.crudo(l);
     }
   }
+
+  static bool _yaSeEscribio = false;
+  static bool _yaEscribioExtensiones = false;
 
   /// Deja escritas las extensiones instaladas y con qué versión.
   ///
@@ -146,6 +165,10 @@ class EncabezadoDeSesion {
   static void escribirExtensiones(
     Iterable<({String paquete, String version, bool activa})> instaladas,
   ) {
+    // Por el mismo motivo que la cabecera: si el arranque se repite, esta
+    // lista salía dos veces y se leía como si hubiera el doble de extensiones.
+    if (_yaEscribioExtensiones) return;
+    _yaEscribioExtensiones = true;
     final lista = instaladas.toList(growable: false);
     if (lista.isEmpty) {
       PrismLog.crudo('  extensiones: ninguna instalada');
