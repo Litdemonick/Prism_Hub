@@ -15,6 +15,7 @@ import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/zonas_preferidas.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';

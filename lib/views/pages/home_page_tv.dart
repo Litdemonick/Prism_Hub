@@ -346,7 +346,7 @@ class _ZonaQueAparece extends StatelessWidget {
     //
     // El contenido aparece puesto, que en un televisor no se extraña.
     if (PlatformTv.esTelevisionSync ||
-        PerfilDeAparato.nivel == NivelDeAparato.bajo) {
+        PrismHubMas.nivel == NivelDeAparato.bajo) {
       return contenido;
     }
     return TweenAnimationBuilder<double>(

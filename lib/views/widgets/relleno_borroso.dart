@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 
 /// El relleno que va DETRÁS de una imagen que no llena su caja: la misma
 /// imagen estirada a cubrir y desdibujada, para que los costados no queden en
@@ -57,11 +57,11 @@ class RellenoBorroso extends StatelessWidget {
   /// hace es ocupar memoria. En televisor se achica mucho más porque ahí ese
   /// achicado ES el desenfoque (ver la explicación de la clase).
   static int get _divisor =>
-      PerfilDeAparato.nivel.elegir(alto: 4, medio: 16, bajo: 16);
+      PrismHubMas.nivel.elegir(alto: 4, medio: 16, bajo: 16);
 
   /// Cuánto desenfoque de verdad se aplica. Cero = ninguno.
   static double get _sigma =>
-      PerfilDeAparato.nivel.elegir(alto: 18, medio: 0, bajo: 0);
+      PrismHubMas.nivel.elegir(alto: 18, medio: 0, bajo: 0);
 
   @override
   Widget build(BuildContext context) {

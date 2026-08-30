@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -241,7 +241,7 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   ///
   /// En un televisor esa preocupación no existe: no hay pellizco para ampliar,
   /// y la pantalla no da más de lo que el tope permite igual.
-  static int? get _topeDelPerfil => PerfilDeAparato.nivel.elegir<int?>(
+  static int? get _topeDelPerfil => PrismHubMas.nivel.elegir<int?>(
         alto: null,
         medio: 1080,
         bajo: 720,

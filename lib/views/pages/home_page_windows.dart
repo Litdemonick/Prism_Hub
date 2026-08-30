@@ -350,6 +350,8 @@ class _FilaWindowsState extends State<_FilaWindows> {
                       child: ListView.separated(
                         controller: _scroll,
                         scrollDirection: Axis.horizontal,
+                        // Ver la nota igual en home_section.dart.
+                        scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
                         // Sin esto el recorte se come la sombra igual, por más
                         // aire que se le dé: un ListView recorta en su borde
                         // por defecto.

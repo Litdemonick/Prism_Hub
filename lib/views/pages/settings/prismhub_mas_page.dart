@@ -241,7 +241,7 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
   Widget _loQueAjusta(bool encendido) {
     final sinRecorte = 'settings.mas-sin-recorte'.i18n;
     final peticiones = PrismHubMas.peticionesALaVez;
-    final deMas = PrismHubMas.cuantoSeConstruyeDeMas;
+    final deMas = PrismHubMas.pixelesQueSeConstruyenDeMas;
     return _Tarjeta(
       tv: _tv,
       hijos: [

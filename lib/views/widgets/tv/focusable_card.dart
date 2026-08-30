@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 /// Envuelve cualquier tarjeta/tile existente (HomeMediaCard, un tile de
@@ -272,7 +273,7 @@ class _FocusableCardState extends State<FocusableCard> {
     // el crecido es la señal de que algo es tocable.
     final conEscala = widget.conCrecido &&
         !PlatformTv.esTelevisionSync &&
-        PerfilDeAparato.nivel != NivelDeAparato.bajo;
+        PrismHubMas.nivel != NivelDeAparato.bajo;
     final tarjeta = Focus(
       focusNode: _focusNode,
       autofocus: widget.autofocus,

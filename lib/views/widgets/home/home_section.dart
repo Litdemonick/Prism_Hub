@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/horizontal_scroll_fade.dart';
@@ -105,6 +106,16 @@ class _HomeSectionState extends State<HomeSection> {
       scrollDirection: Axis.horizontal,
       controller: _controller,
       itemExtent: effWidth + 16,
+      // Cuánto se construye por fuera de lo que se ve, según el aparato.
+      //
+      // De fábrica Flutter construye 250 px de más a cada lado, y en un aparato
+      // capaz eso es lo que hace que el carrusel vaya suave al deslizar. En uno
+      // modesto es trabajo que no llega a tiempo —y portadas decodificadas que
+      // quizá no se miren nunca—, que es justo lo que se reportó: «al deslizar
+      // el carrusel se nota demora, y después va bien».
+      //
+      // Null es «lo que decida Flutter», o sea lo de siempre. Ver PrismHubMas.
+      scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
       // Espacio arriba para la elevación de 4px que hace la card al pasar el
       // mouse: sin esto la lista la recortaba justo por ese borde y parecía
       // que se comía la tarjeta.

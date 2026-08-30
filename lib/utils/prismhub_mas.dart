@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/rendering.dart';
+
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
@@ -111,7 +113,17 @@ class PrismHubMas {
   /// memoria con portadas que quizá no se miren nunca.
   ///
   /// Null es «lo que decida Flutter», que es lo de siempre.
-  static double? get cuantoSeConstruyeDeMas => switch (nivel) {
+  /// Se devuelve ya como `ScrollCacheExtent` y no como número suelto porque es
+  /// lo que piden las listas de Flutter desde la 3.41 —`cacheExtent` quedó
+  /// obsoleto— y traducirlo en cada sitio de uso sería repetir lo mismo.
+  static ScrollCacheExtent? get cuantoSeConstruyeDeMas => switch (nivel) {
+        NivelDeAparato.bajo => const ScrollCacheExtent.pixels(250),
+        NivelDeAparato.medio => const ScrollCacheExtent.pixels(600),
+        NivelDeAparato.alto => null,
+      };
+
+  /// Lo mismo en píxeles, para poder mostrarlo en Ajustes.
+  static double? get pixelesQueSeConstruyenDeMas => switch (nivel) {
         NivelDeAparato.bajo => 250,
         NivelDeAparato.medio => 600,
         NivelDeAparato.alto => null,

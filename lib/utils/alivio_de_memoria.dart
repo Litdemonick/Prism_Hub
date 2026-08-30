@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 
@@ -78,9 +79,9 @@ class AlivioDeMemoria with WidgetsBindingObserver {
   static void aplicarTechoDeImagenes() {
     final cache = PaintingBinding.instance.imageCache;
     cache.maximumSizeBytes =
-        PerfilDeAparato.nivel.elegir(alto: 220, medio: 96, bajo: 48) << 20;
+        PrismHubMas.nivel.elegir(alto: 220, medio: 96, bajo: 48) << 20;
     cache.maximumSize =
-        PerfilDeAparato.nivel.elegir(alto: 1000, medio: 400, bajo: 200);
+        PrismHubMas.nivel.elegir(alto: 1000, medio: 400, bajo: 200);
   }
 
   /// Suelta las imágenes guardadas ANTES de abrir el reproductor.
@@ -109,7 +110,7 @@ class AlivioDeMemoria with WidgetsBindingObserver {
   /// sobra, tirar la caché sería pagar decodificaciones de más al volver al
   /// catálogo sin ganar nada a cambio.
   static void soltarAntesDeReproducir() {
-    if (!PerfilDeAparato.esModesto) return;
+    if (!PrismHubMas.estaAjustando) return;
     final antes = PaintingBinding.instance.imageCache.currentSizeBytes;
     if (antes == 0) return;
     PaintingBinding.instance.imageCache.clear();
@@ -144,7 +145,7 @@ class AlivioDeMemoria with WidgetsBindingObserver {
   /// que el sistema pida un par de veces es normal y bajar el techo sería
   /// pagar redecodificaciones sin motivo. Por eso el flojo reacciona antes.
   static int get _cuandoYaEsDemasiado =>
-      PerfilDeAparato.nivel.elegir(alto: 6, medio: 4, bajo: 3);
+      PrismHubMas.nivel.elegir(alto: 6, medio: 4, bajo: 3);
 
   /// Si ya se bajó el techo por insistencia del sistema.
   static bool _techoBajado = false;

@@ -8,7 +8,7 @@ import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/novedades.dart';
-import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
@@ -118,7 +118,7 @@ class HomePageController extends GetxController {
     // con la app en segundo plano o con el usuario en Ajustes — o sea,
     // pagando el cruce entero para que no lo viera nadie.
     _rotationTimer = Timer.periodic(
-      PerfilDeAparato.nivel.elegir(
+      PrismHubMas.nivel.elegir(
         alto: const Duration(seconds: 20),
         medio: const Duration(seconds: 45),
         bajo: const Duration(seconds: 90),
