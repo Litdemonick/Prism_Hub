@@ -1,43 +1,57 @@
-## PrismHub v1.0.48 — El registro, afinado
+## PrismHub v1.0.49 — Que el registro sirva para arreglar
 
-> 🧹 **Limpiar ya no se lleva el historial.** Y limpia la zona en la que
-> estés: si estás en Reproductor se va solo eso, lo de las extensiones queda.
+> 🔎 **Ahora se ve lo que hace la app, no solo lo que falla.** Cada pedido de
+> red, cada paso que das y todo lo que antes solo salía por consola queda
+> escrito. Si algo no te anda, el registro que exportes ya trae con qué
+> encontrarlo.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 🧹 Limpiar (todas las plataformas)
+### 🔎 Mucho más registro (todas las plataformas)
 
-- **El historial no se toca nunca.** Antes el botón borraba el archivo
-  entero, aperturas anteriores incluidas — justo lo que explica un cierre. Se
-  limpia solo la sesión de ahora.
-- **Limpia la zona que estés mirando.** En «Todo» se va todo lo de la sesión;
-  en una zona concreta se va solo esa y las demás quedan.
-- **Pregunta antes**, porque no se puede deshacer, y dice exactamente qué se
-  va a borrar. Cancelar viene con el foco puesto.
-- Después queda como recién abierto, con la presentación arriba.
+- **Cada pedido de red de la app queda anotado**: método, servidor, código de
+  respuesta y cuánto tardó. Antes solo se anotaba lo de las extensiones, así
+  que cuando algo «no cargaba» y la extensión ni intervenía, no había nada que
+  mirar. Ni cabeceras ni contenido, a propósito: ahí es donde viajan las
+  cookies.
+- **Lo que antes solo salía por consola ahora se guarda.** Había medio
+  centenar de mensajes que se perdían — justo en televisor y teléfono, donde
+  nadie tiene una consola abierta.
+- **Se ve lo que estabas haciendo**, paso a paso, y no solo después de un
+  cierre: a qué zona fuiste, qué instalaste, cuándo buscaste. De la búsqueda
+  **no** se guarda qué escribiste.
+- **Las zonas ahora dividen bien.** Se revisó el código y faltaban la mitad de
+  las marcas reales: el reproductor y las extensiones dejaban líneas fuera de
+  su zona. Y un fallo aparece en «Fallos» además de en la suya, para no tener
+  que elegir primero de qué parte de la app era.
+- **Lo normal se lee en blanco.** Iba en gris apagado, que es el color de
+  «esto no importa» — y era la mayor parte del registro.
 
-### 🖼️ El recuadro de PrismHub, entero
+### 🖼️ El nombre de PrismHub, entero
 
-- Se veía cortado, y no era por el ancho de la pantalla: cada línea del
-  recuadro salía con la fecha y la hora del registro delante, de largo
-  variable, así que ninguna arrancaba en la misma columna y el dibujo no
-  cerraba. Ahora se escribe sin ese encabezado, y además se dibuja como una
-  sola pieza que se ajusta si la pantalla es angosta.
+- Se veía cortado en todas las plataformas. Las letras mezclaban dos tipos de
+  caracteres, y cuando al aparato le falta alguno lo saca de otra fuente con
+  otro ancho: ahí la letra se desarma. Ahora está dibujado con uno solo.
+- El recuadro se mide solo en vez de estar escrito a mano, así que no puede
+  quedar abierto.
+- Y cada sesión guarda su hora de apertura, así el historial ya no muestra
+  aperturas «sin fecha».
 
 ### 📺 Televisor
 
-- **Botón de salir**, al final de la columna. No todos los mandos traen el
-  botón de atrás en un sitio evidente, y una pantalla sin salida visible es
-  una pantalla de la que se sale apagando el televisor.
-- **La flecha izquierda vuelve a los botones.** No funcionaba: la zona de
-  desplazamiento se quedaba con las flechas horizontales antes de que
-  llegaran a mover el foco. Ahora salta directo, y cae sobre la zona que
-  tengas puesta.
-- **Cortar la conexión con otro aparato pregunta antes.** Es el mismo botón
-  que la enciende, así que una pulsación de más dejaba sin nada a quien
-  estuviera leyendo desde el navegador — y volver a levantarla obliga a
-  escribir una dirección nueva, porque el código cambia cada vez.
-- La banda de pausa dice en qué zona estás: pausado en «Fallos» y pausado en
-  «Todo» se veían igual, y son cosas distintas.
+- **El historial usa el mismo diseño que el registro**: columna de acciones al
+  costado en las tres pantallas, así que salir, cambiar de zona o encender la
+  conexión se hace desde cualquier punto sin subir hasta arriba.
+- **Al abrir una sesión guardada podés filtrar por zona** igual que en el
+  registro en vivo — Todo, Fallos, Extensiones, Reproductor.
+- **La luz de selección ya no se sale de la tarjeta.** El resplandor se dibuja
+  detrás y las tarjetas eran translúcidas, así que se veía entero a través.
+
+### 💻 PC y Android
+
+- Cada plataforma con lo suyo: en teléfono y escritorio la barra de arriba se
+  queda —con el dedo o el ratón se llega sin recorrer nada— y ahí va exportar.
+  «Ver desde otro aparato» sigue siendo solo de televisor, que es donde no hay
+  a dónde exportar.
