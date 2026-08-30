@@ -375,6 +375,18 @@ class ReproductorMedia3(
             )
         }
 
+        override fun onRenderedFirstFrame() {
+            // El aviso que dice que de verdad se ESTA VIENDO algo.
+            //
+            // Es la unica forma de distinguir «reproduciendo» de «reproduciendo
+            // y visible». Con la superficie en capa aparte esa diferencia es
+            // todo: el fallo que ya se vio en un televisor era audio andando,
+            // posicion avanzando y la pantalla negra — o sea, todo el estado
+            // diciendo que si, y nada en pantalla. Del lado de Dart hay un
+            // vigilante esperando esto.
+            avisar(mapOf("que" to "primerCuadro"))
+        }
+
         override fun onVideoSizeChanged(medidas: VideoSize) {
             avisar(
                 mapOf(

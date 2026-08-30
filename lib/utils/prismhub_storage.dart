@@ -477,6 +477,21 @@ class SettingKey {
   // publicar una version por prueba. Se saca cuando el motor este decidido por
   // plataforma y formato — ver EleccionDeMotor.
   static const motorDeVideo = 'MotorDeVideo';
+
+  // Si en ESTE aparato el video en capa aparte del sistema funciona.
+  //
+  // La capa aparte —una SurfaceView— es el camino bueno: el video no pasa por
+  // el dibujado de la interfaz. Pero en un televisor con Android 9 dejo la
+  // pantalla NEGRA con el audio andando, que es un fallo conocido de las
+  // vistas de plataforma (flutter/flutter#164899).
+  //
+  // La app se da cuenta sola: Media3 avisa cuando pinta el primer cuadro, y si
+  // el video esta rodando y ese aviso no llega, se vuelve a la textura. Lo que
+  // guarda esta clave es ESA respuesta, para no repetir la prueba —y los
+  // segundos de pantalla negra— en cada arranque.
+  //
+  // Sin valor guardado se prueba la capa aparte, que es lo que hay que querer.
+  static const capaDeVideoAparte = 'CapaDeVideoAparte';
   static const tmdbKey = 'TMDBKey';
   static const autoCheckUpdate = 'AutoCheckUpdate';
   static const language = 'Language';

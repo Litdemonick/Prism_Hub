@@ -25,17 +25,22 @@ import io.flutter.view.TextureRegistry
  * a media app para decirle que nada cambió. Acá el que sabe que algo cambió es
  * el que avisa, y en pausa no se cruza el puente ni una vez.
  *
- * ── Dónde se dibuja hoy ─────────────────────────────────────────────────────
+ * ── Dónde se dibuja: los dos caminos ────────────────────────────────────────
  *
- * En una textura de Flutter. Es el mismo camino que `video_player` y que
- * media_kit, o sea que el vídeo se compone junto con la interfaz y cada cuadro
- * de vídeo es una pasada de dibujado.
+ * **Capa aparte.** El vídeo va a una `SurfaceView`, que el compositor del
+ * aparato pone en su propia capa. La interfaz se redibuja solo cuando cambia
+ * algo, y el vídeo avanza a su ritmo sin tocarla. Es lo que hacen las apps de
+ * vídeo del sistema, y lo que habilita la tunelización.
  *
- * Se empieza por acá a propósito: es el camino conocido y comparable. Lo otro
- * —una `SurfaceView` de verdad, con el vídeo en una capa aparte del sistema— se
- * apoya en esta misma clase cambiando solo de dónde sale la [Surface], y va
- * aparte para poder medir una cosa por vez. Poner las dos juntas dejaría sin
- * saber cuál de las dos arregló o rompió qué.
+ * **Textura.** El decodificador escribe en un búfer que Flutter compone junto
+ * con el resto. Cada cuadro de vídeo obliga a una pasada de dibujado de la
+ * interfaz entera — a 24 cuadros por segundo, 24 pasadas por segundo aunque no
+ * haya cambiado un píxel.
+ *
+ * La capa aparte es lo que se quiere, y la textura sigue estando porque la capa
+ * aparte ya falló una vez en un televisor con Android 9: audio bien, posición
+ * avanzando, pantalla negra. Que el camino bueno pueda fallar en un aparato
+ * concreto obliga a poder volver al otro sin actualizar la app.
  */
 @UnstableApi
 class PuenteMedia3(
@@ -71,7 +76,9 @@ class PuenteMedia3(
     private fun atender(llamada: MethodCall, resultado: MethodChannel.Result) {
         try {
             when (llamada.method) {
-                "crear" -> resultado.success(crear())
+                "crear" -> resultado.success(
+                    crear(llamada.argument<Boolean>("capaAparte") ?: false)
+                )
                 "abrir" -> {
                     val r = reproductor
                     if (r == null) {
@@ -143,19 +150,50 @@ class PuenteMedia3(
     }
 
     /**
-     * Arma el reproductor y su textura, y devuelve el número con el que Flutter
-     * la dibuja.
+     * Arma el reproductor y le dice dónde pintar.
+     *
+     * Con [capaAparte] el vídeo va a una `SurfaceView` —una capa del sistema,
+     * separada de la interfaz— y se devuelve -1, porque no hay textura que
+     * dibujar: la pone Flutter como vista de plataforma. Sin ella se crea una
+     * textura y se devuelve su número.
+     *
+     * Los dos caminos conviven a propósito. La capa aparte es lo que se quiere,
+     * pero ya falló una vez en un televisor con Android 9 (pantalla negra con
+     * el audio andando), así que la textura tiene que seguir estando para poder
+     * volver a ella sin actualizar la app.
      */
-    private fun crear(): Long {
+    private fun crear(capaAparte: Boolean): Long {
         soltar()
+        val r = ReproductorMedia3(contexto, ::emitir)
+        reproductor = r
+        if (capaAparte) {
+            // La superficie llega cuando Flutter monta la vista, que puede ser
+            // antes o después de esto. Si ya llegó, se entrega ahora; si no, la
+            // entrega ponerSuperficieNativa cuando aparezca.
+            superficieNativa?.let { r.ponerSuperficie(it) }
+            return -1L
+        }
         val entrada = texturas.createSurfaceTexture()
         textura = entrada
         val s = Surface(entrada.surfaceTexture())
         superficie = s
-        val r = ReproductorMedia3(contexto, ::emitir)
         r.ponerSuperficie(s)
-        reproductor = r
         return entrada.id()
+    }
+
+    /** La superficie de la `SurfaceView`, cuando se dibuja en capa aparte. */
+    private var superficieNativa: Surface? = null
+
+    /**
+     * La vista de plataforma avisa por acá cuando su superficie nace, cambia o
+     * muere.
+     *
+     * Se guarda además de entregarla porque el orden no está garantizado: la
+     * vista puede montarse antes de que exista el reproductor, y al revés.
+     */
+    fun ponerSuperficieNativa(s: Surface?) {
+        superficieNativa = s
+        reproductor?.ponerSuperficie(s)
     }
 
     /**
@@ -187,6 +225,9 @@ class PuenteMedia3(
     fun soltar() {
         reproductor?.soltar()
         reproductor = null
+        // Solo se suelta la superficie de la textura, que es nuestra. La de la
+        // SurfaceView la maneja su propia vista: soltarla acá se la sacaría de
+        // abajo a un widget que sigue montado.
         superficie?.release()
         superficie = null
         textura?.release()

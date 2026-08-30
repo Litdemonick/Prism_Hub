@@ -21,6 +21,7 @@ import androidx.core.content.FileProvider
 //    (audio_service). Sin esto, tocar la notificación cuando la app ya no está
 //    en memoria levantaría un motor NUEVO: la app arrancaría de cero y los
 //    botones quedarían hablándole a un reproductor que ya no existe.
+import com.prismhub.app.media3.FabricaDeVistaMedia3
 import com.prismhub.app.media3.PuenteMedia3
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -55,6 +56,13 @@ class MainActivity: AudioServiceFragmentActivity() {
             // El renderizador de Flutter ES el registro de texturas: es quien
             // sabe crear una que Flutter pueda dibujar despues con Texture().
             flutterEngine.renderer,
+        )
+        // La vista que dibuja el video en su propia capa del sistema. Se
+        // registra siempre, aunque no se use: registrarla no crea nada: es
+        // decirle a Flutter con que fabrica armarla SI Dart la pide.
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            FabricaDeVistaMedia3.TIPO,
+            FabricaDeVistaMedia3(media3!!),
         )
         
         canalEnlaces = MethodChannel(

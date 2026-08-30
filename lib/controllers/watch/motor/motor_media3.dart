@@ -1,10 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show Factory;
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:prismhub/controllers/watch/motor/motor_de_video.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 
 /// Una pista de audio o de subtítulos de las que trae el contenido.
 class PistaDeMedia3 {
@@ -96,6 +100,46 @@ class MotorMedia3 implements MotorDeVideo {
   StreamSubscription<dynamic>? _escucha;
   int? _textura;
 
+  /// Si el vídeo va a una capa del sistema en vez de a una textura.
+  ///
+  /// Empieza en lo que dijo la última vez este mismo aparato. Sin respuesta
+  /// guardada se prueba la capa aparte, que es la que hay que querer.
+  bool _capaAparte =
+      PrismHubStorage.getSetting(SettingKey.capaDeVideoAparte) != false;
+
+  /// Si de verdad se vio algo desde que se abrió.
+  bool _seVioAlgo = false;
+
+  /// Si se le pide al aparato que decodifique tunelizado.
+  ///
+  /// ── Qué es y por qué importa acá ────────────────────────────────────────
+  ///
+  /// Tunelizar es que el decodificador escriba directo al hardware y que la
+  /// sincronía de audio y vídeo la lleve el propio televisor, en vez de que la
+  /// lleve la app. Es lo que le saca el desfase de audio a un televisor, y es
+  /// lo que hacen las apps de vídeo del sistema.
+  ///
+  /// Solo en televisores: en un teléfono no arregla nada y hay hardware donde
+  /// no está bien implementado. Y solo con la capa aparte, porque el
+  /// decodificador necesita una superficie de verdad a la que escribir — con
+  /// una textura, ExoPlayer descarta la pista sin decir nada.
+  bool _tunelizando =
+      PrismHubStorage.getSetting(SettingKey.capaDeVideoAparte) != false &&
+          PlatformTv.esTelevisionSync;
+
+  /// El vigilante de la pantalla negra. Ver [_vigilarQueSeVea].
+  Timer? _vigilante;
+
+  /// Lo último que se abrió, para poder reabrirlo por el otro camino.
+  String? _ultimaUrl;
+  Map<String, String>? _ultimasCabeceras;
+  List<Map<String, String>> _ultimosSubtitulos = const [];
+
+  /// Se llama cuando hay que rearmar la vista porque cambió el camino.
+  final vistaCambio = ValueNotifier<int>(0);
+
+  bool get enCapaAparte => _capaAparte;
+
   final _posiciones = StreamController<Duration>.broadcast();
   final _duraciones = StreamController<Duration>.broadcast();
   final _colchones = StreamController<Duration>.broadcast();
@@ -153,13 +197,22 @@ class MotorMedia3 implements MotorDeVideo {
     List<Map<String, String>> subtitulosAparte = const [],
   }) async {
     _reiniciarEstado();
-    _textura ??= await _canal.invokeMethod<int>('crear');
+    _ultimaUrl = url;
+    _ultimasCabeceras = cabeceras;
+    _ultimosSubtitulos = subtitulosAparte;
+    if (!_creado) {
+      _textura = await _canal.invokeMethod<int>(
+        'crear',
+        {'capaAparte': _capaAparte},
+      );
+      _creado = true;
+    }
     _escucha ??= _avisos.receiveBroadcastStream().listen(
-          _mirarYAvisar,
-          onError: (Object e) {
-            if (!_errores.isClosed) _errores.add('$e');
-          },
-        );
+      _mirarYAvisar,
+      onError: (Object e) {
+        if (!_errores.isClosed) _errores.add('$e');
+      },
+    );
     await _canal.invokeMethod<void>('abrir', {
       'url': url,
       'cabeceras': cabeceras ?? const <String, String>{},
@@ -167,18 +220,120 @@ class MotorMedia3 implements MotorDeVideo {
       'arrancar': arrancar,
       // Cuánto colchón puede permitirse este aparato. Ver colchonPara() del
       // lado nativo para por qué no es el mismo para todos.
-      'perfil': switch (PerfilDeAparato.nivel) {
+      'perfil': _comoEsElAparato(),
+      'tunelizar': _tunelizando,
+    });
+    _vigilarQueSeVea();
+  }
+
+  /// Si ya se armó el reproductor nativo en esta sesión del motor.
+  bool _creado = false;
+
+  /// Vigila que el vídeo se VEA, no solo que suene.
+  ///
+  /// ── El fallo que esto atrapa ────────────────────────────────────────────
+  ///
+  /// Con el vídeo en una capa del sistema hay televisores donde el audio anda,
+  /// la posición avanza y la pantalla queda negra. Pasó en uno con Android 9, y
+  /// es un fallo conocido de las vistas de plataforma en Android
+  /// (flutter/flutter#164899). Desde afuera todo el estado dice que sí: no hay
+  /// error, no hay excepción, y por eso la caída al motor de reserva no salta.
+  ///
+  /// Media3 avisa cuando pinta el primer cuadro. Si el vídeo está rodando y ese
+  /// aviso no llega en unos segundos, la conclusión es que este aparato no
+  /// puede con la capa aparte, y se vuelve a la textura — que anda en todos.
+  ///
+  /// La respuesta queda guardada, así que esto se paga UNA vez por aparato y no
+  /// en cada arranque.
+  void _vigilarQueSeVea() {
+    _vigilante?.cancel();
+    // Sin capa aparte y sin tunelizar no hay nada que vigilar: la textura es el
+    // camino que anda en todos, y si ahí no se ve, el problema es la fuente y
+    // lo dice el flujo de errores.
+    if (!_capaAparte && !_tunelizando) return;
+    _vigilante = Timer(const Duration(seconds: 6), () {
+      if (_seVioAlgo) return;
+      // Si ni siquiera está rodando, esto no es el fallo de la capa: puede ser
+      // una fuente lenta o caída, y volver a la textura no arreglaría nada
+      // mientras esconde el problema de verdad.
+      if (!_reproduciendo) return;
+      // Primero se suelta lo más específico, no lo más general.
+      //
+      // Si está tunelizado, ESE es el sospechoso número uno: es lo que depende
+      // del hardware de cada televisor, y hay modelos donde está a medio
+      // implementar. Apagarlo y reintentar conserva la capa aparte, que es lo
+      // que de verdad se quiere. Recién si tampoco así se ve, se concluye que
+      // el problema es la capa y se vuelve a la textura.
+      //
+      // Al revés —tirar la capa de una— se perdería el motivo entero del
+      // cambio por un fallo que quizá era solo del tunelizado.
+      if (_tunelizando) {
+        logger.warning(
+          'media3: el vídeo suena pero no se ve con decodificación '
+          'tunelizada. Se reintenta sin tunelizar, conservando la capa.',
+        );
+        unawaited(_reabrir(tunelizar: false, capaAparte: true));
+        return;
+      }
+      logger.warning(
+        'media3: el vídeo suena pero no se ve con la capa aparte del sistema. '
+        'Este aparato se pasa a textura.',
+      );
+      unawaited(_reabrir(tunelizar: false, capaAparte: false));
+    });
+  }
+
+  /// Rearma el reproductor por otro camino y sigue donde estaba.
+  Future<void> _reabrir({
+    required bool tunelizar,
+    required bool capaAparte,
+  }) async {
+    final url = _ultimaUrl;
+    if (url == null) return;
+    final donde = _posicion;
+    final cambiaLaVista = capaAparte != _capaAparte;
+    _tunelizando = tunelizar;
+    _capaAparte = capaAparte;
+    if (!capaAparte) {
+      // Se recuerda para no volver a pagar los seis segundos de pantalla negra
+      // en cada arranque de este aparato.
+      await PrismHubStorage.setSetting(SettingKey.capaDeVideoAparte, false);
+    }
+    try {
+      await _canal.invokeMethod<void>('soltar');
+      _creado = false;
+      _seVioAlgo = false;
+      _textura = await _canal.invokeMethod<int>(
+        'crear',
+        {'capaAparte': capaAparte},
+      );
+      _creado = true;
+      // La vista se rearma solo si cambió el camino: pasar de una vista de
+      // plataforma a una textura no es cambiar una propiedad, es otro widget.
+      if (cambiaLaVista) vistaCambio.value++;
+      await _canal.invokeMethod<void>('abrir', {
+        'url': url,
+        'cabeceras': _ultimasCabeceras ?? const <String, String>{},
+        'subtitulos': _ultimosSubtitulos,
+        'arrancar': true,
+        'perfil': _comoEsElAparato(),
+        'tunelizar': tunelizar,
+      });
+      if (donde > Duration.zero) await saltarA(donde);
+      _vigilarQueSeVea();
+    } catch (e) {
+      // Si ni por acá se puede, el problema no era el camino. Se avisa por el
+      // flujo de errores, que es lo que hace caer al motor de reserva.
+      logger.severe('media3: tampoco se pudo por el otro camino: $e');
+      if (!_errores.isClosed) _errores.add('$e');
+    }
+  }
+
+  String _comoEsElAparato() => switch (PerfilDeAparato.nivel) {
         NivelDeAparato.alto => 'alto',
         NivelDeAparato.medio => 'medio',
         NivelDeAparato.bajo => 'bajo',
-      },
-      // Todavía no: la tunelización necesita una superficie nativa de verdad, y
-      // hoy se dibuja sobre una textura. Encenderla acá dejaría la pantalla
-      // negra con el audio andando, que es exactamente el fallo que ya se vio
-      // en un televisor. Se prende cuando esté la SurfaceView.
-      'tunelizar': false,
-    });
-  }
+      };
 
   void _reiniciarEstado() {
     _posicion = Duration.zero;
@@ -189,6 +344,7 @@ class MotorMedia3 implements MotorDeVideo {
     _ancho = null;
     _alto = null;
     _ultimasPistas = const [];
+    _seVioAlgo = false;
     lineasDeSubtitulo.value = const [];
     _medidas.value = null;
   }
@@ -219,13 +375,23 @@ class MotorMedia3 implements MotorDeVideo {
         _alto = (crudo['alto'] as num?)?.toInt();
         final a = _ancho ?? 0;
         final b = _alto ?? 0;
-        _medidas.value = (a > 0 && b > 0)
-            ? Size(a.toDouble(), b.toDouble())
-            : null;
+        _medidas.value =
+            (a > 0 && b > 0) ? Size(a.toDouble(), b.toDouble()) : null;
       case 'error':
         final texto = crudo['valor']?.toString() ?? 'error desconocido';
         logger.severe('media3: $texto');
         if (!_errores.isClosed) _errores.add(texto);
+      case 'primerCuadro':
+        // Lo que confirma que se está viendo algo, no solo que suena.
+        _seVioAlgo = true;
+        _vigilante?.cancel();
+        // Si se probó la capa aparte y anduvo, queda anotado: así el próximo
+        // arranque no vuelve a dudar.
+        if (_capaAparte) {
+          unawaited(
+            PrismHubStorage.setSetting(SettingKey.capaDeVideoAparte, true),
+          );
+        }
       case 'final':
         if (!_finales.isClosed) _finales.add(true);
       case 'pistas':
@@ -270,7 +436,8 @@ class MotorMedia3 implements MotorDeVideo {
       _intentar('pausar', () => _canal.invokeMethod('pausar'));
 
   @override
-  Future<void> parar() => _intentar('parar', () => _canal.invokeMethod('parar'));
+  Future<void> parar() =>
+      _intentar('parar', () => _canal.invokeMethod('parar'));
 
   @override
   Future<void> saltarA(Duration donde) => _intentar(
@@ -359,13 +526,39 @@ class MotorMedia3 implements MotorDeVideo {
     Alignment alineacion = Alignment.center,
     Widget? encima,
   }) {
+    // Escucha el cambio de camino. Si el vigilante decide volver a la textura,
+    // esto rearma el widget: pasar de una vista de plataforma a una textura no
+    // es cambiar una propiedad, es otro widget.
+    return ValueListenableBuilder<int>(
+      valueListenable: vistaCambio,
+      builder: (context, _, __) =>
+          _armarVista(ajuste, fondo, alineacion, encima),
+    );
+  }
+
+  Widget _armarVista(
+    BoxFit ajuste,
+    Color fondo,
+    Alignment alineacion,
+    Widget? encima,
+  ) {
     final id = _textura;
     return ColoredBox(
       color: fondo,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (id != null)
+          if (_capaAparte)
+            // La vista de plataforma: una SurfaceView de verdad, en su propia
+            // capa del compositor del aparato.
+            //
+            // AndroidView y no `Texture`: no hay textura que dibujar. El vídeo
+            // lo pone el sistema por debajo y Flutter solo reserva el hueco.
+            // Por eso tampoco se envuelve en un FittedBox — el ajuste lo hace
+            // la propia SurfaceView con el tamaño que le toca, y meterla en un
+            // FittedBox la escalaría dos veces.
+            const _VistaEnCapaAparte()
+          else if (id != null)
             // Escucha SOLO las medidas del vídeo.
             //
             // Es lo único de acá que cambia cuando cambia el vídeo, y aislarlo
@@ -402,9 +595,12 @@ class MotorMedia3 implements MotorDeVideo {
 
   @override
   Future<void> soltar() async {
+    _vigilante?.cancel();
+    _vigilante = null;
     await _escucha?.cancel();
     _escucha = null;
     _textura = null;
+    _creado = false;
     try {
       await _canal.invokeMethod<void>('soltar');
     } catch (e) {
@@ -441,11 +637,62 @@ class MotorMedia3 implements MotorDeVideo {
         // Las dos razones por las que existe este motor.
         CapacidadDeMotor.saltoEnFmp4 => true,
         CapacidadDeMotor.pistas => true,
-        // La sabe hacer, pero necesita una superficie nativa y hoy se dibuja
-        // sobre una textura. Se enciende cuando esté la SurfaceView; hasta
-        // entonces prometerla sería mentir en el contrato.
-        CapacidadDeMotor.tunelizado => false,
+        // Solo mientras el vídeo esté en su propia capa: con textura, el
+        // decodificador no tiene superficie a la que escribir directo. Se
+        // contesta con el estado de AHORA y no con un sí fijo, porque el
+        // vigilante puede haber vuelto a la textura en este mismo aparato.
+        CapacidadDeMotor.tunelizado => _capaAparte && _tunelizando,
         CapacidadDeMotor.volumenAmplificado => false,
         CapacidadDeMotor.captura => false,
       };
+}
+
+/// El hueco donde el sistema pone el vídeo.
+///
+/// ── Por qué no alcanza con `AndroidView` ────────────────────────────────────
+///
+/// `AndroidView` deja que Flutter elija cómo montar la vista nativa, y su
+/// camino preferido la termina copiando a una textura. Eso funciona, pero es
+/// exactamente lo que se está tratando de evitar: si el vídeo vuelve a pasar
+/// por el dibujado de la interfaz, no se ganó nada.
+///
+/// `initExpensiveAndroidView` fuerza el otro modo: la vista nativa entra en la
+/// jerarquía de verdad del sistema. Es la única forma de que una `SurfaceView`
+/// sea de verdad una capa aparte — y también la única con la que la
+/// tunelización tiene dónde escribir.
+///
+/// Se llama «expensive» porque obliga a Flutter a componer su interfaz en otro
+/// hilo, y eso tiene un costo. Acá se paga a propósito: el costo es fijo y
+/// chico, y lo que se compra es que la interfaz deje de redibujarse una vez por
+/// cada cuadro de vídeo.
+class _VistaEnCapaAparte extends StatelessWidget {
+  const _VistaEnCapaAparte();
+
+  @override
+  Widget build(BuildContext context) {
+    return PlatformViewLink(
+      viewType: _tipo,
+      surfaceFactory: (context, control) => AndroidViewSurface(
+        controller: control as AndroidViewController,
+        // Ningún gesto: los controles del reproductor están por encima, en
+        // Flutter. Dejando que los reciba, la vista se comería los toques que
+        // van a los botones.
+        gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
+        hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+      ),
+      onCreatePlatformView: (parametros) {
+        return PlatformViewsService.initExpensiveAndroidView(
+          id: parametros.id,
+          viewType: _tipo,
+          layoutDirection: TextDirection.ltr,
+          creationParamsCodec: const StandardMessageCodec(),
+          onFocus: () => parametros.onFocusChanged(true),
+        )
+          ..addOnPlatformViewCreatedListener(parametros.onPlatformViewCreated)
+          ..create();
+      },
+    );
+  }
+
+  static const _tipo = 'com.prismhub.app/media3/vista';
 }
