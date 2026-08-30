@@ -42,8 +42,10 @@ class EncabezadoDeSesion {
   /// Va la presentación primero y los datos del aparato después, para que
   /// quien abra esta pantalla sin saber qué es entienda antes de leer nada.
   static void escribir({required String version}) {
+    // Crudo y no `logger.info`: el recuadro es un dibujo, y el encabezado de
+    // `logging` delante lo desalinea línea por línea. Ver PrismLog.crudo.
     for (final l in _presentacion(version)) {
-      logger.info(l);
+      PrismLog.crudo(l);
     }
   }
 
@@ -143,4 +145,65 @@ class EncabezadoDeSesion {
       return null;
     }
   }
+}
+
+/// Si esta línea es parte del recuadro de presentación.
+///
+/// Vive acá, junto al sitio que dibuja el recuadro, para que no haya dos
+/// ideas distintas de qué cuenta como recuadro. Si mañana cambia el dibujo,
+/// cambia en un solo archivo.
+bool esElRecuadro(String linea) {
+  for (final c in _caracteresDelRecuadro) {
+    if (linea.contains(c)) return true;
+  }
+  return false;
+}
+
+/// Los caracteres con los que está dibujado. Ninguno lo escribe otra cosa de
+/// la app: son de dibujo de cajas, no de texto.
+const _caracteresDelRecuadro = ['╔', '╚', '║', '╗', '╝', '┌', '└', '├', '│'];
+
+/// Junta las líneas seguidas del recuadro en una sola.
+///
+/// El recuadro es un dibujo, no texto: solo se entiende con todas sus líneas
+/// alineadas entre sí. Mostrado línea por línea, cada una se ajusta al ancho
+/// por su cuenta y en cuanto una no entra se parte en dos — que es como se
+/// rompía en pantalla.
+///
+/// Juntándolas, quien lo dibuja puede tratarlo como un bloque: achicarlo
+/// entero hasta que entre, sin que las líneas se desalineen entre sí.
+///
+/// El resto de las líneas pasan tal cual, una por una, porque son texto de
+/// verdad y ahí ajustar al ancho es lo correcto.
+List<String> agruparElRecuadro(List<String> lineas) {
+  if (lineas.isEmpty) return lineas;
+  var hayAlguno = false;
+  for (final l in lineas) {
+    if (esElRecuadro(l)) {
+      hayAlguno = true;
+      break;
+    }
+  }
+  // Sin recuadro no se copia nada: es el caso de casi todos los refrescos, y
+  // recorrer miles de líneas para no cambiar ninguna sería trabajo tirado.
+  if (!hayAlguno) return lineas;
+
+  final salida = <String>[];
+  final bloque = <String>[];
+  void cerrarBloque() {
+    if (bloque.isEmpty) return;
+    salida.add(bloque.join('\n'));
+    bloque.clear();
+  }
+
+  for (final l in lineas) {
+    if (esElRecuadro(l)) {
+      bloque.add(l);
+    } else {
+      cerrarBloque();
+      salida.add(l);
+    }
+  }
+  cerrarBloque();
+  return salida;
 }

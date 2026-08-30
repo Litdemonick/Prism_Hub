@@ -60,6 +60,22 @@ class PrismLog {
   // hilo de UI — se sentía como tirones/traba constante que empeoraba
   // cuanto más se acumulaban logs. Bufferizado, una racha de 50 errores en
   // un segundo genera un solo volcado (a archivo o consola) en vez de 50.
+  /// Escribe una línea tal cual, sin el encabezado de `logging`.
+  ///
+  /// ── Para qué hace falta ─────────────────────────────────────────────────
+  ///
+  /// Todo lo que pasa por `logger` sale con `prismhub INFO <fecha y hora>: `
+  /// adelante. Para una línea de registro eso es exactamente lo que se quiere.
+  /// Para el recuadro de presentación es lo que lo rompe: es un dibujo hecho
+  /// con caracteres, y con un prefijo delante —de largo variable, porque los
+  /// microsegundos no siempre ocupan lo mismo— cada línea arranca en una
+  /// columna distinta y el recuadro deja de cerrar. Reportado en vivo: «el
+  /// prism, el unicode, se corta».
+  ///
+  /// Pasa por el mismo saneado y el mismo camino que el resto: lo único que
+  /// se saltea es el encabezado.
+  static void crudo(String linea) => _queueLog(linea);
+
   static void _queueLog(String log) {
     final limpio = sanear(log);
     _recordar(limpio);
