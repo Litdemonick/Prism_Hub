@@ -46,7 +46,14 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
   Future<void> _leer() async {
     final datos = await DatabaseService.getFavoritesByType(type: widget.type);
     if (!mounted) return;
-    setState(() => _datos = datos);
+    // Nada de la Zona +18 acá.
+    //
+    // Esta pantalla no distingue zona —la de la Zona es HistoryPage con
+    // `zone: true`, que sí filtra— así que sin esto mostraría todo mezclado.
+    // Hoy no se llega desde ningún botón de la app (la interfaz usa
+    // HistoryPage), pero la ruta `/favorites` existe y basta con abrirla para
+    // ver lo que no corresponde. Se filtra acá, que es donde se lee.
+    setState(() => _datos = datos.where((f) => !f.isNsfw).toList());
   }
 
   @override

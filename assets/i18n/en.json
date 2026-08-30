@@ -492,7 +492,11 @@
     "motor-mpv": "mpv (the usual one)",
     "motor-exo": "ExoPlayer (native to Android)",
     "motor-puesto": "In use",
-    "view-log-tv-subtitle": "Everything that happens, including previous sessions. If the app closed by itself, what it was doing is here."
+    "view-log-tv-subtitle": "Everything that happens, including previous sessions. If the app closed by itself, what it was doing is here.",
+    "log-filtro-todo": "All",
+    "log-filtro-fallos": "Failures",
+    "log-filtro-extensiones": "Extensions",
+    "log-filtro-reproductor": "Player"
   },
   "external-player-launching": "Launching {player}",
   "detail": {

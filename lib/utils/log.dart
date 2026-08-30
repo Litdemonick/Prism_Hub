@@ -6,8 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:logging/logging.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
-import 'package:prismhub/utils/platform_tv.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:path/path.dart' as path;
 
 final logger = Logger('PrismHub');
@@ -237,23 +235,21 @@ class PrismLog {
     // sesión, sin perder el volcado por consola que sirve para verlo en vivo.
     if (kProfileMode) {
       debugPrint(batch);
-    } else if (!PlatformTv.esTelevisionSync &&
-        PrismHubStorage.getSetting(SettingKey.saveLog) != true) {
-      // ── En televisor se escribe SIEMPRE, sin preguntar ─────────────────
-      //
-      // Ahí el archivo no es «por si querés exportarlo»: es lo ÚNICO que
-      // explica un cierre. La app se cierra sola, se vuelve a abrir, y lo que
-      // pasó antes solo existe si quedó escrito — en la memoria no, porque
-      // esa se fue con el proceso.
-      //
-      // Y no hay a quién preguntarle: el interruptor de Ajustes se sacó de la
-      // pantalla de televisor justamente porque ahí no tiene sentido apagarlo.
-      // Dejarlo respondiendo a un ajuste invisible sería peor: el registro
-      // aparecería vacío sin ninguna explicación.
-      // En release manda el interruptor de Ajustes. En perfilado no se pregunta:
-      // esa compilación no la usa nadie para ver una serie, se usa para medir.
-      return;
     }
+    // ── El archivo se escribe SIEMPRE, en las cuatro plataformas ─────────
+    //
+    // Había un interruptor de Ajustes que lo decidía, y estaba al revés de lo
+    // que hace falta: el archivo es lo ÚNICO que explica un cierre. La app se
+    // cierra sola, se vuelve a abrir, y lo que pasó antes solo existe si quedó
+    // escrito — en la memoria no, porque esa se fue con el proceso.
+    //
+    // O sea que el interruptor solo servía para que, justo cuando algo falla,
+    // no hubiera nada que mirar. Y quien lo necesita no puede saber de
+    // antemano que iba a necesitarlo.
+    //
+    // No cuesta: se escribe en tandas cada dos segundos, y el archivo se
+    // recorta solo (ver _recortar). Y lo que se escribe va saneado, así que
+    // guardarlo siempre no expone nada — ver `sanear`.
     try {
       final file = File(logFilePath);
       await file.writeAsString(batch, mode: FileMode.append, flush: false);

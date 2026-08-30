@@ -15,6 +15,7 @@ import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/centinela_de_arranque.dart';
+import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/pages/debug_page.dart';
@@ -89,7 +90,19 @@ void main(List<String> args) async {
         if (where.isNotEmpty) '[$where]',
         if (frames.isNotEmpty) frames,
       ];
-      return _StartupErrorView(message: parts.join('$nl$nl'));
+      // ── Saneado ANTES de mostrarlo ──────────────────────────────────────
+      //
+      // El mensaje de una excepción arrastra lo que estaba en juego cuando
+      // falló, y eso puede ser una dirección con su credencial («no se pudo
+      // abrir https://cdn.x/…?token=…») o el título de lo que la persona
+      // estaba viendo.
+      //
+      // Esta pantalla se fotografía y se comparte para reportar el fallo —
+      // es literalmente para lo que está—, así que lo que muestra tiene que
+      // aguantar salir de la casa. Es el mismo criterio que ya rige para el
+      // registro, y va con el mismo saneado para no tener dos reglas que se
+      // separen con el tiempo.
+      return _StartupErrorView(message: PrismLog.sanear(parts.join('$nl$nl')));
     };
 
     WidgetsFlutterBinding.ensureInitialized();
@@ -764,6 +777,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       // decidir; hasta este punto casi no se decodificó nada, así que ese
       // techo alto no llega a llenarse.
       AlivioDeMemoria.aplicarTechoDeImagenes();
+      // La cabecera de la sesión, recién acá: es el primer momento en que se
+      // sabe qué aparato es esto y qué perfil le tocó. Ver EncabezadoDeSesion.
+      EncabezadoDeSesion.escribir(version: packageInfo.version);
       // ── Lo que un televisor hace distinto de arranque ────────────────────
       //
       // Un televisor SIEMPRE está apaisado — no hay forma física de girarlo —

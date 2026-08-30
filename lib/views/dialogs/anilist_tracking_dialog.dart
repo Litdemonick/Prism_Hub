@@ -11,6 +11,7 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:prismhub/views/widgets/progress.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/log.dart';
 
 class AnilistTrackingDialog extends StatefulWidget {
   const AnilistTrackingDialog({
@@ -404,8 +405,13 @@ class _AnilistTrackingDialogState extends State<AnilistTrackingDialog> {
             );
           } catch (e) {
             if (mounted) {
-              // ignore: use_build_context_synchronously
-              showPlatformSnackbar(context: context, content: e.toString(), severity: fluent.InfoBarSeverity.error);
+              showPlatformSnackbar(
+                  // ignore: use_build_context_synchronously
+                  context: context,
+                  // Saneado: el mensaje de una excepción de red trae la
+                  // dirección, y ahí viaja el identificador de la cuenta.
+                  content: PrismLog.sanear(e.toString()),
+                  severity: fluent.InfoBarSeverity.error);
               return;
             }
           }

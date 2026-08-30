@@ -1593,17 +1593,18 @@ class _SettingsPageState extends State<SettingsPage> {
         icon: fluent.FluentIcons.report_alert,
         content: Column(
           children: [
-            SettingsSwitchTile(
-              title: 'settings.save-log'.i18n,
-              buildSubtitle: () => 'settings.save-log-subtitle'.i18n,
-              buildValue: () {
-                return PrismHubStorage.getSetting(SettingKey.saveLog);
-              },
-              onChanged: (value) {
-                PrismHubStorage.setSetting(SettingKey.saveLog, value);
-              },
-            ),
-            const SizedBox(height: 10),
+            // Sin el interruptor de "guardar registros": ahora se guarda
+            // siempre.
+            //
+            // Estaba al revés de lo que hace falta. El archivo es lo único que
+            // explica un cierre —la memoria se va con el proceso— así que ese
+            // interruptor solo servía para que, justo cuando algo falla, no
+            // hubiera nada que mirar. Y quien lo necesita no puede saber de
+            // antemano que iba a necesitarlo.
+            //
+            // Se puede dejar siempre encendido porque lo que se escribe va
+            // saneado: sin credenciales, sin qué se estaba viendo y sin el
+            // nombre de usuario del sistema. Ver PrismLog.sanear.
             // Ver el registro sin salir de la app. Va ANTES de exportar: mirar
             // qué está pasando es lo que uno intenta primero; exportar es el
             // paso siguiente, y solo si hay algo que mandar.

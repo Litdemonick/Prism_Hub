@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/tv/desplazable_con_mando.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
@@ -180,7 +182,32 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       return HomeTheme.accentRed;
     }
     if (linea.contains(' WARNING ')) return const Color(0xFFE8B339);
+    // La cabecera de sesión, en verde y fuerte: es lo que separa una sesión de
+    // la siguiente en un archivo que ya trae varias, así que tiene que
+    // encontrarse de un vistazo al recorrer.
+    if (linea.contains('═══')) return const Color(0xFF6FCFA5);
+    // El veredicto de cada servidor y el rastro del último cierre: son las dos
+    // líneas que se buscan a propósito, así que se despegan del resto.
+    if (linea.contains('RESULTADO ·')) return const Color(0xFF62B6FF);
+    if (linea.contains('LO ULTIMO QUE HIZO')) return const Color(0xFFD98CFF);
     return const Color(0xFFB9BBC6);
+  }
+
+  /// Por qué categoría se está mirando el registro.
+  ///
+  /// Un archivo de varias sesiones son miles de líneas, y quien lo abre viene
+  /// buscando UNA cosa: por qué falló una extensión, por qué se cerró la app,
+  /// o qué hizo el reproductor. Recorrerlo entero con el mando para encontrar
+  /// eso es lo que lo vuelve inútil en un televisor.
+  _Filtro _filtro = _Filtro.todo;
+
+  /// Las líneas que corresponden al filtro puesto.
+  ///
+  /// Se calcula al construir y no se guarda: el registro crece mientras se
+  /// mira, así que una copia filtrada quedaría vieja enseguida.
+  List<String> _conFiltro(List<String> todas) {
+    if (_filtro == _Filtro.todo) return todas;
+    return todas.where((l) => _filtro.acepta(l)).toList(growable: false);
   }
 
   // Monoespaciada con lista de reemplazos: 'monospace' es un nombre genérico
@@ -194,8 +221,64 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     height: 1.35,
   );
 
+  /// La barra de filtros.
+  ///
+  /// Botones y no un menú desplegable: con un control remoto un desplegable
+  /// son tres pulsaciones y perder de vista el registro. Acá se ve qué hay y
+  /// se cambia con una.
+  ///
+  /// Se desplaza en horizontal para que en una pantalla angosta —un teléfono
+  /// de pie— no se aplaste ninguno ni se corte el texto.
+  Widget _barraDeFiltros() {
+    final tv = PlatformTv.esTelevisionSync;
+    return SizedBox(
+      height: tv ? 56 : 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: tv ? 20 : 12),
+        children: [
+          for (final f in _Filtro.values)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Center(
+                child: FocusableCard(
+                  borderRadius: 999,
+                  onTap: () => setState(() => _filtro = f),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: tv ? 20 : 14,
+                      vertical: tv ? 10 : 7,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: _filtro == f
+                          ? HomeTheme.accentPink.withValues(alpha: 0.22)
+                          : Colors.white.withValues(alpha: 0.06),
+                    ),
+                    child: Text(
+                      f.clave.i18n,
+                      style: TextStyle(
+                        fontSize: tv ? 15 : 13,
+                        fontWeight:
+                            _filtro == f ? FontWeight.w700 : FontWeight.w500,
+                        color: _filtro == f
+                            ? HomeTheme.accentPink
+                            : HomeTheme.textMuted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLista() {
-    if (_lineas.isEmpty) {
+    final visibles = _conFiltro([..._deAntes, ..._lineas]);
+    if (visibles.isEmpty && _lineas.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -217,11 +300,9 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       child: ListView.builder(
         controller: _scroll,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-        itemCount: _deAntes.length + _lineas.length,
+        itemCount: visibles.length,
         itemBuilder: (context, index) {
-          final linea = index < _deAntes.length
-              ? _deAntes[index]
-              : _lineas[index - _deAntes.length];
+          final linea = visibles[index];
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
             child: Text(linea, style: _mono.copyWith(color: _colorDe(linea))),
@@ -308,6 +389,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       body: Column(
         children: [
           if (_pausado) _bandaDePausa(),
+          _barraDeFiltros(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Align(
@@ -397,6 +479,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
           const SizedBox(height: 14),
           if (_pausado) ...[
             _bandaDePausa(),
+            _barraDeFiltros(),
             const SizedBox(height: 10),
           ],
           Expanded(
@@ -448,4 +531,56 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       desktopBuilder: _buildDesktop,
     );
   }
+}
+
+/// Por qué se filtra el registro.
+///
+/// No son niveles de gravedad —eso ya lo dice el color— sino ÁREAS: quien abre
+/// el registro viene buscando una cosa concreta, y son casi siempre estas
+/// cuatro. Filtrar por área es lo que hace utilizable un archivo de miles de
+/// líneas en un televisor, donde recorrerlo con el mando no es opción.
+enum _Filtro {
+  todo('settings.log-filtro-todo'),
+
+  /// Solo lo que salió mal. Es el primer sitio donde mirar.
+  fallos('settings.log-filtro-fallos'),
+
+  /// Extensiones y servidores: qué resolvió, cuál falló, cuánto tardó.
+  extensiones('settings.log-filtro-extensiones'),
+
+  /// El reproductor: qué decodifica, cuadros perdidos, saltos.
+  reproductor('settings.log-filtro-reproductor');
+
+  const _Filtro(this.clave);
+
+  /// La clave de idioma del botón.
+  final String clave;
+
+  /// Si una línea entra en este filtro.
+  bool acepta(String l) => switch (this) {
+        _Filtro.todo => true,
+        _Filtro.fallos => l.contains(' SEVERE ') ||
+            l.contains(' SHOUT ') ||
+            l.contains(' WARNING ') ||
+            l.contains('LO ULTIMO QUE HIZO') ||
+            l.contains('no se cerro normalmente'),
+        // La cabecera de sesión entra en TODOS los filtros: sin ella no se
+        // sabría de qué sesión ni de qué aparato son las líneas que quedan.
+        _Filtro.extensiones => l.contains('═══') ||
+            l.contains('RESULTADO ·') ||
+            l.contains('switchServer') ||
+            l.contains('[home]') ||
+            l.contains('ficha ·') ||
+            l.contains('extension') ||
+            l.contains('Extension'),
+        _Filtro.reproductor => l.contains('═══') ||
+            l.contains('medición') ||
+            l.contains('rueda') ||
+            l.contains('recorte') ||
+            l.contains('DECODIFICACIÓN') ||
+            l.contains('FRAME LENTO') ||
+            l.contains('Pantalla puesta') ||
+            l.contains('Dibujado del vídeo') ||
+            l.contains('Motor de vídeo'),
+      };
 }
