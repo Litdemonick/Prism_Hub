@@ -150,6 +150,42 @@ class EncabezadoDeSesion {
   static bool _yaSeEscribio = false;
   static bool _yaEscribioExtensiones = false;
 
+  /// Dónde se guarda con qué versión se abrió la última vez.
+  static const _claveVersionAnterior = 'registro-version-anterior';
+
+  /// Deja escrito si esta sesión es la primera después de actualizar.
+  ///
+  /// ── Por qué importa ─────────────────────────────────────────────────────
+  ///
+  /// Al actualizar, el registro empieza limpio solo porque se instala un APK
+  /// nuevo y el proceso arranca de cero — pasa, pero por casualidad, y el
+  /// archivo no lo decía en ningún lado. Quien recibe un registro veía la
+  /// versión de la cabecera y nada más: no había forma de saber si ese
+  /// arranque era el primero con la versión nueva, que es justo cuando
+  /// aparecen los fallos de una actualización.
+  ///
+  /// Ahora la primera sesión después de actualizar lo dice, y con la versión
+  /// de la que se venía. Un fallo que empieza exactamente ahí ya no hay que
+  /// deducirlo comparando archivos.
+  ///
+  /// Se llama después de [escribir], para que quede justo debajo de la ficha.
+  static Future<void> avisarSiSeActualizo(String version) async {
+    try {
+      final anterior = PrismHubStorage.getSetting(_claveVersionAnterior);
+      if (anterior is String && anterior.isNotEmpty && anterior != version) {
+        PrismLog.crudo('  ── PRIMERA VEZ CON LA VERSIÓN $version '
+            '(se venía de la $anterior) ──');
+        PrismLog.crudo('');
+      }
+      if (anterior != version) {
+        await PrismHubStorage.setSetting(_claveVersionAnterior, version);
+      }
+    } catch (e) {
+      // Un dato de menos no puede impedir que la app arranque.
+      logger.info('No se pudo comparar la versión anterior: $e');
+    }
+  }
+
   /// Deja escritas las extensiones instaladas y con qué versión.
   ///
   /// ── Por qué en su propio momento ────────────────────────────────────────

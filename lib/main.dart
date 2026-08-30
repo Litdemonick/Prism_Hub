@@ -854,6 +854,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       // La cabecera de la sesión, recién acá: es el primer momento en que se
       // sabe qué aparato es esto y qué perfil le tocó. Ver EncabezadoDeSesion.
       EncabezadoDeSesion.escribir(version: packageInfo.version);
+      // Y si este es el primer arranque después de actualizar, que se note:
+      // es justo cuando aparecen los fallos de una versión nueva.
+      unawaited(
+        EncabezadoDeSesion.avisarSiSeActualizo(packageInfo.version),
+      );
       // Y qué extensiones hay puestas, que es lo primero que hace falta
       // preguntar ante un «esta extensión no carga». Va acá y no dentro de la
       // cabecera porque las extensiones se cargan antes (línea de arriba,
