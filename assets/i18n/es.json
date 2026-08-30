@@ -364,8 +364,6 @@
     "external-player-locked-subtitle": "Por ahora toda la app usa el reproductor incorporado.",
     "external-player-builtin": "Incorporado",
     "language-subtitle": "Cambia el idioma de la aplicación",
-    "extension-log": "Ventana de registro de extensiones",
-    "extension-log-subtitle": "Usado para depurar extensiones",
     "skip-interval": "Saltar intervalo",
     "skip-interval-subtitle": "Cuántos segundos salta el reproductor incorporado con cada atajo. «key I» y «key J» son los saltos largos (teclas I y J); las flechas ‹ › son los saltos finos (flechas izquierda y derecha). Un número negativo retrocede y uno positivo adelanta: cuanto más alto, más se mueve de una.",
     "default-reader-mode": "Modo de lector predeterminado",

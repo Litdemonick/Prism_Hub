@@ -1655,27 +1655,16 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       ),
-      if (!Platform.isAndroid) ...[
-        const SizedBox(height: 10),
-        Obx(
-          () {
-            final value = c.extensionLogWindowId.value != -1;
-            return SettingsSwitchTile(
-              icon: const Icon(
-                fluent.FluentIcons.bug,
-                size: 24,
-              ),
-              title: 'settings.extension-log'.i18n,
-              buildSubtitle: () => 'settings.extension-log-subtitle'.i18n,
-              buildValue: () => value,
-              onChanged: (value) {
-                c.toggleExtensionLogWindow(value);
-              },
-              isCard: true,
-            );
-          },
-        )
-      ],
+      // La ventana aparte de registro de extensiones ya no esta.
+      //
+      // Era de escritorio y de una sola cosa: lo que decian las extensiones,
+      // en una ventana flotante que habia que acordarse de abrir ANTES de
+      // que pasara el fallo. Todo eso ahora entra en «Ver registro» junto
+      // con el resto —reproductor, arranque, cierres— y ahi se puede
+      // filtrar, exportar y leer despues del hecho, no solo en vivo.
+      //
+      // Tener las dos era ofrecer dos sitios distintos para la misma
+      // pregunta, y el que menos servia era el que estaba mas a mano.
       // 关于
       const SizedBox(height: 20),
       ListTitle(title: 'settings.about'.i18n),

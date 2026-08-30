@@ -368,8 +368,6 @@
     "external-player-locked-subtitle": "For now the whole app uses the built-in player.",
     "external-player-builtin": "Built-in",
     "language-subtitle": "Change the language of the software",
-    "extension-log": "Extension Log Window",
-    "extension-log-subtitle": "Used for debugging extensions",
     "skip-interval": "Skip Interval",
     "skip-interval-subtitle": "How many seconds the built-in player skips with each shortcut. \"key I\" and \"key J\" are the long jumps (I and J keys); the ‹ › arrows are the fine ones (left and right arrow keys). A negative number rewinds and a positive one skips ahead: the higher the value, the further it moves at once.",
     "default-reader-mode": "Default reader mode",

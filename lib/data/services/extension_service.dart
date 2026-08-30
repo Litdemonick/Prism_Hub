@@ -73,7 +73,9 @@ class ExtensionService {
     runtime.enableHandlePromises();
 
     jsLog(dynamic args) {
-      logger.info(args[0]);
+      // No se escribe aca: addLog ya lo manda al registro unico, y con el
+      // paquete adelante. Hacerlo en los dos sitios dejaba cada console.log
+      // de las extensiones dos veces en el archivo.
       ExtensionUtils.addLog(
         extension,
         ExtensionLogLevel.info,

@@ -2109,11 +2109,27 @@ class ExtensionUtils {
     return readingTypes.contains(ext.type) && !videoTypes.contains(ext.type);
   }
 
+  /// Deja constancia de algo que dijo una extension.
+  ///
+  /// Va SIEMPRE al registro unico de la app, este abierta o no la ventana
+  /// aparte de escritorio. Antes solo iba a esa ventana: si nadie la tenia
+  /// abierta —o sea, casi siempre, y desde luego en telefono y televisor— el
+  /// error de una extension no quedaba escrito en ningun lado, y despues no
+  /// habia con que reconstruir por que habia fallado.
+  ///
+  /// El texto pasa por [PrismLog.sanear] como cualquier otra linea, asi que
+  /// una direccion que venga adentro sale recortada al servidor y el formato.
   static addLog(
     Extension ext,
     ExtensionLogLevel level,
     String logContent,
   ) async {
+    final linea = 'extension ${ext.package} · $logContent';
+    if (level == ExtensionLogLevel.error) {
+      logger.warning(linea);
+    } else {
+      logger.info(linea);
+    }
     if (!Get.isRegistered<SettingsController>()) {
       return;
     }
@@ -2139,10 +2155,24 @@ class ExtensionUtils {
     }
   }
 
+  /// Anota un pedido de red de una extension.
+  ///
+  /// Al registro unico va UNA linea y solo cuando la respuesta ya llego:
+  /// metodo, direccion y codigo. Ni cabeceras ni cuerpo — eso es lo que
+  /// lleva cookies y tokens, y [PrismLog.sanear] limpia direcciones, no
+  /// cabeceras. El detalle completo sigue estando en la ventana aparte, que
+  /// se queda en memoria y no se exporta a ningun lado.
+  ///
+  /// Se llama dos veces por pedido (al salir y al volver); se escribe en la
+  /// segunda, que es la unica que tiene el codigo de respuesta.
   static addNetworkLog(
     String key,
     ExtensionNetworkLog log,
   ) {
+    if (log.statusCode != null) {
+      logger.info('extension ${log.extension.package} · '
+          '${log.method} ${log.url} → ${log.statusCode}');
+    }
     if (!Get.isRegistered<SettingsController>()) {
       return;
     }
