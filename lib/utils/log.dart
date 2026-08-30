@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:logging/logging.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/sesiones_del_registro.dart';
 import 'package:path/path.dart' as path;
 
 final logger = Logger('PrismHub');
@@ -182,25 +183,72 @@ class PrismLog {
     await _flush();
   }
 
-  /// Borra el registro. Para el botón de reseteo.
+  /// Borra la sesión de ahora, dejando el historial intacto.
   ///
-  /// Tira también lo que estaba en memoria: si no, los 2 segundos anteriores
-  /// se escribirían encima del archivo recién vaciado y quedaría "limpiado"
-  /// con cosas adentro. Y vacía lo que muestra el visor, porque limpiar y
-  /// seguir viendo las mismas líneas en pantalla se lee como que el botón no
-  /// hizo nada.
-  static Future<void> limpiar() async {
+  /// ── Por qué no borra el archivo entero ──────────────────────────────────
+  ///
+  /// [limpiar] tira todo, aperturas anteriores incluidas. Eso está bien para
+  /// un botón de reseteo de fábrica y muy mal para el de esta pantalla:
+  /// pedido explícito, «el historial no se limpia, siempre se guarda la
+  /// info». Y tiene razón de fondo — el historial es justamente lo que
+  /// explica un cierre, así que un botón que se lo lleva de paso destruye lo
+  /// único que sirve para arreglar el problema que llevó a apretarlo.
+  ///
+  /// ── Y por qué se puede limpiar solo una zona ────────────────────────────
+  ///
+  /// [dejar] decide qué líneas de la sesión de ahora sobreviven. Se usa para
+  /// limpiar solo la zona que se está mirando: quien está en «Reproductor»
+  /// limpiando ruido de una prueba no quiere perder lo de las extensiones,
+  /// que ni estaba viendo. Sin [dejar] no sobrevive ninguna, que es lo que
+  /// corresponde estando en «Todo».
+  ///
+  /// [escribirCabecera] se llama con el archivo ya recortado y antes de
+  /// devolver las supervivientes, para que la sesión quede empezada por su
+  /// presentación y no por líneas sueltas sin contexto. Va acá adentro y no
+  /// afuera porque el orden importa y repartirlo entre dos sitios es pedir
+  /// que algún día se llamen al revés.
+  static Future<void> limpiarSesionActual({
+    bool Function(String)? dejar,
+    void Function()? escribirCabecera,
+  }) async {
+    await flush();
+    List<String> sobreviven = const [];
+    try {
+      final file = File(logFilePath);
+      final texto = (await file.exists()) ? await file.readAsString() : '';
+      final lineas = texto
+          .split(RegExp(r'\r?\n'))
+          .where((l) => l.trim().isNotEmpty)
+          .toList(growable: false);
+      final sesiones = partirEnSesiones(lineas);
+      final anteriores = sesiones.length <= 1
+          ? const <String>[]
+          : sesiones
+              .sublist(0, sesiones.length - 1)
+              .expand((s) => s.lineas)
+              .toList(growable: false);
+      if (sesiones.isNotEmpty && dejar != null) {
+        sobreviven =
+            sesiones.last.lineas.where(dejar).toList(growable: false);
+      }
+      await file.writeAsString(
+        anteriores.isEmpty ? '' : '${anteriores.join('\n')}\n',
+        flush: true,
+      );
+    } catch (_) {
+      // Si el archivo no se deja tocar se sigue igual: al menos la pantalla
+      // queda limpia, que es lo que se pidió.
+    }
     _flushTimer?.cancel();
     _flushTimer = null;
     _pending.clear();
     _memoria.clear();
     _generacion++;
-    try {
-      final file = File(logFilePath);
-      if (await file.exists()) await file.delete();
-    } catch (_) {
-      // Que no se pueda borrar no puede tumbar la app.
+    escribirCabecera?.call();
+    for (final l in sobreviven) {
+      _queueLog(l);
     }
+    await flush();
   }
 
   /// El registro entero, para mostrarlo o exportarlo.
