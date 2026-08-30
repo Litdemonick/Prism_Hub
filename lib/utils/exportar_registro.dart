@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/zonas_del_registro.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// Arma y entrega el archivo de registro para reportar un fallo.
@@ -33,53 +34,16 @@ class ExportarRegistro {
   ///
   /// Los fallos primero: es lo que se busca. Lo general al final, que es el
   /// contexto de todo lo demás.
-  static const _secciones = <(String, bool Function(String))>[
-    ('FALLOS Y AVISOS', _esFallo),
-    ('REPRODUCTOR', _esReproductor),
-    ('EXTENSIONES Y SERVIDORES', _esExtension),
-    ('GENERAL DE LA APP', _esGeneral),
+  ///
+  /// Qué entra en cada una lo decide [ZonaDelRegistro], que es lo mismo que
+  /// usa el visor: si acá hubiera una lista propia, «Fallos» significaría una
+  /// cosa mirando la pantalla y otra abriendo el archivo exportado.
+  static final _secciones = <(String, bool Function(String))>[
+    (ZonaDelRegistro.fallos.seccion, ZonaDelRegistro.fallos.acepta),
+    (ZonaDelRegistro.reproductor.seccion, ZonaDelRegistro.reproductor.acepta),
+    (ZonaDelRegistro.extensiones.seccion, ZonaDelRegistro.extensiones.acepta),
+    ('GENERAL DE LA APP', esGeneral),
   ];
-
-  static bool _esFallo(String l) =>
-      l.contains(' SEVERE ') ||
-      l.contains(' SHOUT ') ||
-      l.contains(' WARNING ') ||
-      l.contains('LO ULTIMO QUE HIZO') ||
-      l.contains('no se cerro normalmente');
-
-  static bool _esReproductor(String l) =>
-      l.contains('medición') ||
-      l.contains('rueda') ||
-      l.contains('recorte') ||
-      l.contains('DECODIFICACIÓN') ||
-      l.contains('FRAME LENTO') ||
-      l.contains('Pantalla puesta') ||
-      l.contains('Dibujado del vídeo') ||
-      l.contains('Motor de vídeo');
-
-  static bool _esExtension(String l) =>
-      l.contains('RESULTADO ·') ||
-      l.contains('switchServer') ||
-      l.contains('[home]') ||
-      l.contains('ficha ·') ||
-      l.contains('extension') ||
-      l.contains('Extension');
-
-  /// Lo que no cayó en ninguna de las otras.
-  ///
-  /// Se calcula por descarte y no con su propia lista: así ninguna línea se
-  /// pierde. Un registro al que le faltan líneas es peor que uno largo.
-  static bool _esGeneral(String l) =>
-      !_esFallo(l) && !_esReproductor(l) && !_esExtension(l);
-
-  /// Los nombres de las áreas, para que quien llame pueda pedir una sola.
-  ///
-  /// Se exponen desde acá y no se repiten afuera: el visor y el servidor de
-  /// red tienen que agrupar EXACTAMENTE igual que el exportado, o lo que se
-  /// ve en pantalla y lo que se manda dirían cosas distintas.
-  static const areaFallos = 'FALLOS Y AVISOS';
-  static const areaReproductor = 'REPRODUCTOR';
-  static const areaExtensiones = 'EXTENSIONES Y SERVIDORES';
 
   /// Arma el texto completo, ya ordenado por secciones.
   ///
@@ -104,7 +68,7 @@ class ExportarRegistro {
 
     // Un resumen antes de las líneas: quien abre esto quiere saber en diez
     // segundos si hay algo roto, no leer dos mil líneas para averiguarlo.
-    final fallos = lineas.where(_esFallo).length;
+    final fallos = lineas.where(ZonaDelRegistro.fallos.acepta).length;
     salida
       ..writeln('RESUMEN')
       ..writeln('  líneas en total: ${lineas.length}')
