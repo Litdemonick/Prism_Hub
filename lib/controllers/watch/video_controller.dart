@@ -128,6 +128,49 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     videoController: videoController,
   );
 
+  /// Si ya se avisó de que el wakelock no responde en este aparato.
+  bool _yaAvisoDelWakelock = false;
+
+  /// Cuándo fue la última vez que la app pidió un salto.
+  ///
+  /// Lo usa el detector de saltos fantasma para no acusarse a sí mismo. Ver
+  /// [_saltoNuestro].
+  DateTime? _cuandoPedimosUnSalto;
+
+  /// Pide un salto dejando constancia de que lo pedimos nosotros.
+  ///
+  /// ── Por qué hace falta ──────────────────────────────────────────────────
+  ///
+  /// El detector de saltos fantasma mira `_destinoDeSalto`, que lo pone el
+  /// salto que viene de la barra de progreso. Los demás caminos —«continuar
+  /// viendo», retomar a mitad de stream, ir al final— llaman al motor
+  /// directo, así que el detector veía la posición pegar un brinco sin nadie
+  /// que lo hubiera pedido y lo anotaba como fallo.
+  ///
+  /// Comprobado en un registro real: «SALTO FANTASMA: mpv pasó de 0s a 98s» y,
+  /// tres cuartos de segundo después, «continuar viendo: quedó en 1:38». 1:38
+  /// son 98 segundos: el salto lo había pedido la app.
+  ///
+  /// Un aviso falso en la zona de «Fallos» es peor que ninguno — manda a
+  /// buscar un problema que no existe, justo en la pantalla que se abre
+  /// cuando algo va mal.
+  Future<void> _saltarPedido(Duration donde) {
+    _cuandoPedimosUnSalto = DateTime.now();
+    return motor.saltarA(donde);
+  }
+
+  /// Si el brinco que se acaba de ver lo había pedido la app.
+  ///
+  /// Con margen de tiempo y no con una bandera exacta: entre que se pide el
+  /// salto y mpv informa la posición nueva pasan cientos de milisegundos, y
+  /// en HLS el salto real cae en el corte de un pedacito, así que puede llegar
+  /// en varios avisos seguidos.
+  bool get _saltoNuestro {
+    final cuando = _cuandoPedimosUnSalto;
+    if (cuando == null) return false;
+    return DateTime.now().difference(cuando) < const Duration(seconds: 5);
+  }
+
   /// Abre una fuente en el motor que esté puesto.
   ///
   /// ── Por qué existe este método ──────────────────────────────────────────
@@ -1537,7 +1580,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         return;
       }
       if (playMode.value == PlaylistMode.loop) {
-        motor.saltarA(Duration.zero);
+        _saltarPedido(Duration.zero);
         safePlay();
         return;
       }
@@ -1718,7 +1761,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
                 'listener de duración — de eso se encarga el cartel');
           } else {
             _isAutoSeekPosition = true;
-            motor.saltarA(Duration(seconds: guardado));
+            _saltarPedido(Duration(seconds: guardado));
             sendMessage(Message(Text('video.resume-last-playback'.i18n)));
           }
         }
@@ -1812,7 +1855,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       unawaited(
         (reproduciendo ? WakelockPlus.enable() : WakelockPlus.disable())
             .catchError((Object e) {
-          logger.warning('No se pudo cambiar el wakelock: $e');
+          // ── Se avisa UNA vez por sesión ──────────────────────────────
+          //
+          // Cuando este canal no responde, no responde nunca: es el mismo
+          // fallo repetido en cada arranque y cada pausa. Medido en un
+          // televisor MediaTek con Android 9, cuatro avisos idénticos en un
+          // minuto de uso normal.
+          //
+          // Repetirlo no aporta nada y sí tapa lo demás en la zona de
+          // «Fallos», que es justo la pantalla que se abre cuando algo va
+          // mal. La primera vez dice todo lo que hay que saber.
+          if (_yaAvisoDelWakelock) return;
+          _yaAvisoDelWakelock = true;
+          logger.warning('No se pudo cambiar el wakelock, y no se vuelve a '
+              'avisar en esta sesión. La pantalla podría apagarse sola '
+              'mientras se reproduce: $e');
         }),
       );
     }));
@@ -1838,6 +1895,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (_ultimaCruda != null &&
           !_saltandoConRecorte.value &&
           _destinoDeSalto == null &&
+          !_saltoNuestro &&
           (crudo - _ultimaCruda!).abs() > const Duration(seconds: 3)) {
         logger.warning(
             'SALTO FANTASMA: mpv pasó de ${_ultimaCruda!.inSeconds}s a '
@@ -3529,7 +3587,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     var attempts = 0;
     _qualitySwitchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       attempts++;
-      motor.saltarA(Duration(seconds: currentSecond));
+      _saltarPedido(Duration(seconds: currentSecond));
       if (motor.posicion.inSeconds == currentSecond || attempts >= 10) {
         timer.cancel();
       }
@@ -5399,7 +5457,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // Recuperación de un corte a mitad de capítulo (ver
         // _midStreamResumeAt) — seguir donde se quedó en vez de arrancar
         // la fuente nueva desde 0.
-        motor.saltarA(_midStreamResumeAt!);
+        _saltarPedido(_midStreamResumeAt!);
         _midStreamResumeAt = null;
       }
     }
@@ -6094,7 +6152,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     for (var intento = 1; intento <= 3; intento++) {
       try {
-        await motor.saltarA(destino);
+        await _saltarPedido(destino);
       } catch (e) {
         logger.warning('no se pudo saltar a $destino', e);
         return;
@@ -6640,7 +6698,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await _saltarConRecorte(recorte, duration);
       return;
     }
-    motor.saltarA(duration);
+    _saltarPedido(duration);
   }
 
 
