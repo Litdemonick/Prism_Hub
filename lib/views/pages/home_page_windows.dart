@@ -64,6 +64,9 @@ class HomeWindows extends StatelessWidget {
           // deslizar hacia abajo siempre vuelve a pedir lo mismo de antes.
           onRefresh: c.refrescarTodo,
           child: ListView.builder(
+            // Una pantalla de adelanto: cada fila pide lo suyo al construirse, así
+            // que esto adelanta la PETICIÓN, no el dibujado. Ver home_page_tv.dart.
+            scrollCacheExtent: const ScrollCacheExtent.viewport(1),
             physics: const AlwaysScrollableScrollPhysics(),
             // Arriba también: el acordeón arrancaba pegado al borde de la
             // ventana, sin nada entre la barra de título y la primera portada.

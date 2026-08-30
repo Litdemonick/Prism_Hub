@@ -208,7 +208,27 @@ class _HomeTVState extends State<HomeTV> {
     // están el nombre y los botones.
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.all(overscan),
+        // ── El margen de seguridad va a los COSTADOS, no arriba y abajo ───
+        //
+        // Era `EdgeInsets.all(overscan)`, o sea el 5 % del ancho por los cuatro
+        // lados. En un televisor de 1280x720 son 64 px arriba y 64 abajo: el
+        // 18 % de la altura, perdido. Reportado: «usá toda la pantalla del
+        // televisor, veo que usás una porción».
+        //
+        // El overscan de verdad —el borde que algunos televisores viejos
+        // recortan— importa a los costados, que es donde se pierde texto. En
+        // vertical la barra de arriba ya tiene su propio aire y la lista es
+        // desplazable, así que ahí ese margen no protege nada: solo achica la
+        // pantalla y hace que entre una fila menos.
+        //
+        // Abajo se deja un tercio: alcanza para que la última fila no quede
+        // pegada al borde, sin regalar el espacio de una fila entera.
+        padding: EdgeInsets.fromLTRB(
+          overscan,
+          overscan / 3,
+          overscan,
+          overscan / 3,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -642,6 +662,26 @@ class _ContenidoTV extends StatelessWidget {
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.only(bottom: 24),
+              // ── Se construye una pantalla POR DELANTE ─────────────────
+              //
+              // Cada fila pide su contenido cuando se construye, y de fábrica
+              // Flutter construye apenas 250 px de más: en un televisor eso es
+              // menos de una fila, así que la fila se armaba justo al entrar en
+              // pantalla y sus tarjetas llegaban un segundo después.
+              //
+              // Reportado en vivo: «bajo y veo el nombre de la extensión pero
+              // no se ve nada, y cuando bajo otra vez ahí recién aparecen las
+              // tarjetas». No era el dibujado: era el pedido, que arrancaba
+              // tarde.
+              //
+              // Con una pantalla de adelanto, la fila siguiente ya pidió lo
+              // suyo mientras se mira la anterior, y al llegar ya está puesta.
+              //
+              // Ojo: esto es lo CONTRARIO de lo que se hace en los carruseles
+              // horizontales, donde construir de más es trabajo perdido. Acá lo
+              // que se adelanta no es dibujado sino una petición de red, que es
+              // justo lo que conviene adelantar.
+              scrollCacheExtent: const ScrollCacheExtent.viewport(1),
               // +1: el destacado.
               itemCount: (visibles.isEmpty ? 2 : visibles.length) + 1,
               itemBuilder: (context, i) => switch (i) {

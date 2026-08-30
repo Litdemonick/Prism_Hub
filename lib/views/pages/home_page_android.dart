@@ -104,6 +104,11 @@ class HomeAndroid extends StatelessWidget {
           onRefresh: c.refrescarTodo,
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
+            // Una pantalla de adelanto, igual que en televisor: cada fila pide
+            // su contenido al construirse, así que adelantar la construcción
+            // adelanta la petición y la fila llega puesta en vez de vacía. Ver
+            // la nota larga en home_page_tv.dart.
+            scrollCacheExtent: const ScrollCacheExtent.viewport(1),
             // Lo que ocupa la barra flotante, que con `extendBody` llega acá
             // como relleno del MediaQuery, más aire.
             // `padding.bottom` ya viene siendo el alto exacto de la barra
