@@ -8,6 +8,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:prismhub/utils/exportar_registro.dart';
 import 'package:prismhub/utils/anuncio_de_registro.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/registro_guardado_de_otro.dart';
 import 'package:prismhub/utils/zonas_del_registro.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -118,6 +119,12 @@ class _RegistroDeOtroAparatoPageState
       'settings.log-olvidar-detalle'.i18n,
     )) {
       return;
+    }
+    // Y también el registro que se guardó de cada uno. Olvidar a medias
+    // —sacarlo de la lista pero dejar su registro en el disco— no es lo que
+    // pidió quien tocó «olvidar».
+    for (final t in _sinConexion) {
+      await RegistroGuardadoDeOtro.olvidar(t.url);
     }
     await TelevisoresConocidos.olvidar();
     // Los que están en línea se vuelven a anotar enseguida: lo que se olvida
@@ -401,6 +408,18 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
   String? _fallo;
   bool _primeraVez = true;
 
+  /// De cuándo es lo que se está viendo, si viene de lo guardado en disco.
+  ///
+  /// Null quiere decir que lo de pantalla llegó en esta sesión. Con fecha, lo
+  /// que se ve es de la última vez que este aparato contestó — y eso hay que
+  /// decirlo, porque un registro viejo que parece de ahora lleva a conclusiones
+  /// equivocadas.
+  DateTime? _deCuandoEs;
+
+  /// Cuántas líneas tenía lo último que se guardó, para no reescribir el
+  /// archivo en cada refresco de cinco segundos si no cambió nada.
+  int _lineasGuardadas = -1;
+
   /// Si hay una lectura en curso.
   ///
   /// Evita que el botón de refrescar y el temporizador de cinco segundos se
@@ -414,6 +433,19 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
   @override
   void initState() {
     super.initState();
+    // Lo que se guardó la última vez se muestra YA, antes de pedir nada.
+    //
+    // Si el televisor está caído —que es justo cuando uno entra a mirar por
+    // qué— la petición va a fallar, y sin esto la pantalla quedaba vacía
+    // debajo de un cartel que promete «lo de abajo es lo último que llegó».
+    final guardado = RegistroGuardadoDeOtro.leer(widget.url);
+    if (guardado != null) {
+      _cabecera = guardado.cabecera;
+      _lineas = guardado.lineas;
+      _lineasGuardadas = guardado.lineas.length;
+      _deCuandoEs = guardado.cuando;
+      _primeraVez = false;
+    }
     // Igual que en la búsqueda: pedir por red en el mismo cuadro en que la
     // pantalla entra deslizándose cuesta un cuadro, y ese cuadro se ve como un
     // parpadeo. Se espera a que la animación termine.
@@ -571,7 +603,22 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
             : partido;
         _fallo = null;
         _primeraVez = false;
+        // Lo que se ve ahora es de ahora.
+        _deCuandoEs = null;
       });
+      // Y se guarda, para que siga estando si el televisor se cae.
+      //
+      // Solo cuando cambió la cantidad de líneas: esto se refresca cada cinco
+      // segundos, y reescribir el archivo entero cada vez sería castigar el
+      // disco para guardar lo mismo.
+      if (_lineas.length != _lineasGuardadas) {
+        _lineasGuardadas = _lineas.length;
+        unawaited(RegistroGuardadoDeOtro.guardar(
+          url: widget.url,
+          cabecera: _cabecera,
+          lineas: _lineas,
+        ));
+      }
       // ── Se sigue el FINAL, no el principio ────────────────────────────
       //
       // Un registro en vivo se lee por abajo: lo último que pasó es lo que
@@ -703,10 +750,40 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
                         TextStyle(fontSize: 12, color: HomeTheme.textPrimary),
                   ),
                 ),
+              if (_deCuandoEs != null) _avisoDeQueEsDeAntes(),
               Expanded(child: _texto()),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Avisa, sin lugar a dudas, que lo que se está viendo NO es de ahora.
+  ///
+  /// Un registro viejo que parece de ahora es peor que no tener nada: lleva a
+  /// mirar un fallo que ya se arregló, o a no ver el que está pasando.
+  Widget _avisoDeQueEsDeAntes() {
+    final d = _deCuandoEs!;
+    String dos(int n) => n.toString().padLeft(2, '0');
+    final cuando = '${d.year}-${dos(d.month)}-${dos(d.day)} '
+        '${dos(d.hour)}:${dos(d.minute)}';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: const Color(0x33B98A00),
+        border: Border.all(color: const Color(0x66D9A400)),
+      ),
+      child: Text(
+        FlutterI18n.translate(
+          context,
+          'settings.log-remoto-guardado',
+          translationParams: {'cuando': cuando},
+        ),
+        style: TextStyle(fontSize: 13, color: HomeTheme.textPrimary),
       ),
     );
   }

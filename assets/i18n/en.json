@@ -555,7 +555,8 @@
     "mas-limpiar": "Clean now",
     "mas-limpiando": "Cleaning…",
     "mas-limpiado": "Freed {mb} MB",
-    "mas-subtitulo": "Which device the app detected and how it is adapting to it"
+    "mas-subtitulo": "Which device the app detected and how it is adapting to it",
+    "log-remoto-guardado": "This is the last thing received from this device, on {cuando}. It is not live: it will not change until the connection comes back."
   },
   "external-player-launching": "Launching {player}",
   "detail": {

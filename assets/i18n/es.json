@@ -551,7 +551,8 @@
     "mas-limpiar": "Limpiar ahora",
     "mas-limpiando": "Limpiando…",
     "mas-limpiado": "Se soltaron {mb} MB",
-    "mas-subtitulo": "Qué aparato detectó la app y cómo se está adaptando a él"
+    "mas-subtitulo": "Qué aparato detectó la app y cómo se está adaptando a él",
+    "log-remoto-guardado": "Esto es lo último que se recibió de este aparato, el {cuando}. No es de ahora: mientras no vuelva la conexión, no va a cambiar."
   },
   "external-player-launching": "Lanzando {player}",
   "detail": {
