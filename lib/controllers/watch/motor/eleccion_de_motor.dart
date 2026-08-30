@@ -58,21 +58,31 @@ class EleccionDeMotor {
   /// audio pero la pantalla quedaba NEGRA. Reportado en vivo en un televisor.
   ///
   /// La causa, medida: el commit que metió la fachada enganchó la VISTA al
-  /// motor, pero no la REPRODUCCIÓN. El controlador sigue abriendo el vídeo
-  /// con `player.open()` de media_kit en los siete sitios donde abre, y lee
-  /// todo su estado —posición, duración, si reproduce— de `player.state`. Así
-  /// que al elegir ExoPlayer pasaba esto:
+  /// motor, pero no la REPRODUCCIÓN. El controlador abría el vídeo con
+  /// `player.open()` de media_kit en los siete sitios donde abre. Así que al
+  /// elegir ExoPlayer pasaba esto:
   ///
   ///   - la vista era la de ExoPlayer, que no tenía nada cargado → negro;
   ///   - mpv seguía reproduciendo por debajo → se escuchaba.
   ///
-  /// Encenderlo de nuevo pide llevar a la fachada las aperturas Y todo el
-  /// estado que el controlador lee del reproductor. Es el paso 3.2 del plan
-  /// (partir el reproductor), que justamente por eso iba antes.
+  /// Ya está conectado: las aperturas pasan por `_abrirFuente`, que va a la
+  /// fachada, así que cambiar de motor cambia de verdad lo que reproduce. Y
+  /// ExoPlayer dibuja en superficie nativa, que es su ventaja de fondo.
   ///
-  /// Mientras tanto se apaga: un interruptor que deja la pantalla en negro es
-  /// peor que no tenerlo.
-  static bool get sePuedeElegir => false;
+  /// Lo que sigue SIN pasar por la fachada son los extras propios de mpv
+  /// —propiedades de libmpv, pistas, captura del cuadro, el recorte fMP4—.
+  /// Todos se apagan solos cuando el motor no es mpv (`player.platform is!
+  /// NativePlayer`), así que con ExoPlayer se pierde esa información de
+  /// diagnóstico pero no la reproducción.
+  ///
+  /// ── Por qué el interruptor sigue a la vista ─────────────────────────────
+  ///
+  /// Cada extensión tiene sus servidores y cada servidor su formato, así que
+  /// cuál de los dos motores conviene no se sabe leyendo código: se sabe
+  /// probando extensión por extensión en aparatos reales. El interruptor está
+  /// para eso, es temporal, y se saca cuando la elección esté decidida por
+  /// plataforma y formato.
+  static bool get sePuedeElegir => true;
 
   /// Arma el motor que corresponde.
   ///

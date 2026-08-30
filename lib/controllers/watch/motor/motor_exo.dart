@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:prismhub/controllers/watch/motor/motor_de_video.dart';
@@ -87,6 +88,24 @@ class MotorExo implements MotorDeVideo {
       // Sin las cabeceras muchas fuentes contestan que no: el Referer y el
       // User-Agent son lo que las convence de entregar el vídeo.
       httpHeaders: cabeceras ?? const {},
+      // ── Superficie nativa y no textura ────────────────────────────────
+      //
+      // Acá está la razón de tener este motor. Con una textura, cada cuadro
+      // hace el mismo viaje que con mpv —decodificador, contexto gráfico,
+      // textura, y recién ahí Flutter lo compone— y son dos pasadas de GPU
+      // por cuadro. En un televisor, cuya GPU es floja aunque decodifique
+      // vídeo de sobra, eso es justo lo que se paga.
+      //
+      // Con superficie nativa el decodificador pinta directo en una capa del
+      // sistema. Es lo que hace que las apps de vídeo de un televisor vayan
+      // suaves en cajas donde todo lo demás va a tirones, y lo que abre la
+      // puerta al modo tunelizado, que la textura no permite ni en teoría.
+      //
+      // Solo en Android: en escritorio esta ruta no existe y el motor de allá
+      // es mpv de todos modos.
+      viewType: Platform.isAndroid
+          ? VideoViewType.platformView
+          : VideoViewType.textureView,
     );
     _cx = cx;
     cx.addListener(() => _mirarYAvisar(cx));

@@ -128,6 +128,26 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     videoController: videoController,
   );
 
+  /// Abre una fuente en el motor que esté puesto.
+  ///
+  /// ── Por qué existe este método ──────────────────────────────────────────
+  ///
+  /// Había siete sitios llamando a `player.open()` directo, o sea a mpv. La
+  /// pantalla ya pedía el vídeo a la fachada, pero la REPRODUCCIÓN seguía
+  /// cableada a un motor concreto — así que al elegir ExoPlayer se veía su
+  /// superficie, vacía, mientras mpv reproducía por detrás. Ese era el
+  /// «se escucha pero se ve todo negro» que se reportó.
+  ///
+  /// Con un solo punto de entrada, cambiar de motor cambia de verdad lo que
+  /// reproduce. Para mpv no cambia nada: `MotorMpv.abrir` es exactamente el
+  /// `player.open(Media(url, httpHeaders: ...), play: ...)` que había.
+  Future<void> _abrirFuente(
+    String url, {
+    Map<String, String>? cabeceras,
+    bool arrancar = true,
+  }) =>
+      motor.abrir(url, cabeceras: cabeceras, arrancar: arrancar);
+
   final showSidebar = false.obs;
   final isOpenSidebar = false.obs;
   final isFullScreen = false.obs;
@@ -317,7 +337,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _redDeLaRueda?.cancel();
       _redDeLaRueda = null;
       final conIdioma = AudioHls.conAudio(actual, quiere.numero);
-      await player.open(Media(conIdioma, httpHeaders: headers));
+      await _abrirFuente(conIdioma, cabeceras: headers);
       _fuenteUrl = conIdioma;
       audioHlsElegido.value = indice;
       if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
@@ -3401,7 +3421,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // abre audio directo (no pasa por _tryOpenPlayer), así que necesita la
     // misma protección contra _routeClosing. Ver el comentario largo ahí.
     if (_isPlaybackClosed()) return;
-    player.open(Media('${BTServerApi.baseApi}/torrent/$_torrenHash/$file'));
+    unawaited(
+      _abrirFuente('${BTServerApi.baseApi}/torrent/$_torrenHash/$file'),
+    );
   }
 
   // 切换全屏
@@ -3494,9 +3516,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final currentSecond = motor.posicion.inSeconds;
     await _ensureVideoSurfaceMounted();
     if (_disposed) return;
-    await player.open(
-      Media(qualityUrl, httpHeaders: headers),
-    );
+    await _abrirFuente(qualityUrl, cabeceras: headers);
     //跳轉到切換之前的時間
     // Antes este timer no se guardaba en ningún campo ni tenía límite de
     // intentos — si el seek real cae en el keyframe más cercano y nunca
@@ -4370,7 +4390,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
       final actual = watchData;
       if (actual == null) return;
-      await player.open(Media(actual.url, httpHeaders: actual.headers));
+      await _abrirFuente(actual.url, cabeceras: actual.headers);
       // Mismo cuidado que en "continuar viendo": pedirle el salto a mpv
       // apenas vuelve open() se pierde si todavia no conoce la duracion.
       if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
@@ -5129,7 +5149,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     try {
       // Sin httpHeaders, igual que en la apertura: las de los pedacitos ya
       // están puestas como propiedad de mpv y siguen ahí entre aperturas.
-      await player.open(Media(ruta));
+      await _abrirFuente(ruta);
       if (_disposed) return;
       // Recién ACÁ entra el desfase nuevo. Antes de `open()` mpv todavía
       // informa la posición del tramo anterior, y sumarle el desfase de la
@@ -5287,9 +5307,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // igual, media_kit volvería a escribir `http-header-fields` con su propio
     // formato —pegando las cabeceras con comas, sin escapar— y pisaría el que
     // se acaba de poner bien.
-    await player.open(listaRecortada != null
-        ? Media(listaRecortada)
-        : Media(plan.url ?? url, httpHeaders: hdrs));
+    await _abrirFuente(
+      listaRecortada ?? plan.url ?? url,
+      // La lista recortada va SIN cabeceras a propósito — ver arriba.
+      cabeceras: listaRecortada != null ? null : hdrs,
+    );
     // El desfase entra recién con la fuente ya abierta — igual que en el salto.
     // Sin esto, abrir directo en el minuto guardado dejaba la barra contando
     // desde cero sobre un vídeo que empieza más adelante.
@@ -6409,9 +6431,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // crashea con SIGSEGV porque el pipeline de render nunca procesó frames.
   Future<void> _safePlayerInit() async {
     if (_disposed) return;
+    // Solo con mpv.
+    //
+    // Esto existe para un fallo de mpv y de nadie más: liberar su contexto de
+    // render sin haber procesado nunca un cuadro revienta en nativo. Con otro
+    // motor no hay tal contexto que cebar, y abrirle una fuente de relleno
+    // sería trabajo —y una pantalla en negro de medio segundo— por un
+    // problema que ahí no existe.
+    if (motor.nombre != 'mpv') return;
     try {
       // av://lavfi:color genera frames localmente sin red — siempre disponible
       // play:false evita que mpv empiece a reproducir (wakelock=1)
+      //
+      // Va contra `player` y no contra la fachada a propósito: `av://lavfi` es
+      // una entrada de libavfilter que solo entiende mpv. Con otro motor este
+      // cebado no aplica —su superficie se prepara sola— y se sale antes de
+      // llegar acá.
       await player.open(
         Media('av://lavfi:color=black:size=2x2:rate=1'),
         play: false,
