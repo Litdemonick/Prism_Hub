@@ -19,6 +19,7 @@ import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
+import 'package:prismhub/views/widgets/tv/desplazable_con_mando.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1910,7 +1911,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: _DesplazableConMando(
+                      child: DesplazableConMando(
                         controlador: _scrollMovil,
                         child: Scrollbar(
                         controller: _scrollMovil,
@@ -2455,93 +2456,6 @@ class _BarraDeDescarga extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-/// Deja leer un texto largo con el control remoto.
-///
-/// ── Por qué hace falta ──────────────────────────────────────────────────────
-///
-/// Reportado en vivo: el aviso de versión nueva en el televisor «ni deja hacer
-/// scroll para leer las cosas». Y es exacto — esa pantalla usa la disposición
-/// de celular, donde se desplaza con el dedo. Con un mando no hay dedo, y
-/// tampoco había nada que tomara el foco: las flechas no llegaban a ninguna
-/// parte y el texto que no entraba en pantalla era, sencillamente, ilegible.
-///
-/// Es peor de lo que suena porque ese aviso **bloquea la app**: no se puede
-/// seguir usando sin responderlo, y responder sin poder leer qué trae la
-/// versión es elegir a ciegas.
-///
-/// ── Qué hace ────────────────────────────────────────────────────────────────
-///
-/// Toma el foco al aparecer y traduce arriba/abajo del mando a desplazamiento.
-/// Nada más. Los botones siguen siendo alcanzables con el foco normal: este
-/// widget solo se queda las dos flechas verticales y deja pasar el resto.
-///
-/// Fuera de televisor no se interpone en nada — devuelve al hijo tal cual, así
-/// que en teléfono y en escritorio esta pantalla sigue exactamente igual.
-class _DesplazableConMando extends StatefulWidget {
-  const _DesplazableConMando({
-    required this.controlador,
-    required this.child,
-  });
-
-  final ScrollController controlador;
-  final Widget child;
-
-  @override
-  State<_DesplazableConMando> createState() => _DesplazableConMandoState();
-}
-
-class _DesplazableConMandoState extends State<_DesplazableConMando> {
-  /// Cuánto se mueve por pulsación.
-  ///
-  /// Una pantalla entera desorienta —se pierde el hilo de lo que se venía
-  /// leyendo— y unas pocas líneas obligan a machacar el botón. Poco más de
-  /// media pantalla deja siempre algo de lo anterior a la vista.
-  static const _paso = 220.0;
-
-  bool _mover(double delta) {
-    if (!widget.controlador.hasClients) return false;
-    final pos = widget.controlador.position;
-    final destino =
-        (pos.pixels + delta).clamp(pos.minScrollExtent, pos.maxScrollExtent);
-    // Ya está en el tope: se devuelve `false` para que la tecla siga su camino
-    // y el foco pueda salir hacia los botones. Quedársela sería encerrar al
-    // usuario en un texto del que no se puede salir.
-    if (destino == pos.pixels) return false;
-    widget.controlador.animateTo(
-      destino,
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-    );
-    return true;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!PlatformTv.esTelevisionSync) return widget.child;
-    return Focus(
-      autofocus: true,
-      onKeyEvent: (nodo, evento) {
-        if (evento is! KeyDownEvent && evento is! KeyRepeatEvent) {
-          return KeyEventResult.ignored;
-        }
-        final tecla = evento.logicalKey;
-        if (tecla == LogicalKeyboardKey.arrowDown) {
-          return _mover(_paso)
-              ? KeyEventResult.handled
-              : KeyEventResult.ignored;
-        }
-        if (tecla == LogicalKeyboardKey.arrowUp) {
-          return _mover(-_paso)
-              ? KeyEventResult.handled
-              : KeyEventResult.ignored;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: widget.child,
     );
   }
 }

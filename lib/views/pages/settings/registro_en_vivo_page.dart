@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/widgets/tv/desplazable_con_mando.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -157,7 +158,9 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     // SelectionArea y no un SelectableText por línea: así se puede arrastrar y
     // copiar un tramo entero (un stack trace completo, por ejemplo) para
     // pegarlo en un reporte, en vez de línea por línea.
-    return SelectionArea(
+    return DesplazableConMando(
+      controlador: _scroll,
+      child: SelectionArea(
       child: ListView.builder(
         controller: _scroll,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
@@ -169,6 +172,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
             child: Text(linea, style: _mono.copyWith(color: _colorDe(linea))),
           );
         },
+      ),
       ),
     );
   }
