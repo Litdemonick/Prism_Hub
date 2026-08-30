@@ -1,53 +1,31 @@
-## PrismHub v1.0.53 — ExoPlayer, ahora de verdad
+## PrismHub v1.0.54 — Que el registro no mienta
 
-> 🎬 **Vuelve el selector de motor de vídeo**, y esta vez funciona. Antes
-> cambiar a ExoPlayer dejaba la pantalla en negro con el audio sonando: la
-> vista era la suya, pero quien reproducía por debajo seguía siendo el otro.
-> Ya está conectado de punta a punta.
+> 🎯 **Dos avisos que no eran ciertos, corregidos.** Uno acusaba al reproductor
+> de un salto que había pedido la propia app; el otro daba dos números
+> distintos para lo mismo en la misma pantalla.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 🎬 El motor de vídeo (Ajustes)
+### 🎯 «Salto fantasma» era un falso positivo
 
-- **Podés elegir entre mpv y ExoPlayer**, en PC y en televisor. Es un
-  interruptor **temporal y para probar**: cada extensión tiene sus servidores y
-  cada servidor su formato, y cuál conviene solo se sabe probando en aparatos
-  reales. Cuando esté decidido por plataforma y formato, se saca.
-- **En Android, ExoPlayer ahora dibuja en superficie nativa.** Es la razón de
-  tenerlo: con textura, cada cuadro pasa por el decodificador, el contexto
-  gráfico y una textura antes de que la app lo componga — dos pasadas de GPU
-  por cuadro. Un televisor decodifica vídeo de sobra, pero su GPU dibujando
-  interfaz es floja, y eso es justo lo que se paga.
-- Con ExoPlayer se pierde parte de la información de diagnóstico del registro
-  (la que sale de mpv) pero no la reproducción.
-- **Si algo no te va con un motor, probá el otro y contámelo** con el registro:
-  es exactamente para eso.
+- El registro avisaba de que el vídeo se movía solo. No era cierto: el salto lo
+  pedía la propia app al retomar donde lo habías dejado, por un camino que el
+  detector no miraba.
+- Un aviso falso en la zona de Fallos es peor que ninguno — manda a buscar un
+  problema que no existe, justo en la pantalla que se abre cuando algo va mal.
+- El detector sigue puesto, pero ahora cuando avise será por algo.
 
-### 🗂️ Historial
+### 🔢 La página de red contaba mal
 
-- **Fecha completa en vez de «Ayer»**, con segundos. Estas fechas se leen al
-  revés de como se escriben: alguien dice cuándo le falló algo y hay que
-  encontrar esa apertura — con «Ayer» hay que ir calculando.
-- **La hora, en el formato de tu aparato**: si lo tenés en 12 horas, se ve en
-  12 horas. Mismo criterio que el reloj de la pantalla de inicio.
-- La primera tarjeta ya no queda pegada al borde de arriba.
+- Decía «582 líneas» arriba y «544» en el resumen, en la misma página. Contaba
+  los renglones del documento —recuadros y títulos incluidos— en vez de las
+  líneas del registro.
 
-### 📺 Ver desde otro aparato
+### 🔦 El aviso del wakelock, una sola vez
 
-- **La página dice qué está compartiendo**: si es el registro de ahora o una
-  apertura guardada (con su fecha), de qué zona, y cuántas líneas trae. Antes
-  decía «todo el registro» pasara lo que pasara, y una sesión vieja se leía
-  como si fuera lo de ahora.
-- Queda anotado en el registro al encender y al apagar, para poder comprobar
-  después qué se estuvo compartiendo.
-
-### 🧠 Rendimiento y diagnóstico
-
-- **En aparatos con poca memoria, la app reacciona antes.** Medido en un
-  televisor de 0,9 GB: cuatro avisos del sistema en siete minutos, y el umbral
-  para aliviar era seis — no se disparaba nunca.
-- Al salir del reproductor con el mando queda anotado, y también cualquier
-  tecla que llegue y no se use. Sirve para distinguir un botón EXIT que la app
-  recibe de uno que atiende el televisor por su cuenta.
+- En algunos televisores ese canal del sistema no responde, y no responde
+  nunca: salían cuatro avisos idénticos por minuto. Ahora sale uno, y dice lo
+  que importa: **en ese aparato la pantalla podría apagarse sola mientras
+  reproducís**.
