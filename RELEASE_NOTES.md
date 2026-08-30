@@ -2,8 +2,8 @@
 
 > ⚡ **Nuevo: PrismHub+.** La app ahora mira en qué aparato está corriendo
 > —televisor, teléfono, tablet o PC— y se ajusta a lo que ese aparato puede dar.
-> Está en **Ajustes → PrismHub+**, con todo a la vista: qué detectó, qué cambió
-> por eso, y un interruptor para apagarlo.
+> Está en **Ajustes → PrismHub+**, con todo a la vista: qué aparato detectó,
+> con cuánta memoria y cuántos núcleos, y qué cambió por eso.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
@@ -30,8 +30,10 @@ demasiado en un televisor de 1 GB.
 - **Y si la app va a tirones de todos modos, baja el nivel sola** y lo recuerda
   para la próxima vez. Ya medíamos cada cuadro; ahora eso sirve para algo.
 
-Apagado, todo vuelve a comportarse como antes, y se dice bien claro tanto en la
-pantalla como en el registro.
+Esto no se apaga, porque no es una preferencia sino cómo la app se entera de con
+qué cuenta —pedir siempre la máxima calidad de vídeo, que sí es una preferencia,
+sigue en Reproducción—. Lo que sí podés hacer es **volver a medir el aparato**,
+por si alguna vez lo hubiera clasificado peor de lo que es.
 
 ### 🖥️ Ahora se mide el aparato en todas las plataformas
 
