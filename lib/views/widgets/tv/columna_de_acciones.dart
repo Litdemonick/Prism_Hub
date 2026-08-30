@@ -78,7 +78,14 @@ class ColumnaDeAcciones extends StatelessWidget {
               ),
             ],
             for (final grupo in grupos) ...[
-              const SizedBox(height: 18),
+              // Un grupo sin rótulo necesita MÁS aire, no menos.
+              //
+              // El rótulo («ZONA», «ACCIONES») venía con su propio margen
+              // debajo, así que sin él la primera opción quedaba pegada a lo
+              // de arriba — en el historial, donde el único grupo es «Salir»,
+              // la tarjeta salía casi tocando el título de la pantalla.
+              // Reportado en vivo en televisor y en PC.
+              SizedBox(height: grupo.titulo != null ? 18 : 30),
               if (grupo.titulo != null)
                 Padding(
                   padding: const EdgeInsets.only(left: 4, bottom: 8),

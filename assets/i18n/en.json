@@ -513,8 +513,6 @@
     "log-historial-cuantas": "{n} saved sessions",
     "log-historial-error": "Could not read the history: {error}",
     "log-historial-sin-fecha": "No date",
-    "log-historial-hoy": "Today",
-    "log-historial-ayer": "Yesterday",
     "log-historial-fallos": "{n} with errors",
     "log-en-red-bloqueado": "The system would not let the port open on this device. This usually happens with the app in the background: try again with PrismHub on screen.",
     "log-export-listo": "Log exported",

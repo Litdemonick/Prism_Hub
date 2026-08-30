@@ -509,8 +509,6 @@
     "log-historial-cuantas": "{n} aperturas guardadas",
     "log-historial-error": "No se pudo leer el historial: {error}",
     "log-historial-sin-fecha": "Sin fecha",
-    "log-historial-hoy": "Hoy",
-    "log-historial-ayer": "Ayer",
     "log-historial-fallos": "{n} con fallos",
     "log-en-red-bloqueado": "El sistema no dejó abrir el puerto en este aparato. Suele pasar con la app en segundo plano: volvé a intentarlo con PrismHub abierto en pantalla.",
     "log-export-listo": "Registro exportado",

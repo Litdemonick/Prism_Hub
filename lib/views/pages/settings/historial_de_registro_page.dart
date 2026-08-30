@@ -173,8 +173,13 @@ class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
     }
     final tv = PlatformTv.esTelevisionSync;
     return ListView.builder(
-      padding: EdgeInsets.fromLTRB(tv ? 16 : 16, tv ? 20 : 12, tv ? 20 : 16,
-          tv ? 20 : 12),
+      // Aire arriba, y no un margen parejo.
+      //
+      // La primera tarjeta arrancaba pegada al borde de la pantalla —debajo
+      // del título en teléfono y PC, y a la altura del título de la columna
+      // en televisor— y se leía como si estuviera cortada por arriba.
+      // Reportado en vivo. En televisor va más, que es donde más se nota.
+      padding: EdgeInsets.fromLTRB(16, tv ? 34 : 16, tv ? 20 : 16, 20),
       itemCount: _sesiones.length,
       itemBuilder: (context, i) => Padding(
         // La lista se rehace cuando se vuelve de una sesión, y sin clave el
@@ -354,7 +359,7 @@ class _SesionPageState extends State<_SesionPage> {
       // entre las dos.
       if (ServidorDeRegistro.encendido) {
         ServidorDeRegistro.lineasFijas = _visibles;
-        ServidorDeRegistro.areaElegida = null;
+        ServidorDeRegistro.areaElegida = _zona.area;
       }
     });
   }
@@ -422,7 +427,11 @@ class _SesionPageState extends State<_SesionPage> {
     }
     // Se sirve ESTA sesión, y la zona que se esté mirando de ella.
     ServidorDeRegistro.lineasFijas = _visibles;
-    ServidorDeRegistro.areaElegida = null;
+    ServidorDeRegistro.areaElegida = _zona.area;
+    // Con la fecha, no solo «historial»: hay diez aperturas guardadas y desde
+    // el navegador tienen todas la misma pinta.
+    ServidorDeRegistro.queSeSirve =
+        'historial · apertura del ${_tituloDeLaSesion()}';
     final r = await ServidorDeRegistro.encender();
     if (!mounted) return;
     setState(() {});
@@ -731,25 +740,50 @@ class _SesionPageState extends State<_SesionPage> {
   Color _colorDe(String linea) => colorDeLinea(linea);
 }
 
-/// La fecha en palabras cuando es reciente, y en números cuando no.
+/// Cuándo se abrió esa sesión: fecha completa y hora exacta.
 ///
-/// «Hoy 21:45» se ubica de un vistazo; «2026-08-29 21:45» hay que leerlo y
-/// compararlo con el día de hoy. Pasados dos días la fecha completa vuelve a
-/// ser lo más claro.
+/// ── Por qué no dice «Hoy» ni «Ayer» ─────────────────────────────────────────
 ///
-/// Es una función suelta y no un método porque la usan las dos pantallas —la
-/// lista y la sesión abierta— y tienen que decir la misma fecha con las mismas
-/// palabras.
+/// Se mostraba así porque se ubica de un vistazo. Y sirve mientras se mira el
+/// historial en el momento — pero estas fechas se leen sobre todo al revés:
+/// alguien reporta un fallo, dice cuándo le pasó, y hay que encontrar esa
+/// apertura. Con «Ayer» hay que ir calculando contra el día de hoy, y si el
+/// registro se exportó anteayer la cuenta ya no da.
+///
+/// Pedido explícito: «que agregue la fecha en vez de que diga ayer, y que diga
+/// bien la hora». Va también con los segundos: dos aperturas del mismo minuto
+/// se veían idénticas y no había forma de saber cuál era cuál.
 String textoDeFecha(BuildContext context, DateTime cuando) {
-  final hora = '${_dosCifras(cuando.hour)}:${_dosCifras(cuando.minute)}';
-  final hoy = DateTime.now();
-  final dia = DateTime(cuando.year, cuando.month, cuando.day);
-  final diaDeHoy = DateTime(hoy.year, hoy.month, hoy.day);
-  final diferencia = diaDeHoy.difference(dia).inDays;
-  if (diferencia == 0) return '${'settings.log-historial-hoy'.i18n} $hora';
-  if (diferencia == 1) return '${'settings.log-historial-ayer'.i18n} $hora';
-  return '${cuando.year}-${_dosCifras(cuando.month)}-'
-      '${_dosCifras(cuando.day)}  $hora';
+  final fecha = '${cuando.year}-${_dosCifras(cuando.month)}-'
+      '${_dosCifras(cuando.day)}';
+  return '$fecha · ${_hora(context, cuando)}';
+}
+
+/// La hora en el formato que use el aparato, con los segundos.
+///
+/// ── Por qué no se escribe en 24 h y listo ───────────────────────────────────
+///
+/// `alwaysUse24HourFormat` es el interruptor de «usar 24 horas» del sistema, y
+/// en un televisor va con la configuración de hora y país del propio aparato.
+/// Escribirla siempre en 24 h se ve raro para quien tiene el suyo en 12 — es
+/// el mismo criterio que ya usa el reloj de la pantalla de inicio de TV, y
+/// tienen que decir la hora igual.
+///
+/// No se usa `formatTimeOfDay` porque `TimeOfDay` no lleva segundos, y acá
+/// hacen falta: dos aperturas del mismo minuto se veían idénticas y no había
+/// forma de saber cuál era cuál.
+String _hora(BuildContext context, DateTime cuando) {
+  final minutos =
+      '${_dosCifras(cuando.minute)}:${_dosCifras(cuando.second)}';
+  if (MediaQuery.alwaysUse24HourFormatOf(context)) {
+    return '${_dosCifras(cuando.hour)}:$minutos';
+  }
+  final l = MaterialLocalizations.of(context);
+  final doce = cuando.hour % 12 == 0 ? 12 : cuando.hour % 12;
+  final marca = cuando.hour < 12
+      ? l.anteMeridiemAbbreviation
+      : l.postMeridiemAbbreviation;
+  return '$doce:$minutos $marca';
 }
 
 String _dosCifras(int n) => n.toString().padLeft(2, '0');
