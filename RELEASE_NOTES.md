@@ -1,49 +1,50 @@
-## PrismHub v1.0.56 — El televisor se encuentra solo
+## PrismHub v1.0.57 — Historial ordenado, y el registro del televisor en tu bolsillo
 
-> 📡 **Se acabó escribir direcciones.** En el teléfono, la tablet o el PC:
-> Ajustes → Registros → **«Ver el registro de un televisor»**. Busca en tu red,
-> muestra los que estén compartiendo y lo abre de un toque.
+> 🗑️ **Ya podés borrar lo guardado**, suelto o un día entero, y las aperturas
+> se agrupan por día para encontrarlas cuando se acumulan. En televisor, PC,
+> teléfono y tablet.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 📡 Ver el registro de un televisor, sin escribir nada
+### 🗂️ El historial, ordenado y limpiable
 
-- En el televisor se enciende igual que antes: **Ajustes → Ver registro → «Ver
-  desde otro aparato»**. Y ahí ya no hace falta apuntar la dirección.
-- En el otro aparato aparece en una lista y se abre de un toque. Se ve dentro
-  de PrismHub, con los mismos colores del visor de siempre — no en una página
-  pelada del navegador.
-- **Si la conexión se corta, lo que ya llegó no se borra.** Si el televisor se
-  cayó, eso es justamente lo que hace falta para saber por qué.
-- **La dirección sigue a la vista, con dos botones**: copiarla o abrirla en el
-  navegador. Que ya no haga falta escribirla no es razón para esconderla — en
-  un PC es cómodo tenerla en otra ventana al lado de la app, y copiarla sirve
-  para mandársela a alguien.
+- **Agrupado por día.** Se pidió partirlo «cada diez, como subcarpetas», y el
+  bloque de diez tiene un problema: no significa nada — «las diez anteriores»
+  cambia de contenido cada vez que abrís la app. El día sí, y es como se busca
+  de verdad: «lo de anoche», «lo del martes».
+- **Borrar una apertura, o todo un día.** Pregunta antes, porque no se puede
+  deshacer. La sesión de ahora nunca se toca.
+- El botón va dentro de la tarjeta y no deslizando: deslizar no existe con un
+  mando, y una acción que en un aparato está y en otro no hace creer que a la
+  app le falta algo.
 
-### 🔗 Y la dirección, mucho más corta
+### 📱 El registro del televisor, y qué hacer con él
 
-- Antes: `http://192.168.50.183:40365/r/ab3k9x`. Ahora: `192.168.50.183:8787/ab3k`
-  — y **ya no cambia en toda la sesión**, así que apagar y volver a encender no
-  te obliga a escribirla de nuevo.
-- **Elige bien la dirección.** Un televisor con cable y wifi tiene dos, y se
-  tomaba la primera sin mirar cuál. Ahora prefiere `192.168.x.x`, que es lo que
-  reparten casi todos los routers de casa, y deja las dos anotadas en el
-  registro por si la otra fuera la buena.
+- **Guardalo o compartilo** desde el teléfono o el PC: en teléfono sale por el
+  menú de compartir del sistema (WhatsApp, correo, lo que tengas); en
+  escritorio elegís dónde guardarlo.
+- El archivo **dice de qué televisor es**. Sin eso saldría afirmando que el
+  registro es de tu teléfono, y quien lo recibiera buscaría el fallo en el
+  aparato equivocado.
+- **Botón de refrescar**, además de la actualización automática cada 5
+  segundos. Y ya no se pisan entre sí.
+- **Barra de desplazamiento siempre visible, ancha y que se puede arrastrar.**
+  La anterior se desvanecía y en PC ni siquiera se podía agarrar.
+- **Si se corta la conexión, no se borra lo que ya llegó** — que es justo lo
+  que hace falta si el televisor se cayó.
 
-### 🔒 Sobre la privacidad, dicho claro
+### 🐞 Corregido
 
-- El televisor solo se anuncia **mientras vos lo enciendas**, se apaga solo a
-  los 45 minutos y es de solo lectura.
-- Quien esté en tu red puede encontrarlo en ese rato sin ver la pantalla del
-  televisor — antes hacía falta verla. Es el precio de la comodidad, y el
-  registro sigue saliendo **sin credenciales, sin qué estuviste viendo y sin
-  datos tuyos**.
-
-### 🔧 Actualizaciones
-
-- Cuando el instalador no aparece al actualizar, el registro ahora dice por
-  qué: si falta el permiso de instalar apps o si el instalador se lanzó y el
-  televisor no lo trajo al frente. Son dos problemas distintos que desde fuera
-  se ven igual.
+- **Ya no parpadea en blanco al entrar.** Se buscaba en la red en el mismo
+  cuadro en que la pantalla entra deslizándose.
+- **Ya no se come el borde del logo de PrismHub.** Se tomaba la primera línea
+  como cabecera sin comprobar que lo fuera.
+- **Lo que se comparte coincide con lo que ves en el televisor**: mismas
+  líneas, mismo orden, mismo filtro. Antes se enviaba el archivo exportado,
+  repartido en secciones — y el orden en que pasaron las cosas *es* la
+  información.
+- **El registro dice cuándo es el primer arranque tras actualizar**, con la
+  versión de la que venías. Es justo cuando aparecen los fallos de una
+  versión nueva.
