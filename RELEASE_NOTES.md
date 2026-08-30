@@ -1,39 +1,36 @@
-## PrismHub v1.0.51 — El registro contesta las tres preguntas
+## PrismHub v1.0.52 — Que «Fallos» muestre fallos
 
-> 🧩 **Ahora dice qué extensiones tenés puestas y en qué versión**, cómo está
-> configurada la app y qué hardware mueve el vídeo. Son las preguntas que
-> había que hacer por mensaje antes de poder mirar nada.
+> 🧹 **La zona de Fallos estaba enterrada bajo avisos que no son fallos.** En
+> un registro real había catorce errores de verdad perdidos entre doscientos
+> cuarenta y nueve avisos. Ahora se ven.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 🧩 Extensiones instaladas
+### 🧠 El aviso de memoria decía «0.0 MB» siempre
 
-- El registro abre listando **qué extensiones hay puestas, con su versión**, y
-  marcando las apagadas. La mayoría de los reportes son «esta extensión no
-  carga», y sin esto no se puede distinguir un fallo de la app de una
-  extensión vieja — que es lo primero que hay que descartar.
+- Aparecía cientos de veces y parecía que la app no soltaba nada cuando el
+  sistema pedía memoria. **Era la medición, no el comportamiento**: Flutter
+  vacía él mismo la caché de imágenes *antes* de avisarle a la app, así que
+  cuando la app iba a medir ya estaba vacía por definición.
+- Lo que esta parte sí aporta es soltar las imágenes **en uso** —las que están
+  en pantalla, las más grandes, que Flutter no toca— y los registros de
+  portadas. Eso es lo que se cuenta ahora, y es un número que dice algo.
+- **Y ahora la app reacciona.** Si el sistema insiste media docena de veces en
+  una sesión, está diciendo con hechos que el aparato va justo *hoy* —puede
+  ser un teléfono capaz con otras diez apps abiertas— así que se le baja un
+  escalón al techo de imágenes para lo que queda de sesión. Un escalón y no
+  más: bajarlo al mínimo cambiaría un problema de memoria por uno de fluidez.
+- Los avisos llegaban de a pares porque Android manda varios niveles a la vez;
+  ahora cuentan como uno solo.
 
-### ⚙️ Cómo está configurada la app
+### 🧹 «Fallos» vuelve a servir
 
-- Se anota lo que **cambia el comportamiento**: proxy, motor de vídeo,
-  reproductor, idioma y cuántas extensiones hay apagadas. Con un proxy puesto
-  toda la red pasa por otro lado, y un «no carga» ahí no significa lo mismo.
-- No va la lista entera de ajustes: eso sería ruido.
-
-### 📺 Hardware que importa para el vídeo
-
-- **Arquitectura y chip**: los decodificadores traen binarios distintos por
-  arquitectura, y un aparato que corre la app en 32 bits teniendo 64 —pasa en
-  cajas de televisión mal armadas— se comporta distinto.
-- **Hercios de la pantalla**: buena parte de los tirones del reproductor son
-  cuadros que no encajan con el refresco, y sin ese número no se puede ni
-  empezar a mirarlo.
-
-### 🐞 Corregido
-
-- **La explicación desaparecía al filtrar.** Al elegir una zona se veía el
-  nombre en grande y debajo, directamente, líneas técnicas: los apartados que
-  cuentan qué es el registro y qué **no** lleva se escondían justo para quien
-  estaba mirando una zona concreta.
+- Que el sistema pida memoria es normal —pasa cada vez que abrís otra app— y
+  que la app la suelte es la app funcionando bien. Ya no figura como fallo.
+- **Los tirones**: a 60 Hz pasarse de 50 ms es perder tres cuadros; molesta,
+  pero pasa constantemente y no es un fallo. Ahora avisa a partir de un cuarto
+  de segundo, que ya es un parpadeo que cualquiera nota.
+- **No se pierde ninguno**: los demás se siguen registrando como información y
+  en la zona «Reproductor» están todos.
