@@ -77,6 +77,41 @@ class PrismLog {
   /// se saltea es el encabezado.
   static void crudo(String linea) => _queueLog(linea);
 
+  /// Manda al registro TAMBIÉN lo que se escribe con `debugPrint`.
+  ///
+  /// ── Por qué hacía falta ─────────────────────────────────────────────────
+  ///
+  /// La app tiene medio centenar de `debugPrint` repartidos: fallos de red que
+  /// se atrapan y se siguen, cosas que no se pudieron leer, avisos de por qué
+  /// se tomó un camino y no otro. Nada de eso llegaba al archivo — quedaba
+  /// solo en una consola que en un televisor o un teléfono nadie tiene
+  /// abierta, justo los dos sitios donde el registro es la única herramienta.
+  ///
+  /// Pedido explícito: «debe ser full transparente para poder fixear bien la
+  /// app en todas las plataformas». Esto cierra el agujero más grande que
+  /// quedaba, sin tener que ir cambiando cincuenta llamadas de una en una — y
+  /// atrapa además lo que escriben Flutter y los complementos.
+  ///
+  /// Pasa por el mismo saneado que todo lo demás, así que sumar esto no
+  /// expone nada nuevo.
+  static void capturarDebugPrint() {
+    if (_debugPrintOriginal != null) return;
+    final original = debugPrint;
+    _debugPrintOriginal = original;
+    debugPrint = (String? mensaje, {int? wrapWidth}) {
+      // El propio volcado del registro usa debugPrint. Sin esta guarda, cada
+      // línea volcada se volvería a encolar y de ahí a volcarse otra vez: una
+      // vuelta infinita que además crece sola.
+      if (!_volcando && mensaje != null && mensaje.isNotEmpty) {
+        _queueLog('consola · $mensaje');
+      }
+      original(mensaje, wrapWidth: wrapWidth);
+    };
+  }
+
+  static DebugPrintCallback? _debugPrintOriginal;
+  static bool _volcando = false;
+
   static void _queueLog(String log) {
     final limpio = sanear(log);
     _recordar(limpio);
@@ -285,7 +320,7 @@ class PrismLog {
 
     // En depuración, a la consola y nada más: ahí se está mirando la consola.
     if (kDebugMode) {
-      debugPrint(batch);
+      _aLaConsola(batch);
       return;
     }
 
@@ -298,7 +333,7 @@ class PrismLog {
     // queda escrito, así que se puede exportar y adjuntar como cualquier otra
     // sesión, sin perder el volcado por consola que sirve para verlo en vivo.
     if (kProfileMode) {
-      debugPrint(batch);
+      _aLaConsola(batch);
     }
     // ── El archivo se escribe SIEMPRE, en las cuatro plataformas ─────────
     //
@@ -320,6 +355,19 @@ class PrismLog {
       if (await file.length() > _topeBytes) await _recortar(file);
     } catch (_) {
       // Best-effort — perder una tanda de log no debe romper nada más.
+    }
+  }
+
+  /// Vuelca a la consola marcando que estamos volcando.
+  ///
+  /// La marca es lo que corta la vuelta infinita: mientras esté puesta, lo que
+  /// salga por `debugPrint` no se vuelve a encolar. Ver [capturarDebugPrint].
+  static void _aLaConsola(String batch) {
+    _volcando = true;
+    try {
+      debugPrint(batch);
+    } finally {
+      _volcando = false;
     }
   }
 

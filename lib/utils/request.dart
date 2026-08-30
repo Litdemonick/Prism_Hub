@@ -2,6 +2,7 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:flutter_socks_proxy/socks_proxy.dart';
+import 'package:prismhub/utils/traza_de_red.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 
@@ -34,6 +35,8 @@ class PrismRequest {
     ));
     final cookieManager = CookieManager(_cookieJar);
     dio.interceptors.add(cookieManager);
+    // Cada pedido de la app queda anotado. Ver TrazaDeRed.
+    dio.interceptors.add(TrazaDeRed());
     refreshProxy();
     _isInitialized = true;
   }
@@ -113,6 +116,7 @@ class PrismRequest {
         sendTimeout: const Duration(seconds: 15),
       ));
       d.interceptors.add(CookieManager(cookieJarForPackage(package)));
+      d.interceptors.add(TrazaDeRed());
       return d;
     });
   }

@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/extension/extension_controller.dart';
 import 'package:prismhub/controllers/extension/extension_repo_controller.dart';
@@ -1665,6 +1666,7 @@ class ExtensionUtils {
   }
 
   static uninstall(String package) async {
+    CentinelaDeArranque.marcar('desinstala la extension $package');
     final file = File(path.join(extensionsDir, '$package.js'));
     if (await file.exists()) {
       await file.delete();
@@ -1782,6 +1784,7 @@ class ExtensionUtils {
   }
 
   static install(String url, BuildContext context) async {
+    CentinelaDeArranque.marcar('instala una extension');
     try {
       final res = await dio.get<String>(url);
       if (res.data == null) throw Exception("Does not seem to be an extension");

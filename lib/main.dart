@@ -47,6 +47,13 @@ void main(List<String> args) async {
   }
 
   runZonedGuarded(() async {
+    // Lo que va por debugPrint también al registro.
+    //
+    // Se engancha antes que nada: si se dejara para más adelante, todo lo que
+    // se escriba durante el arranque —que es cuando más cosas pueden salir
+    // mal— se perdería. Ver PrismLog.capturarDebugPrint.
+    PrismLog.capturarDebugPrint();
+
     FlutterError.onError = (FlutterErrorDetails details) {
       // details.exception a secas es solo el resumen ("A RenderFlex
       // overflowed by 13 pixels..."), sin el widget/archivo/línea donde

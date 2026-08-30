@@ -140,11 +140,22 @@ class CentinelaDeArranque {
   ///
   /// Va corto y sin datos del usuario: el archivo se comparte para
   /// diagnosticar. «abrió el reproductor», no qué episodio.
+  /// Con qué se firman los pasos en el registro.
+  static const marcaDePaso = '[paso]';
+
   static void marcar(String que) {
     try {
       if (_comenzoEn == null) return;
       final desde = DateTime.now().difference(_comenzoEn!).inSeconds;
       _rastro.add('+${desde}s $que');
+      // También al registro normal, y no solo al rastro de cierre.
+      //
+      // El rastro solo se lee DESPUÉS de un cierre inesperado, así que todo
+      // esto —lo que la persona estaba haciendo paso a paso— era invisible
+      // mientras la app funcionaba. Y es justo lo que hace falta para
+      // entender un fallo que no llega a cerrar nada: sin saber qué se tocó
+      // antes, una línea de error suelta no dice de dónde salió.
+      logger.info('$marcaDePaso $que');
       if (_rastro.length > _cuantasSeGuardan) _rastro.removeAt(0);
       // Se escribe en el momento, sin esperar: si el proceso muere en el paso
       // siguiente, esta marca tiene que estar ya en el disco.

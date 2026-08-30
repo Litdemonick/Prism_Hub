@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
@@ -535,6 +536,12 @@ class SearchPageController extends GetxController {
   // la misma palabra no hacía absolutamente nada, y los resultados viejos
   // quedaban en pantalla incluso después de actualizar una extensión.
   void submitSearch(String value) {
+    // Sin el texto buscado: eso es lo que la persona estaba mirando, y el
+    // registro no lleva eso a propósito. Con saber que hubo una búsqueda y
+    // en cuántas extensiones alcanza para seguir el hilo de lo que pasó.
+    CentinelaDeArranque.marcar(
+      'busca en ${searchResultList.length} extensiones',
+    );
     if (search.value == value) {
       _randomKey = DateTime.now().millisecondsSinceEpoch.toString();
       getResult(_randomKey);
