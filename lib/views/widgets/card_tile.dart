@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:prismhub/views/widgets/tema_fluent_seguro.dart';
 
 class CardTile extends StatelessWidget {
   const CardTile({
@@ -18,7 +19,7 @@ class CardTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 13),
       decoration: BoxDecoration(
-        color: FluentTheme.of(context).cardColor,
+        color: temaFluent(context).cardColor,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.grey.withValues(alpha:0.1), width: 1),
       ),
@@ -48,7 +49,7 @@ class CardTile extends StatelessWidget {
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: FluentTheme.of(context).brightness == Brightness.dark
+                  color: temaFluent(context).brightness == Brightness.dark
                       ? Colors.white.withValues(alpha:0.1)
                       : Colors.grey.withValues(alpha:0.1),
                   width: 1,

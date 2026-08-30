@@ -1,9 +1,9 @@
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'dart:io';
 
-import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/widgets/tema_fluent_seguro.dart';
 
 /// Wraps a horizontally-scrolling [child] with a visible "there's more"
 /// indicator — a soft edge fade plus a chevron that bounces gently toward
@@ -162,7 +162,7 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
     // interfaz oscura. En escritorio hay que preguntarle a FluentTheme.
     final bg = Platform.isAndroid
         ? Theme.of(context).scaffoldBackgroundColor
-        : fluent.FluentTheme.of(context).scaffoldBackgroundColor;
+        : temaFluent(context).scaffoldBackgroundColor;
     final dir = right ? 1 : -1;
     return Positioned(
       right: right ? 0 : null,

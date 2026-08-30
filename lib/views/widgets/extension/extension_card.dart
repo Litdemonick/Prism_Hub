@@ -17,6 +17,7 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/progress.dart';
+import 'package:prismhub/views/widgets/tema_fluent_seguro.dart';
 
 class ExtensionCard extends StatefulWidget {
   const ExtensionCard({
@@ -701,7 +702,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
-                  color: fluent.FluentTheme.of(context).inactiveColor,
+                  color: temaFluent(context).inactiveColor,
                 ),
               ),
               // Descripción — de qué va la extensión (anime, lectura,

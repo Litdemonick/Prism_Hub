@@ -7,6 +7,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:prismhub/views/widgets/tema_fluent_seguro.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
     show openWebViewPlayer;
@@ -223,7 +224,7 @@ class _VideoPlayerDesktopControlsState
         // del FluentTheme(dark) local de este widget — sin este wrap
         // quedaba con el tema claro/celeste por defecto de toda la app en
         // vez del oscuro+morado del reproductor.
-        data: FluentTheme.of(context).copyWith(
+        data: temaFluent(context).copyWith(
           accentColor: AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
         ),
         child: ContentDialog(
@@ -2032,7 +2033,7 @@ class _SeekBarState extends State<_SeekBar> {
     final shadowFraction = (bufferFraction - playedFraction).clamp(0.0, 1.0);
 
     return FluentTheme(
-      data: FluentTheme.of(context).copyWith(
+      data: temaFluent(context).copyWith(
         accentColor: AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
       ),
       // Sin altura fija: el Stack se ajusta solo a la altura natural del

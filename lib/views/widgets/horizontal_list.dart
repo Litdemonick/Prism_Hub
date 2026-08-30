@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/horizontal_scroll_fade.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/tema_fluent_seguro.dart';
 
 class HorizontalList extends StatefulWidget {
   const HorizontalList({
@@ -222,7 +223,7 @@ class _HorizontalTitleState extends State<HorizontalTitle> {
           decoration: BoxDecoration(
             borderRadius: const BorderRadius.all(Radius.circular(8)),
             color: _hoverTitle
-                ? fluent.FluentTheme.of(context).brightness == Brightness.light
+                ? temaFluent(context).brightness == Brightness.light
                     ? const Color.fromARGB(19, 27, 26, 25)
                     : const Color.fromARGB(19, 186, 186, 186)
                 : Colors.transparent,
