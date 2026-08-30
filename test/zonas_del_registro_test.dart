@@ -73,6 +73,16 @@ void main() {
       });
     }
 
+    test('el bloqueador de anuncios NO entra: es de la app, no de una extension',
+        () {
+      // Sus listas se descargan al arrancar, sin ninguna extension de por
+      // medio. En esta zona eran cuatro lineas de arranque que no tienen que
+      // ver con lo que se busca aca.
+      final l = _linea('INFO', '[bloqueador] 58052 dominios en 1 lista(s)');
+      expect(ZonaDelRegistro.extensiones.acepta(l), isFalse);
+      expect(esGeneral(l), isTrue);
+    });
+
     test('no se lleva lo del reproductor', () {
       expect(
         ZonaDelRegistro.extensiones

@@ -101,6 +101,14 @@ bool _esFallo(String l) =>
     l.contains('LO ULTIMO QUE HIZO') ||
     l.contains('no se cerro normalmente');
 
+/// El bloqueador de anuncios NO entra en «Extensiones».
+///
+/// Estaba ahí porque se nota sobre todo cargando páginas de extensiones, pero
+/// es infraestructura de la app: sus listas se descargan al arrancar, sin que
+/// haya ninguna extensión de por medio. En «Extensiones» ensuciaba la zona con
+/// cuatro líneas de arranque que no tienen nada que ver con lo que se busca
+/// ahí. Queda en «Todo» y en «General de la app».
+///
 /// La marca de los pedidos de red de la app. Ver TrazaDeRed.
 ///
 /// No entra en ninguna zona: un pedido de red puede ser de cualquier parte de
@@ -159,7 +167,6 @@ const _deExtensiones = [
   '[vista previa]',
   '[sniffer',
   '[webview-html]',
-  '[bloqueador]',
   'Page-sniff',
   'Sniffer',
   'ficha ·',
