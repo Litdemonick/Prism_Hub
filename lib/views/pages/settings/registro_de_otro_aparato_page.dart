@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
+import 'package:prismhub/utils/exportar_registro.dart';
 import 'package:prismhub/utils/anuncio_de_registro.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/zonas_del_registro.dart';
@@ -82,44 +84,6 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
       _encontrados = hallazgos;
       _buscando = false;
     });
-  }
-
-  Future<void> _copiar(String url) async {
-    await Clipboard.setData(ClipboardData(text: url));
-    if (!mounted) return;
-    showPlatformSnackbar(context: context, content: 'common.copied'.i18n);
-  }
-
-  /// Abre la dirección en el navegador del sistema.
-  ///
-  /// Sigue estando aunque el registro se pueda ver acá dentro: en un PC es
-  /// cómodo tenerlo en otra ventana, al lado de la app, en vez de ir y venir
-  /// entre pantallas.
-  Future<void> _enElNavegador(String url) async {
-    try {
-      final abierto = await launchUrl(
-        Uri.parse(url),
-        mode: LaunchMode.externalApplication,
-      );
-      if (abierto) return;
-      await _dejarlaCopiada(url);
-    } catch (_) {
-      await _dejarlaCopiada(url);
-    }
-  }
-
-  /// Cuando no hay navegador que abrir, al menos que quede copiada.
-  ///
-  /// El aviso dice que lo está, así que tiene que estarlo: un mensaje que
-  /// promete algo que no pasó es peor que no decir nada — se pega en cualquier
-  /// lado y aparece lo que hubiera antes en el portapapeles.
-  Future<void> _dejarlaCopiada(String url) async {
-    await Clipboard.setData(ClipboardData(text: url));
-    if (!mounted) return;
-    showPlatformSnackbar(
-      context: context,
-      content: 'settings.log-sin-navegador'.i18n,
-    );
   }
 
   @override
@@ -257,14 +221,14 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
                           ),
                         ),
                         const SizedBox(height: 3),
-                        // La dirección sigue a la vista.
+                        // La dirección, a la vista pero sin botones al lado.
                         //
-                        // Verla no es un resto de cuando había que
-                        // escribirla: es lo que deja abrirla en el navegador
-                        // —que a veces es lo que uno quiere, para tenerla en
-                        // otra ventana mientras usa la app— y copiarla para
-                        // mandársela a alguien. Que ya no HAGA falta
-                        // escribirla no es razón para esconderla.
+                        // Acá sirve para reconocer cuál televisor es cuando
+                        // hay más de uno. Copiarla y abrirla en el navegador
+                        // están DENTRO, en la pantalla del registro: son
+                        // cosas que se hacen sobre el que ya se eligió, y
+                        // acá solo llenaban la fila de iconos chicos entre
+                        // los que hay que apuntar.
                         Text(
                           e.url,
                           style: TextStyle(
@@ -274,18 +238,6 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
                         ),
                       ],
                     ),
-                  ),
-                  IconButton(
-                    tooltip: 'settings.log-copiar'.i18n,
-                    icon: const Icon(Icons.copy_rounded, size: 20),
-                    color: HomeTheme.textMuted,
-                    onPressed: () => _copiar(e.url),
-                  ),
-                  IconButton(
-                    tooltip: 'settings.log-en-navegador'.i18n,
-                    icon: const Icon(Icons.open_in_browser, size: 20),
-                    color: HomeTheme.textMuted,
-                    onPressed: () => _enElNavegador(e.url),
                   ),
                   Icon(Icons.chevron_right, color: HomeTheme.textMuted),
                 ],
@@ -315,15 +267,46 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
   String _cabecera = '';
   String? _fallo;
   bool _primeraVez = true;
+
+  /// Si hay una lectura en curso.
+  ///
+  /// Evita que el botón de refrescar y el temporizador de cinco segundos se
+  /// pisen: dos lecturas a la vez sobre una red de casa lenta terminan
+  /// llegando en cualquier orden, y la que llega segunda puede ser la MÁS
+  /// VIEJA — o sea que el registro daría un paso hacia atrás solo.
+  bool _trayendo = false;
+
   Timer? _reloj;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_traer());
-    // Cada cinco segundos, igual que la página que sirve el televisor: es lo
-    // que hace que esto se sienta en vivo sin castigar una red de casa.
-    _reloj = Timer.periodic(const Duration(seconds: 5), (_) => _traer());
+    // Igual que en la búsqueda: pedir por red en el mismo cuadro en que la
+    // pantalla entra deslizándose cuesta un cuadro, y ese cuadro se ve como un
+    // parpadeo. Se espera a que la animación termine.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final animacion = ModalRoute.of(context)?.animation;
+      void arrancar() {
+        if (!mounted) return;
+        unawaited(_traer());
+        // Cada cinco segundos, igual que la página que sirve el televisor: es
+        // lo que hace que esto se sienta en vivo sin castigar una red de casa.
+        _reloj = Timer.periodic(const Duration(seconds: 5), (_) => _traer());
+      }
+
+      if (animacion == null || animacion.isCompleted) {
+        arrancar();
+        return;
+      }
+      void alTerminar(AnimationStatus estado) {
+        if (estado != AnimationStatus.completed) return;
+        animacion.removeStatusListener(alTerminar);
+        arrancar();
+      }
+
+      animacion.addStatusListener(alTerminar);
+    });
   }
 
   @override
@@ -333,7 +316,70 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
     super.dispose();
   }
 
+  Future<void> _copiar(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    showPlatformSnackbar(context: context, content: 'common.copied'.i18n);
+  }
+
+  /// Guarda o comparte el registro que llegó del televisor.
+  ///
+  /// Se marca de quién es: la ficha del aparato la arma quien exporta, y sin
+  /// decirlo el archivo saldría diciendo que ese registro es de este teléfono
+  /// o de este PC — y quien lo recibiera buscaría el fallo en el aparato
+  /// equivocado.
+  Future<void> _exportar() async {
+    try {
+      final salio = await ExportarRegistro.entregar(
+        lineas: _lineas,
+        etiqueta: 'televisor',
+        deOtroAparato:
+            widget.aparato.isEmpty ? widget.url : widget.aparato,
+      );
+      if (!salio || !mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        content: 'settings.log-export-listo'.i18n,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        content: FlutterI18n.translate(
+          context,
+          'settings.log-export-error',
+          translationParams: {'error': '$e'},
+        ),
+      );
+    }
+  }
+
+  /// Abre la dirección en el navegador del sistema.
+  ///
+  /// Sigue estando aunque el registro se vea acá dentro: en un PC es cómodo
+  /// tenerlo en otra ventana, al lado de la app, en vez de ir y venir entre
+  /// pantallas.
+  Future<void> _enElNavegador(String url) async {
+    try {
+      final abierto = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (abierto) return;
+    } catch (_) {
+      // Se cae al portapapeles, abajo.
+    }
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    showPlatformSnackbar(
+      context: context,
+      content: 'settings.log-sin-navegador'.i18n,
+    );
+  }
+
   Future<void> _traer() async {
+    if (_trayendo) return;
+    if (mounted) setState(() => _trayendo = true);
     final cliente = HttpClient()
       ..connectionTimeout = const Duration(seconds: 6);
     try {
@@ -343,9 +389,24 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
       final texto = await res.transform(utf8.decoder).join();
       if (!mounted) return;
       final partido = const LineSplitter().convert(texto);
+      // ── La primera línea es la cabecera SOLO si lo es ─────────────────
+      //
+      // El televisor manda una línea suya arriba —qué sirve, de qué zona,
+      // cuántas líneas— y el resto es el registro. Se tomaba la primera sin
+      // mirar qué era, y si por lo que fuera esa línea faltara, lo que se
+      // comía era el borde de arriba del recuadro de PrismHub: el dibujo
+      // aparecía descabezado. Reportado en vivo: «se come el logo».
+      //
+      // Comprobando que no sea parte del recuadro, eso no puede pasar: en el
+      // peor caso se ve una línea de más, que es infinitamente mejor que ver
+      // el registro con la primera línea cortada sin saberlo.
+      final tieneCabecera =
+          partido.isNotEmpty && !esElRecuadro(partido.first);
       setState(() {
-        _cabecera = partido.isEmpty ? '' : partido.first;
-        _lineas = partido.length > 1 ? partido.sublist(1) : const [];
+        _cabecera = tieneCabecera ? partido.first : '';
+        _lineas = tieneCabecera
+            ? (partido.length > 1 ? partido.sublist(1) : const <String>[])
+            : partido;
         _fallo = null;
         _primeraVez = false;
       });
@@ -360,6 +421,7 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
       });
     } finally {
       cliente.close(force: true);
+      if (mounted) setState(() => _trayendo = false);
     }
   }
 
@@ -378,43 +440,93 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
             style: TextStyle(color: HomeTheme.textPrimary),
           ),
         ),
+        actions: [
+          // Refrescar a mano, aunque se actualice solo cada cinco segundos.
+          //
+          // Los cinco segundos están bien para mirar; cuando uno acaba de
+          // hacer algo en el televisor y quiere ver el efecto YA, esperar
+          // hasta cinco segundos sin saber cuánto falta se siente colgado.
+          // El botón no reemplaza al automático: lo adelanta.
+          IconButton(
+            tooltip: 'common.refresh'.i18n,
+            icon: _trayendo
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: HomeTheme.textPrimary,
+                    ),
+                  )
+                : const Icon(Icons.refresh),
+            color: HomeTheme.textPrimary,
+            onPressed: _trayendo ? null : () => unawaited(_traer()),
+          ),
+          // Guardar o compartir lo que llegó.
+          //
+          // En teléfono sale por el menú de compartir del sistema —WhatsApp,
+          // correo, lo que haya— y en escritorio se elige dónde guardarlo. En
+          // los dos casos lo decide la persona; la app no elige por ella.
+          IconButton(
+            tooltip: 'common.export'.i18n,
+            icon: const Icon(Icons.ios_share),
+            color: HomeTheme.textPrimary,
+            onPressed: _lineas.isEmpty ? null : _exportar,
+          ),
+          IconButton(
+            tooltip: 'settings.log-copiar'.i18n,
+            icon: const Icon(Icons.copy_rounded),
+            color: HomeTheme.textPrimary,
+            onPressed: () => _copiar(widget.url),
+          ),
+          IconButton(
+            tooltip: 'settings.log-en-navegador'.i18n,
+            icon: const Icon(Icons.open_in_browser),
+            color: HomeTheme.textPrimary,
+            onPressed: () => _enElNavegador(widget.url),
+          ),
+        ],
       ),
       // Acá el ancho NO se acota: son líneas de registro, y cuanto más
       // entren a lo ancho menos se parten. Es lo contrario que en la lista de
       // arriba, y por eso se decide por separado.
-      body: SafeArea(
-        top: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_cabecera.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-                child: Text(
-                  _cabecera,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: HomeTheme.accentPink,
+      body: ColoredBox(
+        color: HomeTheme.bg,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_cabecera.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                  child: Text(
+                    _cabecera,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: HomeTheme.accentPink,
+                    ),
                   ),
                 ),
-              ),
-            if (_fallo != null)
-              Container(
-                margin: const EdgeInsets.fromLTRB(14, 6, 14, 6),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: HomeTheme.accentRed.withValues(alpha: 0.16),
-                  border: Border.all(color: HomeTheme.accentRed),
+              if (_fallo != null)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: HomeTheme.accentRed.withValues(alpha: 0.16),
+                    border: Border.all(color: HomeTheme.accentRed),
+                  ),
+                  child: Text(
+                    'settings.log-remoto-cortado'.i18n,
+                    style:
+                        TextStyle(fontSize: 12, color: HomeTheme.textPrimary),
+                  ),
                 ),
-                child: Text(
-                  'settings.log-remoto-cortado'.i18n,
-                  style: TextStyle(fontSize: 12, color: HomeTheme.textPrimary),
-                ),
-              ),
-            Expanded(child: _texto()),
-          ],
+              Expanded(child: _texto()),
+            ],
+          ),
         ),
       ),
     );
@@ -437,35 +549,59 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
       );
     }
     final agrupadas = agruparElRecuadro(_lineas);
-    return SeleccionableSiSePuede(
-      child: ListView.builder(
-        controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-        itemCount: agrupadas.length,
-        itemBuilder: (context, i) {
-          final linea = agrupadas[i];
-          final estilo = TextStyle(
-            fontFamily: 'monospace',
-            fontFamilyFallback: const [
-              'Consolas',
-              'DejaVu Sans Mono',
-              'Courier New',
-            ],
-            fontSize: 11.5,
-            height: 1.35,
-            color: colorDeLinea(linea),
-          );
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: esElRecuadro(linea)
-                ? FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(linea, style: estilo, softWrap: false),
-                  )
-                : Text(linea, style: estilo),
-          );
-        },
+    // ── Con barra, y que se pueda arrastrar ────────────────────────────
+    //
+    // Reportado en vivo: «el scroll es tosco al tocar la barra». La barra que
+    // sale por defecto en escritorio es solo un indicador —muestra dónde
+    // estás pero no se puede agarrar— así que al intentar arrastrarla no pasa
+    // nada y parece que la pantalla se traba. Con `interactive` se agarra y
+    // se lleva, que es lo que uno intenta hacer con un registro largo.
+    return RawScrollbar(
+      controller: _scroll,
+      // Siempre a la vista y agarrable.
+      //
+      // La de por defecto aparece al desplazar y se desvanece, y en escritorio
+      // es solo un indicador —no se puede agarrar—. En un registro de miles de
+      // líneas eso deja sin la única forma cómoda de moverse rápido: al
+      // intentar arrastrarla no pasa nada y parece que la pantalla se trabó.
+      //
+      // Ancha a propósito: doce puntos es lo que hace falta para acertarle con
+      // el dedo, y con el ratón tampoco molesta.
+      interactive: true,
+      thumbVisibility: true,
+      thickness: 12,
+      radius: const Radius.circular(6),
+      thumbColor: HomeTheme.accentPink.withValues(alpha: 0.55),
+      child: SeleccionableSiSePuede(
+        child: ListView.builder(
+          controller: _scroll,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+          itemCount: agrupadas.length,
+          itemBuilder: (context, i) {
+            final linea = agrupadas[i];
+            final estilo = TextStyle(
+              fontFamily: 'monospace',
+              fontFamilyFallback: const [
+                'Consolas',
+                'DejaVu Sans Mono',
+                'Courier New',
+              ],
+              fontSize: 11.5,
+              height: 1.35,
+              color: colorDeLinea(linea),
+            );
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: esElRecuadro(linea)
+                  ? FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(linea, style: estilo, softWrap: false),
+                    )
+                  : Text(linea, style: estilo),
+            );
+          },
+        ),
       ),
     );
   }

@@ -62,7 +62,18 @@ class ExportarRegistro {
   /// números distintos en la misma pantalla.
   static int cuantasLineas = 0;
 
-  static Future<String> armar({String? soloArea, List<String>? lineas}) async {
+  /// Con [deOtroAparato] el encabezado dice de QUIÉN es el registro.
+  ///
+  /// Hace falta al exportar uno que llegó por la red desde un televisor: la
+  /// ficha del aparato la arma quien exporta, o sea el teléfono o el PC, y sin
+  /// esto el archivo saldría diciendo que ese registro es de la máquina que lo
+  /// guardó. Quien lo recibiera después buscaría el fallo en el aparato
+  /// equivocado. Los datos del televisor van igual, dentro de las líneas.
+  static Future<String> armar({
+    String? soloArea,
+    List<String>? lineas,
+    String? deOtroAparato,
+  }) async {
     await PrismLog.flush();
     lineas ??= await _leerTodo();
     cuantasLineas = lineas.length;
@@ -79,8 +90,15 @@ class ExportarRegistro {
     // pantalla son lo que separa «esto es un fallo» de «este aparato no da
     // más». Ver EncabezadoDeSesion.fichaDelAparato, que además explica qué se
     // deja afuera a propósito.
-    for (final l in EncabezadoDeSesion.fichaDelAparato()) {
-      salida.writeln('  $l');
+    if (deOtroAparato != null) {
+      salida
+        ..writeln('  RECIBIDO DE OTRO APARATO POR LA RED')
+        ..writeln('  $deOtroAparato')
+        ..writeln('  (los datos completos están en la cabecera de abajo)');
+    } else {
+      for (final l in EncabezadoDeSesion.fichaDelAparato()) {
+        salida.writeln('  $l');
+      }
     }
     salida
       ..writeln('═══════════════════════════════════════════════════')
@@ -186,8 +204,13 @@ class ExportarRegistro {
     String? soloArea,
     List<String>? lineas,
     String etiqueta = 'todo',
+    String? deOtroAparato,
   }) async {
-    final texto = await armar(soloArea: soloArea, lineas: lineas);
+    final texto = await armar(
+      soloArea: soloArea,
+      lineas: lineas,
+      deOtroAparato: deOtroAparato,
+    );
     final nombre = nombreDeArchivo(etiqueta);
     final destino =
         File('${File(PrismLog.logFilePath).parent.path}/$nombre');
