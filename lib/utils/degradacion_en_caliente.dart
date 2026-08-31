@@ -144,7 +144,7 @@ class DegradacionEnCaliente {
     //
     // Que no se pueda recordar no invalida haberlo bajado en esta sesión.
     unawaited(
-      PrismHubStorage.setSetting(SettingKey.nivelRebajado, despues.name)
+      PrismHubStorage.setSetting(SettingKey.nivelRebajado, _anotar(despues))
           .catchError((Object e) {
         logger.info('PrismHub+: no se pudo recordar el nivel rebajado — $e');
       }),
@@ -164,13 +164,13 @@ class DegradacionEnCaliente {
       return;
     }
     if (guardado is! String || guardado.isEmpty) return;
-    final rebajado = NivelDeAparato.values
-        .where((n) => n.name == guardado)
-        .firstOrNull;
-    if (rebajado == null) return;
-    // Solo si es MÁS bajo que el que se acaba de medir: si el aparato mejoró
-    // —o si la medición de antes era de otra situación— no hay que castigarlo
-    // para siempre por una sesión mala.
+    final rebajado = loAprendidoDe(guardado, ahora: DateTime.now());
+    if (rebajado == null) {
+      // O no se entiende, o ya caducó. En los dos casos se borra: dejarlo ahí
+      // solo haría que se vuelva a leer y a descartar en cada arranque.
+      unawaited(olvidar());
+      return;
+    }
     if (rebajado.index <= PerfilDeAparato.nivel.index) return;
     logger.info(
       'PrismHub+: en una sesión anterior este aparato fue más lento de lo que '
@@ -179,6 +179,64 @@ class DegradacionEnCaliente {
     );
     PerfilDeAparato.nivel = rebajado;
     _yaBajo = true;
+  }
+
+  /// Cómo se anota una rebaja: el nivel y cuándo fue.
+  ///
+  /// La fecha va junto al nivel y no en otra clave para que no puedan quedar
+  /// desparejos: se escriben y se leen juntos, o no se escribe nada.
+  static String _anotar(NivelDeAparato nivel) =>
+      '${nivel.name}|${DateTime.now().millisecondsSinceEpoch}';
+
+  /// Cuánto vale una rebaja antes de volver a medir el aparato.
+  ///
+  /// ── Por qué caduca ───--------------------------------------------------
+  ///
+  /// Una rebaja se dispara porque la app fue a tirones un rato, y eso no
+  /// siempre es culpa del aparato: puede haber estado el sistema actualizando
+  /// algo, u otra app comiéndose la memoria. Guardada para siempre, un mal
+  /// minuto dejaba al aparato recortado el resto de su vida.
+  ///
+  /// Había un botón en Ajustes para olvidarla a mano, y se sacó: nada de lo
+  /// que PrismHub+ decide se toca desde la interfaz. Así que se olvida sola.
+  ///
+  /// Dos semanas es más largo que cualquier racha mala y más corto que la
+  /// vida del aparato: si de verdad es lento, vuelve a saltar al minuto de
+  /// usarlo y se anota de nuevo, con fecha de hoy.
+  static const caducidad = Duration(days: 14);
+
+  /// Qué nivel dice lo guardado, o null si no se entiende o ya caducó.
+  ///
+  /// Toma `ahora` como parámetro para poder probarla: la caducidad es una
+  /// resta de fechas, y sin poder mover el reloj no habría forma de
+  /// comprobarla sin esperar dos semanas de verdad.
+  static NivelDeAparato? loAprendidoDe(
+    String guardado, {
+    required DateTime ahora,
+  }) {
+    final partes = guardado.split('|');
+    final nivel =
+        NivelDeAparato.values.where((n) => n.name == partes.first).firstOrNull;
+    if (nivel == null) return null;
+    if (partes.length == 1) {
+      // Sin separador: lo guardó una versión anterior a que esto caducara.
+      // Vale — lo que se aprendió sigue siendo cierto, y en cuanto salte de
+      // nuevo se reescribe con fecha.
+      return nivel;
+    }
+    // Con separador pero sin una fecha legible, lo guardado está roto. NO se
+    // trata como formato viejo: eso lo daría por bueno para siempre, que es
+    // justo lo que esta caducidad viene a evitar. Lo atrapó la prueba.
+    final ms = int.tryParse(partes[1]);
+    if (ms == null) return null;
+    final antiguedad = ahora.difference(
+      DateTime.fromMillisecondsSinceEpoch(ms),
+    );
+    // `isNegative` cubre una fecha en el futuro, que pasa de verdad: alcanza
+    // con que el reloj del aparato estuviera adelantado cuando se anotó.
+    // Restando a secas, eso daría un plazo negativo y no caducaría nunca.
+    if (antiguedad.isNegative || antiguedad > caducidad) return null;
+    return nivel;
   }
 
   /// Olvida lo aprendido, para volver a medir el aparato desde cero.

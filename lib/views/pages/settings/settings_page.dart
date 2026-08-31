@@ -18,7 +18,7 @@ import 'package:prismhub/views/pages/settings/bloqueador_page.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:prismhub/views/pages/settings/copia_resultado.dart';
 import 'package:prismhub/views/pages/settings/registro_de_otro_aparato_page.dart';
-import 'package:prismhub/views/pages/settings/prismhub_mas_page.dart';
+import 'package:prismhub/views/pages/settings/info_del_aparato_page.dart';
 import 'package:prismhub/views/pages/settings/registro_en_vivo_page.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
@@ -1615,18 +1615,18 @@ class _SettingsPageState extends State<SettingsPage> {
             // Se puede dejar siempre encendido porque lo que se escribe va
             // saneado: sin credenciales, sin qué se estaba viendo y sin el
             // nombre de usuario del sistema. Ver PrismLog.sanear.
-            // PrismHub+ va junto al registro y no en Reproducción: no es un
-            // ajuste del reproductor, es lo que decide cómo se comporta la app
-            // entera en este aparato. Y quien viene a mirar por qué algo va
-            // lento pasa por acá.
+            // La ficha del aparato va junto al registro: quien viene a mirar
+            // por qué algo va lento pasa por acá, y es el mismo dato que hace
+            // falta al reportar un fallo. Es solo información — nada que
+            // tocar, ver InfoDelAparatoPage.
             SettingsTile(
-              icon: const Icon(Icons.bolt),
-              title: 'PrismHub+',
-              buildSubtitle: () => 'settings.mas-subtitulo'.i18n,
+              icon: const Icon(Icons.devices_other),
+              title: 'settings.mas-tu-aparato'.i18n,
+              buildSubtitle: () => 'settings.aparato-subtitulo'.i18n,
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const PrismHubMasPage(),
+                  builder: (_) => const InfoDelAparatoPage(),
                 ),
               ),
             ),

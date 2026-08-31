@@ -1,10 +1,8 @@
-import 'dart:io';
 
 import 'package:flutter/rendering.dart';
 
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
-import 'package:prismhub/utils/prismhub_directory.dart';
 
 /// **PrismHub+**: mira en qué aparato está corriendo la app y la ajusta a él.
 ///
@@ -106,13 +104,6 @@ class PrismHubMas {
         NivelDeAparato.alto => null,
       };
 
-  /// Lo mismo en píxeles, para poder mostrarlo en Ajustes.
-  static double? get pixelesQueSeConstruyenDeMas => switch (nivel) {
-        NivelDeAparato.bajo => 250,
-        NivelDeAparato.medio => 600,
-        NivelDeAparato.alto => null,
-      };
-
   /// Cuánto se le aguanta a un motor de extensión sin usarse antes de soltarlo.
   ///
   /// ── Por qué no es «para siempre» ni «enseguida» ─────────────────────────
@@ -132,70 +123,6 @@ class PrismHubMas {
         NivelDeAparato.medio => const Duration(minutes: 3),
         NivelDeAparato.alto => const Duration(minutes: 5),
       };
-
-  // ── Limpieza ──────────────────────────────────────────────────────────────
-
-  /// Suelta lo que la app tiene guardado y ya no hace falta.
-  ///
-  /// ── Qué borra y qué NO ──────────────────────────────────────────────────
-  ///
-  /// Borra archivos temporales: lo que quedó de una descarga a medias, de un
-  /// registro exportado, de una actualización que ya se instaló. Todo eso se
-  /// vuelve a generar solo cuando haga falta.
-  ///
-  /// **No toca nada que le importe a nadie**: ni las extensiones, ni el
-  /// historial, ni lo que se está viendo, ni los ajustes, ni las cookies de
-  /// sesión de las extensiones —borrarlas cerraría la sesión de las que
-  /// necesitan cuenta—.
-  ///
-  /// Devuelve cuántos bytes se soltaron.
-  static Future<int> limpiar() async {
-    var soltados = 0;
-    try {
-      final cache = Directory(PrismHubDirectory.getCacheDirectory);
-      if (cache.existsSync()) {
-        soltados += _vaciar(cache);
-      }
-    } catch (e) {
-      // Un archivo tomado por otro proceso, o sin permiso: se sigue con el
-      // resto. Limpiar es de mejor esfuerzo, no una operación que pueda fallar.
-      logger.info('PrismHub+: no se pudo limpiar todo — $e');
-    }
-    logger.info('PrismHub+: se soltaron '
-        '${(soltados / (1024 * 1024)).toStringAsFixed(1)} MB de temporales');
-    return soltados;
-  }
-
-  /// Borra el contenido de una carpeta, no la carpeta.
-  static int _vaciar(Directory dir) {
-    var soltados = 0;
-    for (final cosa in dir.listSync()) {
-      try {
-        if (cosa is File) {
-          soltados += cosa.lengthSync();
-          cosa.deleteSync();
-        } else if (cosa is Directory) {
-          soltados += _pesa(cosa);
-          cosa.deleteSync(recursive: true);
-        }
-      } catch (_) {
-        // Ese no se pudo. Los demás sí.
-      }
-    }
-    return soltados;
-  }
-
-  static int _pesa(Directory dir) {
-    var total = 0;
-    try {
-      for (final c in dir.listSync(recursive: true)) {
-        if (c is File) total += c.lengthSync();
-      }
-    } catch (_) {
-      // Sin permiso para recorrerla: se cuenta como 0 y se sigue.
-    }
-    return total;
-  }
 
   /// Deja escrito en el registro qué decidió, al arrancar.
   ///

@@ -92,4 +92,82 @@ void main() {
       expect(PerfilDeAparato.nivel, NivelDeAparato.alto);
     });
   });
+
+  group('la rebaja caduca sola', () {
+    // El botón de Ajustes para volver a medir el aparato se sacó — nada de lo
+    // que PrismHub+ decide se toca desde la interfaz—, así que esta es ahora
+    // la ÚNICA salida si una racha mala rebaja a un aparato que sí podía.
+    // Si esto se rompe, ese aparato queda recortado para siempre y sin nadie
+    // que pueda arreglarlo.
+    final ahora = DateTime(2026, 8, 30, 12);
+
+    String anotado(NivelDeAparato n, Duration hace) =>
+        '${n.name}|${ahora.subtract(hace).millisecondsSinceEpoch}';
+
+    test('una rebaja reciente vale', () {
+      expect(
+        DegradacionEnCaliente.loAprendidoDe(
+          anotado(NivelDeAparato.medio, const Duration(days: 3)),
+          ahora: ahora,
+        ),
+        NivelDeAparato.medio,
+      );
+    });
+
+    test('justo en el plazo todavía vale', () {
+      expect(
+        DegradacionEnCaliente.loAprendidoDe(
+          anotado(NivelDeAparato.bajo, DegradacionEnCaliente.caducidad),
+          ahora: ahora,
+        ),
+        NivelDeAparato.bajo,
+      );
+    });
+
+    test('pasado el plazo se olvida', () {
+      expect(
+        DegradacionEnCaliente.loAprendidoDe(
+          anotado(NivelDeAparato.bajo,
+              DegradacionEnCaliente.caducidad + const Duration(minutes: 1)),
+          ahora: ahora,
+        ),
+        isNull,
+      );
+    });
+
+    test('una fecha en el futuro se olvida, no dura para siempre', () {
+      // Pasa de verdad: alcanza con que el reloj del aparato estuviera
+      // adelantado cuando se anotó. Restando a secas, el plazo sale negativo
+      // y la rebaja no caducaría nunca.
+      expect(
+        DegradacionEnCaliente.loAprendidoDe(
+          anotado(NivelDeAparato.bajo, const Duration(days: -400)),
+          ahora: ahora,
+        ),
+        isNull,
+      );
+    });
+
+    test('lo guardado por una versión vieja, sin fecha, sigue valiendo', () {
+      // Antes se guardaba solo el nombre del nivel. Descartarlo haría que
+      // todo el que actualice pague de nuevo el rato de ir a tirones.
+      expect(
+        DegradacionEnCaliente.loAprendidoDe('bajo', ahora: ahora),
+        NivelDeAparato.bajo,
+      );
+    });
+
+    test('basura guardada no se aplica', () {
+      expect(DegradacionEnCaliente.loAprendidoDe('', ahora: ahora), isNull);
+      expect(
+        DegradacionEnCaliente.loAprendidoDe('lentisimo|123', ahora: ahora),
+        isNull,
+      );
+      expect(
+        DegradacionEnCaliente.loAprendidoDe('bajo|no-es-un-numero',
+            ahora: ahora),
+        isNull,
+      );
+    });
+  });
 }
