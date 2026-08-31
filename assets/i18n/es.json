@@ -202,8 +202,9 @@
     "empty-hint": "Escribí algo para buscar en todas tus extensiones",
     "most-relevant": "Resultados más relevantes",
     "search-in-extension": "O buscá directo en una extensión",
-    "escribi-algo": "Escribí algo para buscar en tus extensiones.",
-    "nada-encontrado": "No se encontró nada con eso. Probá con otras palabras."
+    "escribi-algo": "Escribí lo que buscás",
+    "nada-encontrado": "No se encontró nada con eso. Probá con otras palabras.",
+    "busca-en-todas": "Se busca en todas tus extensiones activas a la vez, y los resultados van apareciendo a medida que cada una contesta."
   },
   "extension": {
     "import": {

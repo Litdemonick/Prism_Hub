@@ -206,8 +206,9 @@
     "empty-hint": "Type something to search across all your extensions",
     "most-relevant": "Most relevant results",
     "search-in-extension": "Or search directly in one extension",
-    "escribi-algo": "Type something to search your extensions.",
-    "nada-encontrado": "Nothing found for that. Try other words."
+    "escribi-algo": "Type what you are looking for",
+    "nada-encontrado": "Nothing found for that. Try other words.",
+    "busca-en-todas": "It searches all your active extensions at once, and results appear as each one answers."
   },
   "extension": {
     "import": {

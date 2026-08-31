@@ -54,24 +54,8 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
       // Son tres situaciones distintas y ahora se dicen distinto.
       final hayInstaladas = ExtensionUtils.enabledRuntimes.isNotEmpty;
       if (hayInstaladas) {
-        return SizedBox(
-          height: 300,
-          width: double.infinity,
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                widget.kw.trim().isEmpty
-                    ? 'search.escribi-algo'.i18n
-                    : 'search.nada-encontrado'.i18n,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: PlatformTv.esTelevisionSync ? 18 : 14,
-                  color: HomeTheme.textMuted,
-                ),
-              ),
-            ),
-          ),
+        return _EsperandoQueEscribas(
+          sinEscribir: widget.kw.trim().isEmpty,
         );
       }
       return SizedBox(
@@ -149,6 +133,125 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
               ),
             )
         ],
+      ),
+    );
+  }
+}
+
+/// La pantalla del buscador cuando todavía no hay nada que mostrar.
+///
+/// ── Por qué no es solo una línea de texto ───────────────────────────────────
+///
+/// Era una frase gris en medio de una pantalla negra. Funcionaba, pero no
+/// invitaba a nada: no se distingue de un error, y en un televisor —donde la
+/// pantalla es enorme y uno está lejos— se lee como que la app se colgó.
+///
+/// Acá hay un icono que respira despacio y el texto debajo. El movimiento es lo
+/// que hace la diferencia entre «esto está esperando algo» y «esto se quedó
+/// trabado», que es exactamente la duda que uno tiene mirando de lejos.
+///
+/// ── Y por qué respira despacio, no rápido ───────────────────────────────────
+///
+/// Cuatro segundos por ciclo y solo la opacidad: es lo más barato que se puede
+/// animar —no rehace la disposición ni vuelve a dibujar nada, solo mezcla— y en
+/// un televisor modesto una animación continua es de las pocas cosas que puede
+/// costar caro. Con este ritmo no compite con nada, ni siquiera mientras se
+/// escribe.
+class _EsperandoQueEscribas extends StatefulWidget {
+  const _EsperandoQueEscribas({required this.sinEscribir});
+
+  /// True: todavía no se escribió nada. False: se buscó y no hubo resultados.
+  final bool sinEscribir;
+
+  @override
+  State<_EsperandoQueEscribas> createState() => _EsperandoQueEscribasState();
+}
+
+class _EsperandoQueEscribasState extends State<_EsperandoQueEscribas>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulso = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 4),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Solo cuando invita a escribir. Sin resultados NO se anima: ahí la
+    // pantalla está contando algo que ya pasó, y algo latiendo al lado se
+    // leería como que sigue buscando.
+    if (widget.sinEscribir) _pulso.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(_EsperandoQueEscribas viejo) {
+    super.didUpdateWidget(viejo);
+    if (widget.sinEscribir == viejo.sinEscribir) return;
+    if (widget.sinEscribir) {
+      _pulso.repeat(reverse: true);
+    } else {
+      _pulso.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulso.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tv = PlatformTv.esTelevisionSync;
+    final icono = widget.sinEscribir
+        ? Icons.search_rounded
+        : Icons.search_off_rounded;
+    return SizedBox(
+      height: tv ? 380 : 300,
+      width: double.infinity,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FadeTransition(
+              opacity: Tween<double>(begin: 0.35, end: 0.9).animate(_pulso),
+              child: Icon(
+                icono,
+                size: tv ? 74 : 54,
+                color: HomeTheme.accentPink,
+              ),
+            ),
+            SizedBox(height: tv ? 22 : 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                widget.sinEscribir
+                    ? 'search.escribi-algo'.i18n
+                    : 'search.nada-encontrado'.i18n,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: tv ? 19 : 15,
+                  height: 1.45,
+                  color: HomeTheme.textPrimary,
+                ),
+              ),
+            ),
+            if (widget.sinEscribir) ...[
+              SizedBox(height: tv ? 10 : 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  'search.busca-en-todas'.i18n,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: tv ? 15 : 12.5,
+                    color: HomeTheme.textMuted,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
