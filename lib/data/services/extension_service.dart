@@ -9,6 +9,7 @@ import 'package:html/parser.dart';
 import 'package:prismhub/data/services/extension_jscore_plugin.dart';
 import 'package:prismhub/data/services/stream_sniffer_service.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:xpath_selector_html_parser/xpath_selector_html_parser.dart';
@@ -99,6 +100,23 @@ class ExtensionService {
   /// zonas juntas— levantarían dos motores para la misma extensión y el
   /// segundo pisaría al primero, dejando el primero vivo y sin dueño.
   Future<void>? _levantando;
+
+  /// Cuándo se le pidió algo por última vez a esta extensión.
+  DateTime _ultimoUso = DateTime.now();
+
+  /// Cuántas llamadas hay en curso ahora mismo.
+  ///
+  /// Sin esto, el barrido podría soltar el motor en medio de una consulta —y
+  /// eso no es una consulta que falla, es la librería nativa trabajando sobre
+  /// algo que se acaba de liberar.
+  int _enVuelo = 0;
+
+  /// Si conviene soltar su motor por llevar rato sin usarse.
+  bool get motorDeSobra {
+    if (!_motorListo || _enVuelo > 0) return false;
+    return DateTime.now().difference(_ultimoUso) >
+        PrismHubMas.cuantoDuraUnMotorSinUsar;
+  }
 
   /// Levanta el motor si hace falta. Barato de llamar de más.
   Future<void> asegurarMotor() {
@@ -831,7 +849,11 @@ async function stringify(callback) {
       //
       // Este es el paso obligado de TODAS las llamadas a la extensión —listar,
       // buscar, la ficha, el enlace de vídeo—, así que poniéndolo acá no queda
-      // ningún camino por el que se le pida algo a un motor que no está.
+      // ningún camino por el que se le pida algo a un motor que no está. Y por
+      // lo mismo es el sitio donde anotar que se usó, para que el barrido de
+      // motores de sobra sepa cuáles hace rato que nadie toca.
+      _enVuelo++;
+      _ultimoUso = DateTime.now();
       await asegurarMotor();
       return await fun();
     } catch (e) {
@@ -841,6 +863,9 @@ async function stringify(callback) {
         e.toString(),
       );
       rethrow;
+    } finally {
+      _enVuelo--;
+      _ultimoUso = DateTime.now();
     }
   }
 

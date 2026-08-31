@@ -113,6 +113,26 @@ class PrismHubMas {
         NivelDeAparato.alto => null,
       };
 
+  /// Cuánto se le aguanta a un motor de extensión sin usarse antes de soltarlo.
+  ///
+  /// ── Por qué no es «para siempre» ni «enseguida» ─────────────────────────
+  ///
+  /// Un motor que ya no se usa se queda con su pila y con CryptoJS, jsencrypt y
+  /// md5 analizados adentro. Si alguien recorre cinco zonas, termina con cinco
+  /// motores vivos de los que está usando uno.
+  ///
+  /// Pero soltarlo enseguida sería peor: entrar a una zona, salir y volver
+  /// costaría levantarlo de nuevo cada vez. La ventana tiene que ser más larga
+  /// que un paseo por el menú y más corta que una sesión.
+  ///
+  /// Un minuto en un aparato modesto, donde la memoria es lo escaso; cinco en
+  /// uno capaz, donde lo escaso es la paciencia.
+  static Duration get cuantoDuraUnMotorSinUsar => switch (nivel) {
+        NivelDeAparato.bajo => const Duration(minutes: 1),
+        NivelDeAparato.medio => const Duration(minutes: 3),
+        NivelDeAparato.alto => const Duration(minutes: 5),
+      };
+
   // ── Limpieza ──────────────────────────────────────────────────────────────
 
   /// Suelta lo que la app tiene guardado y ya no hace falta.

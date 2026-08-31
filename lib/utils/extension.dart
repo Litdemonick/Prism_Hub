@@ -1390,6 +1390,48 @@ class ExtensionUtils {
   }
 
   // 初始化扩展
+  static Timer? _barridoDeMotores;
+
+  /// Suelta cada tanto los motores de extensión que ya nadie usa.
+  ///
+  /// ── Por qué hace falta además de soltarlos al apagarlas ─────────────────
+  ///
+  /// Los motores se levantan solos cuando la extensión se usa, y eso arregló el
+  /// arranque. Pero seguían quedándose para toda la sesión: recorrer cinco
+  /// zonas dejaba cinco motores vivos, con sus pilas y con CryptoJS, jsencrypt
+  /// y md5 analizados adentro, para estar usando uno.
+  ///
+  /// Al salir de una zona ese motor deja de hacer falta, y devolverle esa
+  /// memoria al sistema es la diferencia entre una app que se mantiene liviana
+  /// y una que solo crece hasta que la cierran.
+  ///
+  /// ── Y por qué con un plazo, no al salir ─────────────────────────────────
+  ///
+  /// Soltar en cuanto se sale de una zona haría que entrar, salir y volver
+  /// —que es lo más normal del mundo— costara levantar el motor cada vez. El
+  /// plazo lo decide PrismHub+ según el aparato: más corto donde la memoria es
+  /// lo escaso, más largo donde lo escaso es la paciencia.
+  ///
+  /// Nunca suelta uno con una consulta en curso: eso no sería una consulta que
+  /// falla, sería la librería nativa trabajando sobre algo recién liberado.
+  static void _arrancarBarridoDeMotores() {
+    _barridoDeMotores?.cancel();
+    // Cada medio minuto: el plazo más corto es de un minuto, así que con esto
+    // ninguno se queda más de minuto y medio, y mirar un puñado de fechas cada
+    // treinta segundos no le cuesta nada a nadie.
+    _barridoDeMotores = Timer.periodic(const Duration(seconds: 30), (_) {
+      final soltados = <String>[];
+      for (final e in runtimes.entries) {
+        if (!e.value.motorDeSobra) continue;
+        e.value.soltarMotor();
+        soltados.add(e.key);
+      }
+      if (soltados.isEmpty) return;
+      logger.info('[extensiones] se soltaron ${soltados.length} motores sin '
+          'usar: ${soltados.join(', ')}');
+    });
+  }
+
   static ensureInitialized() async {
     // 创建目录
     Directory(extensionsDir).createSync(recursive: true);
@@ -1400,6 +1442,7 @@ class ExtensionUtils {
     await _installDefaultsFromRepo();
     // Limpia el Hive disabled-list de entradas muertas (paquetes sin JS).
     await _cleanStaleDisabledList();
+    _arrancarBarridoDeMotores();
     // 监听目录变化
     await _extensionDirWatcher?.cancel();
     _extensionDirWatcher =
