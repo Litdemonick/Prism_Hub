@@ -208,12 +208,15 @@ class _HomeTVState extends State<HomeTV> {
   @override
   Widget build(BuildContext context) {
     final overscan = _overscanTv(context);
-    // Cuánto le deja SIEMPRE reservado a los íconos del sidebar — nunca
-    // cambia con `_expandido`. Ver el `Stack` más abajo: el contenido usa
-    // esto como margen fijo, así que expandir el sidebar no lo mueve ni lo
-    // achica un píxel.
-    final margenParaElSidebar =
-        _anchoSidebarContraidoTv(Ancho.de(context)) + overscan * 1.5;
+    // Solo el aire de overscan, NO el ancho del sidebar.
+    //
+    // Antes se reservaba ancho de sobra para que los íconos contraídos
+    // nunca taparan ninguna tarjeta. Pedido explícito, con foto: al revés —
+    // que las tarjetas usen ESE espacio también. El sidebar es transparente
+    // (ver el degradado de `_SidebarTVState`), así que contraído se ve como
+    // un ícono flotando sobre el borde de la primera columna, no como una
+    // pared que hay que esquivar.
+    final margenParaElSidebar = overscan;
     // ── La barra de arriba manda en TODA la pantalla ────────────────────
     //
     // Estaba dentro del panel de contenido, así que entrar a una zona sin
@@ -554,11 +557,28 @@ class _SidebarTVState extends State<_SidebarTV> {
     final anchoObjetivo =
         _expandido ? _anchoSidebarTv(a) : _anchoSidebarContraidoTv(a);
     return RepaintBoundary(
-      // Fondo propio, opaco: el sidebar ahora se dibuja ENCIMA de las
-      // tarjetas (ver el `Stack` en `HomeTV`), así que sin esto se vería el
-      // póster de una tarjeta asomando detrás de sus propios íconos.
+      // Fondo propio, DEGRADADO y no un bloque sólido: el sidebar ahora se
+      // dibuja ENCIMA de las tarjetas (ver el `Stack` en `HomeTV`).
+      //
+      // Un color sólido tapaba la tarjeta de atrás por completo — reportado
+      // en vivo: «está feo, debe ser transparente». La idea de la referencia
+      // (estilo Crunchyroll) es un degradado: opaco junto al ícono, para que
+      // el texto se siga leyendo, y que se va abriendo hacia la derecha
+      // hasta dejar pasar la tarjeta de atrás. Así el menú se siente flotando
+      // sobre el contenido, no una pared delante.
       child: DecoratedBox(
-        decoration: BoxDecoration(color: HomeTheme.bg),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              HomeTheme.bg.withValues(alpha: 0.96),
+              HomeTheme.bg.withValues(alpha: 0.78),
+              HomeTheme.bg.withValues(alpha: 0.0),
+            ],
+            stops: const [0, 0.68, 1],
+          ),
+        ),
         child: AnimatedContainer(
           width: anchoObjetivo,
           duration: const Duration(milliseconds: 200),
@@ -867,6 +887,26 @@ class _ZonaTvState extends State<_ZonaTv> {
 
   @override
   Widget build(BuildContext context) {
+    // ── Refresco al VOLVER a esta categoría, no solo al crearla ─────────
+    //
+    // El chequeo de `hayExtensionesNuevas` estaba solo en `initState`, que
+    // en televisor corre UNA vez por toda la vida de la app: cada categoría
+    // vive para siempre dentro del `IndexedStack` (ver `_visitadas`), así
+    // que `initState` nunca se vuelve a llamar por más veces que se entre y
+    // se salga.
+    //
+    // Reportado en vivo: activar o desinstalar una extensión y volver a la
+    // zona la dejaba diciendo "sin contenido" — el cambio había pasado,
+    // pero nadie volvía a preguntar.
+    //
+    // Acá SÍ se vuelve a preguntar: cada vez que la categoría elegida
+    // cambia (en cualquier pestaña, no solo esta), `_HomeTVState` se
+    // reconstruye entera y Flutter reconcilia TODOS los hijos del
+    // `IndexedStack` —los visibles y los escondidos—, así que este `build`
+    // se vuelve a llamar sin importar si esta categoría es la que se ve
+    // ahora. Es la misma pasada que ya obligó a poner `ExcludeFocus` y
+    // `TickerMode` en cada hijo: barata, y se aprovecha para esto también.
+    if (c.hayExtensionesNuevas) unawaited(c.cargarInicial());
     return Obx(() {
       // Mismo criterio que en cualquier otra pantalla de la app: hasta que
       // `armado` diga que de verdad terminó de mirar, una lista vacía no

@@ -24,16 +24,29 @@ import 'package:flutter/widgets.dart';
 /// seleccionado, no es «lo de al lado»: es otra fila, y ahí la flecha no hace
 /// nada. Al final de la fila, el foco se queda donde está.
 ///
-/// ── Y por qué solo en horizontal ────────────────────────────────────────────
+/// ── Vertical: la misma idea, pero más angosta ───────────────────────────────
 ///
-/// Porque en vertical la misma regla rompería la navegación. Cada fila se
+/// En vertical NO se exige compartir columna: cada fila de una grilla se
 /// desplaza por su cuenta, así que estando en la sexta tarjeta de una fila,
 /// abajo puede no haber NINGUNA tarjeta alineada — y exigir que la hubiera
 /// dejaría la flecha abajo sin hacer nada, que es peor que lo que se está
 /// arreglando.
 ///
-/// Arriba y abajo siguen buscando lo más razonable, que es lo que se espera de
-/// ellas. Lo que se reportó, y lo que esto arregla, es lo horizontal.
+/// Pero hay un escape que sí hace falta cortar: al llegar a la ÚLTIMA fila de
+/// una zona (o mientras la siguiente todavía no terminó de llegar), abajo no
+/// queda ninguna tarjeta con la que Flutter pueda alinear el salto — y ahí
+/// busca lo más cercano en CUALQUIER lado, incluida la columna de categorías
+/// a la izquierda, que ocupa toda la altura de la pantalla. Reportado en
+/// vivo: «al ir presionando el scroll en una zona me saca y me manda al
+/// panel izquierdo». La flecha abajo terminaba en el menú, sin que nadie lo
+/// pidiera.
+///
+/// La regla: un salto vertical no puede terminar COMPLETAMENTE a la
+/// izquierda de donde estaba. Eso es justo lo que distingue «otra fila de la
+/// misma grilla» (siempre comparte algo de ancho con la fila de arriba,
+/// aunque las columnas no queden alineadas) de «la columna de categorías»
+/// (angosta, pegada al borde, sin nada en común con una tarjeta que ya
+/// estaba bien adentro de la grilla).
 class FocoConTopes extends DirectionalFocusAction {
   FocoConTopes() : super();
 
@@ -48,7 +61,9 @@ class FocoConTopes extends DirectionalFocusAction {
   void invoke(DirectionalFocusIntent intent) {
     final horizontal = intent.direction == TraversalDirection.left ||
         intent.direction == TraversalDirection.right;
-    if (!horizontal) {
+    final vertical = intent.direction == TraversalDirection.up ||
+        intent.direction == TraversalDirection.down;
+    if (!horizontal && !vertical) {
       super.invoke(intent);
       return;
     }
@@ -59,8 +74,11 @@ class FocoConTopes extends DirectionalFocusAction {
     if (antes == null || despues == null || identical(antes, despues)) return;
     final hasta = _rectDe(despues);
     if (desde == null || hasta == null) return;
-    if (_mismaFranja(desde, hasta)) return;
-    // Se fue de fila: se lo devuelve donde estaba.
+    final seFue =
+        horizontal ? !_mismaFranja(desde, hasta) : _escapoALaIzquierda(desde, hasta);
+    if (!seFue) return;
+    // Se fue de fila (u ocurrió el escape a la columna de categorías): se lo
+    // devuelve donde estaba.
     //
     // Deshacer en vez de impedir de antemano porque Flutter no expone a dónde
     // IRÍA el foco sin moverlo. Como todo esto pasa dentro del mismo cuadro,
@@ -80,6 +98,14 @@ class FocoConTopes extends DirectionalFocusAction {
       return null;
     }
   }
+
+  /// El destino terminó COMPLETAMENTE a la izquierda de donde estaba — no
+  /// «una columna más a la izquierda dentro de la misma grilla» (eso
+  /// siempre se solapa con el ancho de la tarjeta de origen), sino en una
+  /// franja de la pantalla que no comparte nada de ancho con ella. Eso es
+  /// la columna de categorías, angosta y pegada al borde.
+  static bool _escapoALaIzquierda(Rect desde, Rect hasta) =>
+      hasta.right <= desde.left;
 
   static bool _mismaFranja(Rect a, Rect b) {
     final desde = a.top > b.top ? a.top : b.top;
