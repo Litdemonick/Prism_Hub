@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/zona_catalogo_controller.dart';
@@ -143,8 +144,16 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
       BuildContext context, double disponible) {
     final ideal = TarjetaDeCatalogo.anchoPara(Ancho.de(context));
     const separacion = 16.0;
-    final columnas =
-        ((disponible + separacion) / (ideal + separacion)).floor().clamp(2, 10);
+    // En televisor, tope de cuatro columnas.
+    //
+    // La cuenta de arriba mete todas las que entren, y en una pantalla ancha
+    // eso puede dar seis o siete aunque la tarjeta sea grande. Desde el sillón
+    // más de cuatro por fila obliga a recorrer con el mando media pantalla
+    // para cruzar una fila, y las portadas quedan chicas.
+    final tope = PlatformTv.esTelevisionSync ? 4 : 10;
+    final columnas = ((disponible + separacion) / (ideal + separacion))
+        .floor()
+        .clamp(2, tope);
     final ancho = (disponible - separacion * (columnas - 1)) / columnas;
     return (columnas: columnas, ancho: ancho);
   }

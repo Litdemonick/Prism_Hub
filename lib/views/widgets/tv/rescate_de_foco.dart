@@ -77,18 +77,29 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!ctx.mounted) return;
       const duracion = Duration(milliseconds: 180);
-      // Las dos políticas mueven lo MÍNIMO: una resuelve "quedó por encima
-      // del borde" y la otra "quedó por debajo". Sobre algo que ya se ve
-      // entero, ninguna hace nada — así el contenido no baila en cada paso.
+      // ── Se deja AIRE alrededor, no se pega al borde ────────────────────
+      //
+      // Antes se movía lo MÍNIMO —dos políticas, una para "quedó por arriba"
+      // y otra para "quedó por abajo"—. Eso deja lo enfocado justo tocando el
+      // filo de la pantalla, y en un televisor eso se ve como que la tarjeta
+      // está cortada: el halo del foco y el crecido se salen del borde, y no
+      // hay forma de saber si abajo hay más contenido.
+      //
+      // Reportado en vivo: «que la cámara se posicione para que no se pierda
+      // la card y no la corte» y «no sé si abajo hay más cosas o no».
+      //
+      // Con `alignment: 0.35` lo enfocado queda a poco más de un tercio
+      // desde arriba: se ve entero con su marco, y por debajo queda pantalla
+      // suficiente para que se note que la lista sigue. Es lo que hacen las
+      // apps de televisor, y por eso ahí uno siempre sabe dónde está parado.
+      //
+      // ¿Y por qué no centrado? Porque centrar mueve la lista en CADA paso,
+      // incluso sobre algo que ya se veía bien, y eso se siente como que la
+      // pantalla se sacude sola.
       Scrollable.ensureVisible(
         ctx,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-        duration: duracion,
-        curve: Curves.easeOut,
-      );
-      Scrollable.ensureVisible(
-        ctx,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        alignment: 0.35,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
         duration: duracion,
         curve: Curves.easeOut,
       );

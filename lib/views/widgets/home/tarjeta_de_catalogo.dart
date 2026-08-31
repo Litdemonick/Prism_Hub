@@ -117,12 +117,25 @@ class TarjetaDeCatalogo extends StatefulWidget {
   // breakpoints, solo más aire por tarjeta. Como todo el resto (alto de
   // portada, alto total de la fila) se calcula A PARTIR de este número,
   // cambiar solo acá alcanza para las tres plataformas.
-  static double anchoPara(Ancho a) => a.elegir(
-        compacto: 150,
-        medio: 180,
-        amplio: 210,
-        enorme: 240,
-      );
+  /// El ancho ideal de una tarjeta de catálogo.
+  ///
+  /// ── En televisor se mide en distancia, no en píxeles ────────────────────
+  ///
+  /// Los peldaños de abajo están pensados para una pantalla que se mira de
+  /// cerca. Un televisor de 1280 de ancho cae en `enorme` y con 240 px por
+  /// tarjeta entran cinco columnas — a tres metros del sillón, cinco portadas
+  /// por fila son cinco estampillas, y el título debajo no se lee.
+  ///
+  /// Con 320 entran tres o cuatro según el ancho real, que es lo que hacen las
+  /// apps de televisor: menos por fila y cada una grande.
+  static double anchoPara(Ancho a) => PlatformTv.esTelevisionSync
+      ? 320
+      : a.elegir(
+          compacto: 150,
+          medio: 180,
+          amplio: 210,
+          enorme: 240,
+        );
 
   static double altoPortadaPara(Ancho a) => anchoPara(a) * 3 / 2;
 
