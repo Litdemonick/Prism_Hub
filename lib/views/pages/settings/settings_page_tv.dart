@@ -100,15 +100,8 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'common.settings'.i18n,
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  color: HomeTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 22),
+              _titulo(context),
+              const SizedBox(height: 10),
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -126,60 +119,128 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
     );
   }
 
-  /// Las categorías, a la izquierda.
-  Widget _menu() {
-    return ListView.separated(
-      itemCount: _Categoria.values.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, i) {
-        final cat = _Categoria.values[i];
-        final elegida = cat == _categoria;
-        return FocusableCard(
-          borderRadius: 12,
-          // Arranca en la que está abierta, para que el mando entre por ahí
-          // y no por la primera de la lista.
-          autofocus: elegida,
-          onTap: () => setState(() => _categoria = cat),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            decoration: BoxDecoration(
-              color: elegida
-                  ? HomeTheme.accentPink.withValues(alpha: 0.16)
-                  : HomeTheme.cardSurface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: elegida ? HomeTheme.accentPink : HomeTheme.border,
+  /// El título, pegado a la esquina de arriba a la izquierda.
+  ///
+  /// Con su flecha al lado cuando se llegó acá desde otra pantalla —que es
+  /// como se entra en televisor, desde el botón de la barra del Inicio—. Es
+  /// el mismo encabezado que el resto de las pantallas de televisor: el
+  /// nombre de dónde estás, en la esquina, y la salida al lado.
+  ///
+  /// Sin `Padding` propio: el único margen es el de overscan que ya pone el
+  /// `build`, así que el título queda tan arriba y tan a la izquierda como el
+  /// televisor permite sin que lo recorte.
+  Widget _titulo(BuildContext context) {
+    final puedeVolver = Navigator.of(context).canPop();
+    return Row(
+      children: [
+        if (puedeVolver) ...[
+          FocusableCard(
+            borderRadius: 999,
+            conCrecido: false,
+            onTap: () => Navigator.of(context).pop(),
+            child: Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: HomeTheme.cardSurface,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.arrow_back_rounded,
+                size: 22,
+                color: HomeTheme.textPrimary,
               ),
             ),
-            child: Row(
-              children: [
-                Icon(
-                  cat.icono,
-                  size: 24,
-                  color:
-                      elegida ? HomeTheme.accentPink : HomeTheme.textPrimary,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    cat.etiqueta,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight:
-                          elegida ? FontWeight.w800 : FontWeight.w600,
-                      color: elegida
-                          ? HomeTheme.accentPink
-                          : HomeTheme.textPrimary,
-                    ),
-                  ),
-                ),
-              ],
+          ),
+          const SizedBox(width: 14),
+        ],
+        Text(
+          'common.settings'.i18n,
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            color: HomeTheme.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Las categorías, a la izquierda.
+  ///
+  /// Centradas en vertical y no pegadas al título: son seis y en un televisor
+  /// sobra alto, así que arriba de todo quedaban seis botones amontonados en
+  /// el tercio superior con media pantalla vacía debajo. Pedido explícito:
+  /// «el título arriba en la esquina, y los botones un poco más abajo
+  /// centrados».
+  ///
+  /// Sigue siendo desplazable: si algún día son más de las que entran, o el
+  /// televisor tiene poco alto útil, el `Center` deja de centrar y la lista
+  /// se recorre como cualquier otra. Sin eso, la última categoría quedaría
+  /// cortada contra el borde y sin forma de alcanzarla.
+  Widget _menu() {
+    return SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.sizeOf(context).height * 0.62,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (final cat in _Categoria.values) _botonDeCategoria(cat),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _botonDeCategoria(_Categoria cat) {
+    final elegida = cat == _categoria;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: FocusableCard(
+        borderRadius: 12,
+        // Arranca en la que está abierta, para que el mando entre por ahí
+        // y no por la primera de la lista.
+        autofocus: elegida,
+        onTap: () => setState(() => _categoria = cat),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            color: elegida
+                ? HomeTheme.accentPink.withValues(alpha: 0.16)
+                : HomeTheme.cardSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: elegida ? HomeTheme.accentPink : HomeTheme.border,
             ),
           ),
-        );
-      },
+          child: Row(
+            children: [
+              Icon(
+                cat.icono,
+                size: 24,
+                color: elegida ? HomeTheme.accentPink : HomeTheme.textPrimary,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  cat.etiqueta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: elegida ? FontWeight.w800 : FontWeight.w600,
+                    color:
+                        elegida ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -405,7 +466,8 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
           icono: Icons.system_update_rounded,
           titulo: 'settings.upgrade'.i18n,
           subtitulo: ModoApp.versionConModo(packageInfo.version),
-          onTap: () => ApplicationUtils.checkUpdate(context, showSnackbar: true),
+          onTap: () =>
+              ApplicationUtils.checkUpdate(context, showSnackbar: true),
         ),
       ];
 
@@ -607,14 +669,14 @@ class _InterruptorState extends State<_Interruptor> {
               ),
             )
           : widget.valorTexto != null
-          ? Text(
-              widget.valorTexto!,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: widget.acento ?? HomeTheme.accentPink,
-              ),
-            )
+              ? Text(
+                  widget.valorTexto!,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: widget.acento ?? HomeTheme.accentPink,
+                  ),
+                )
               : _Pastilla(activa: _activo, acento: widget.acento),
       onTap: bloqueado
           ? null

@@ -162,9 +162,8 @@ class _TecladoTvState extends State<TecladoTv> {
   /// mostrando. Si no, al pasar a los números (filas de cinco) el teclado
   /// entero se encogería y todo lo de al lado saltaría de sitio.
   static double _anchoDelEspacio(int teclasEnLaFila) {
-    final maximo = _filasLetras
-        .map((f) => f.length)
-        .reduce((a, b) => a > b ? a : b);
+    final maximo =
+        _filasLetras.map((f) => f.length).reduce((a, b) => a > b ? a : b);
     final total = maximo * _anchoTecla + (maximo - 1) * _hueco;
     final usado = teclasEnLaFila * _anchoTecla + teclasEnLaFila * _hueco;
     // Nunca más angosto que una tecla y media: si algún día una última fila
@@ -308,7 +307,8 @@ class _CampoDeBusquedaState extends State<_CampoDeBusqueda>
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 17,
-                color: vacio ? HomeTheme.textPlaceholder : HomeTheme.textPrimary,
+                color:
+                    vacio ? HomeTheme.textPlaceholder : HomeTheme.textPrimary,
               ),
             ),
           ),

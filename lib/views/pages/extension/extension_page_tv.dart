@@ -161,8 +161,9 @@ class _ExtensionPageTvState extends State<ExtensionPageTv>
       }
       return _filtro.alcanza(ext);
     }).toList()
-      ..sort((a, b) =>
-          a.extension.name.toLowerCase().compareTo(b.extension.name.toLowerCase()));
+      ..sort((a, b) => a.extension.name
+          .toLowerCase()
+          .compareTo(b.extension.name.toLowerCase()));
   }
 
   /// Cuántas caen en cada filtro, para poder mostrarlo al lado del nombre.
@@ -203,11 +204,11 @@ class _ExtensionPageTvState extends State<ExtensionPageTv>
   Widget build(BuildContext context) {
     return Obx(() {
       final visibles = _visibles;
-      final total =
-          c.runtimes.values.where((r) => !r.extension.nsfw).length;
+      final total = c.runtimes.values.where((r) => !r.extension.nsfw).length;
       final activas = c.runtimes.values
           .where((r) =>
-              !r.extension.nsfw && ExtensionUtils.isEnabled(r.extension.package))
+              !r.extension.nsfw &&
+              ExtensionUtils.isEnabled(r.extension.package))
           .length;
       return PantallaTv(
         child: Row(
@@ -250,9 +251,7 @@ class _ExtensionPageTvState extends State<ExtensionPageTv>
               // Con algo escrito, la opción muestra QUÉ se está buscando: si
               // no, una lista corta se lee como «no tengo extensiones» en vez
               // de «hay un texto puesto».
-              texto: _busqueda.isEmpty
-                  ? 'common.search'.i18n
-                  : '«$_busqueda»',
+              texto: _busqueda.isEmpty ? 'common.search'.i18n : '«$_busqueda»',
               elegido: _busqueda.isNotEmpty,
               onTap: () => setState(() => _escribiendo = true),
             ),
@@ -524,9 +523,7 @@ class _FilaDeExtension extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     // Apagada, el nombre se apaga con ella. Es la señal que
                     // se lee de lejos, antes que cualquier pastilla.
-                    color: activa
-                        ? HomeTheme.textPrimary
-                        : HomeTheme.textMuted,
+                    color: activa ? HomeTheme.textPrimary : HomeTheme.textMuted,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -610,8 +607,7 @@ class _FilaDeExtension extends StatelessWidget {
         fit: BoxFit.cover,
         // Decodificado al tamaño que se ve: sin esto, diecinueve iconos que
         // llegan en 256×256 se guardan enteros para dibujarse en 38.
-        cacheWidth:
-            (lado * MediaQuery.devicePixelRatioOf(context)).ceil(),
+        cacheWidth: (lado * MediaQuery.devicePixelRatioOf(context)).ceil(),
       ),
     );
   }

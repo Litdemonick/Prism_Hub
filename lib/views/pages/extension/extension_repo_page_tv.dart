@@ -297,8 +297,7 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
             OpcionDeColumna(
               id: 'buscar',
               icono: Icons.search_rounded,
-              texto:
-                  _busqueda.isEmpty ? 'common.search'.i18n : '«$_busqueda»',
+              texto: _busqueda.isEmpty ? 'common.search'.i18n : '«$_busqueda»',
               elegido: _busqueda.isNotEmpty,
               onTap: () => setState(() => _escribiendo = true),
             ),
@@ -427,7 +426,8 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.cloud_off_rounded, size: 56, color: HomeTheme.textMuted),
+              Icon(Icons.cloud_off_rounded,
+                  size: 56, color: HomeTheme.textMuted),
               const SizedBox(height: 18),
               Text(
                 'extension-repo.error'.i18n,
@@ -458,8 +458,8 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
                 autofocus: true,
                 onTap: () => unawaited(c.onRefresh(forceRefresh: true)),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 14),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                   decoration: BoxDecoration(
                     color: HomeTheme.cardSurface,
                     borderRadius: BorderRadius.circular(10),

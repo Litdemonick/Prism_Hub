@@ -679,19 +679,18 @@ class _HistoryPageState extends State<HistoryPage> {
 
   Widget _pastillaChip(String texto, bool seleccionado, double fontSize) {
     return AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: EdgeInsets.symmetric(
-              horizontal: fontSize > 12 ? 16 : 12,
-              vertical: fontSize > 12 ? 9 : 6),
-          decoration: BoxDecoration(
-            color: seleccionado
-                ? _accent.withValues(alpha: 0.18)
-                : HomeTheme.cardSurface,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: seleccionado ? _accent : HomeTheme.border,
-            ),
-          ),
+      duration: const Duration(milliseconds: 150),
+      padding: EdgeInsets.symmetric(
+          horizontal: fontSize > 12 ? 16 : 12, vertical: fontSize > 12 ? 9 : 6),
+      decoration: BoxDecoration(
+        color: seleccionado
+            ? _accent.withValues(alpha: 0.18)
+            : HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: seleccionado ? _accent : HomeTheme.border,
+        ),
+      ),
       child: Text(
         texto,
         style: TextStyle(
@@ -818,8 +817,7 @@ class _HistoryPageState extends State<HistoryPage> {
           // En Favoritos no, mismo motivo que en la hoja: ahí la fecha es la de
           // guardado y filtrar por ella no contesta nada.
           if (!_onFavoritesTab) ...[
-            Icon(Icons.schedule_rounded,
-                size: 16, color: HomeTheme.textMuted),
+            Icon(Icons.schedule_rounded, size: 16, color: HomeTheme.textMuted),
             for (final r in _Rango.values)
               _chip(
                 etiquetasRango[r]!,
@@ -1001,8 +999,7 @@ class _HistoryPageState extends State<HistoryPage> {
             Expanded(
               child: TextField(
                 controller: _searchController,
-                style:
-                    TextStyle(color: HomeTheme.textPrimary, fontSize: 14),
+                style: TextStyle(color: HomeTheme.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
@@ -1238,9 +1235,7 @@ class _HistoryPageState extends State<HistoryPage> {
           OpcionDeColumna(
             id: 'buscar',
             icono: Icons.search_rounded,
-            texto: _query.isEmpty
-                ? 'common.search'.i18n
-                : '«$_query»',
+            texto: _query.isEmpty ? 'common.search'.i18n : '«$_query»',
             elegido: _query.isNotEmpty,
             onTap: () => setState(() => _escribiendoTv = true),
           ),
