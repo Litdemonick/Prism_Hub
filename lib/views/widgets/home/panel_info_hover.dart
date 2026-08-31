@@ -55,12 +55,25 @@ class PanelInfoHover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
+      // ── El degradado arranca TRANSPARENTE ─────────────────────────────
+      //
+      // Arrancaba en 0xA6 —un 65 % de opacidad— y eso, cuando el panel no
+      // cubre la tarjeta entera, se ve como una línea recta cortándola por la
+      // mitad. Reportado con foto en un televisor: «sale cortado, sale por la
+      // mitad en vez de ser toda la tarjeta».
+      //
+      // Con el primer tramo en transparente puro no hay borde que ver: el
+      // panel se funde con la portada y solo se oscurece donde hay texto.
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xA6101019), Color(0xE0101019), Color(0xF2101019)],
-          stops: [0.0, 0.45, 1.0],
+          colors: [
+            Color(0x00101019),
+            Color(0xC2101019),
+            Color(0xF2101019),
+          ],
+          stops: [0.0, 0.42, 1.0],
         ),
       ),
       child: Padding(

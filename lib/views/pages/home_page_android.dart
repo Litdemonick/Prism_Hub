@@ -374,6 +374,20 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   double _p = 0;
   bool _sembrado = false;
 
+  /// Si el carrusel tiene el foco del mando ahora mismo.
+  ///
+  /// ── Por qué hace falta guardarlo ────────────────────────────────────────
+  ///
+  /// El carrusel es él mismo el nodo que recibe el foco —no va envuelto en
+  /// FocusableCard, porque envuelto las teclas nunca le llegaban adentro— y
+  /// eso trajo un efecto que nadie notó hasta probarlo con un mando: al
+  /// enfocarlo NO se dibujaba nada. Reportado en vivo: «cuando selecciono el
+  /// carrusel el contorno rosado se pierde, no se ve dónde estoy».
+  ///
+  /// Desde el sillón eso es quedarse sin saber qué está seleccionado, que en
+  /// un televisor es lo único que orienta.
+  bool _enfocado = false;
+
   late final AnimationController _anim = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 340),
@@ -1009,6 +1023,11 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 canRequestFocus: widget.conFocoTv,
                 skipTraversal: !widget.conFocoTv,
                 onKeyEvent: widget.conFocoTv ? manejarTecla : null,
+                onFocusChange: widget.conFocoTv
+                    ? (tiene) {
+                        if (mounted) setState(() => _enfocado = tiene);
+                      }
+                    : null,
                 child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onHorizontalDragStart: (_) {
@@ -1398,7 +1417,16 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                       _abrir(context, planos[i].$2, planos[i].$1);
                     }
 
-                    return _ConPanelDeHover(
+                    // El marco de foco, solo sobre la tarjeta centrada.
+                    //
+                    // En la centrada y no en todas: es la que se abre al
+                    // pulsar OK, así que es la que hay que señalar. El mismo
+                    // rosa y el mismo grosor que usa FocusableCard en el
+                    // resto de la app, para que el mando siempre marque igual.
+                    final esLaDelMedio = (_p - i).abs() < 0.35;
+                    return _ConMarcoDeFoco(
+                      marcado: _enfocado && esLaDelMedio,
+                      child: _ConPanelDeHover(
                       activo: conTexto && !_esTactil &&
                           !PlatformTv.esTelevisionSync,
                       titulo: planos[i].$2.title,
@@ -1426,6 +1454,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                         conTexto: conTexto,
                         anchoTexto: m.ancho - 28,
                         onTap: abrir,
+                      ),
                       ),
                     );
                   })(),
@@ -1605,6 +1634,42 @@ class _MedidasCarrusel {
 /// más adentro arriesgaba romper algo de eso sin poder probarlo en
 /// pantalla antes de mandarlo. Envolviéndola desde afuera, `_TarjetaGrande`
 /// no cambia ni una línea.
+/// Le pone el marco de foco del mando a lo que envuelva.
+///
+/// ── Por qué no se usa FocusableCard ─────────────────────────────────────────
+///
+/// FocusableCard ES el nodo que recibe el foco, y el carrusel no puede estar
+/// envuelto en uno: las teclas salen del nodo enfocado y suben por sus
+/// ancestros, nunca bajan a los hijos, así que envuelto el carrusel se quedaba
+/// mudo y las flechas no le llegaban.
+///
+/// Esto solo DIBUJA. Quién tiene el foco lo decide el carrusel, que es el que
+/// recibe las teclas, y acá se pinta lo que él diga.
+class _ConMarcoDeFoco extends StatelessWidget {
+  const _ConMarcoDeFoco({required this.marcado, required this.child});
+
+  final bool marcado;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!marcado) return child;
+    return DecoratedBox(
+      // Encima y no debajo: la portada llena la tarjeta entera, así que un
+      // marco dibujado detrás quedaría tapado por la imagen.
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        // El mismo rosa y el mismo grosor que FocusableCard usa en el resto de
+        // la app: el mando tiene que marcar siempre igual, o cada zona parece
+        // otra aplicación.
+        border: Border.all(color: HomeTheme.accentPink, width: 3),
+      ),
+      child: child,
+    );
+  }
+}
+
 class _ConPanelDeHover extends StatefulWidget {
   const _ConPanelDeHover({
     required this.child,

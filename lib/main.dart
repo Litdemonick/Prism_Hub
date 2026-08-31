@@ -28,6 +28,7 @@ import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/degradacion_en_caliente.dart';
 import 'package:prismhub/utils/prismhub_mas.dart';
+import 'package:prismhub/views/widgets/tv/foco_con_topes.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/application.dart';
@@ -1179,10 +1180,18 @@ class _MainAppState extends State<MainApp> {
               SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
               SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
             },
-            // Y la red de seguridad del mando: si el foco se pierde, la
-            // primera flecha lo recupera en vez de dejar la app muerta.
-            // Ver RescateDeFoco.
-            child: RescateDeFoco(child: child),
+            // Y que las flechas signifiquen lo que dicen: la derecha no puede
+            // terminar bajando una fila porque en la fila no quede nada.
+            // Ver FocoConTopes.
+            child: Actions(
+              actions: <Type, Action<Intent>>{
+                DirectionalFocusIntent: FocoConTopes(),
+              },
+              // Y la red de seguridad del mando: si el foco se pierde, la
+              // primera flecha lo recupera en vez de dejar la app muerta.
+              // Ver RescateDeFoco.
+              child: RescateDeFoco(child: child),
+            ),
           );
         },
       ),

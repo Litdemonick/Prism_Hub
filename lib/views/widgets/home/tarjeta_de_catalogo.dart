@@ -331,18 +331,21 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                                   // se está mirando: taparla entera deja al
                                   // usuario sin ver qué eligió.
                                   //
-                                  // Acotado a la mitad de abajo, la portada
-                                  // se sigue viendo y la info se lee igual
-                                  // — el degradado del panel ya arranca
-                                  // transparente arriba, así que el corte no
-                                  // se nota como un borde.
+                                  // Pegado abajo y midiendo lo que necesita.
+                                  //
+                                  // Antes se le forzaba el 52 % del alto de la
+                                  // tarjeta. Con un título de una línea eso
+                                  // dejaba un hueco enorme entre el título y
+                                  // «Ver detalles», y el panel se veía cortado
+                                  // por la mitad — reportado con foto.
+                                  //
+                                  // Midiendo su contenido ocupa lo justo, y
+                                  // con el degradado arrancando transparente
+                                  // no hay ningún borde que se note.
                                   child: PlatformTv.esTelevisionSync
                                       ? Align(
                                           alignment: Alignment.bottomCenter,
-                                          child: FractionallySizedBox(
-                                            heightFactor: 0.52,
-                                            child: _panel(),
-                                          ),
+                                          child: _panel(compacto: true),
                                         )
                                       : _panel(),
                                 ),
@@ -436,7 +439,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   /// del carrusel de Inicio (`home_page_android.dart`), pedido explícito:
   /// "que en el carrusel también salga al poner el mouse la selección como
   /// en las otras cards, reutiliza eso". Una mejora acá vale para las dos.
-  Widget _panel() {
+  Widget _panel({bool compacto = false}) {
     return PanelInfoHover(
       titulo: widget.titulo,
       encabezado: widget.encabezado,
@@ -444,6 +447,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
       descripcion: widget.descripcion,
       acento: widget.acento,
       onTap: widget.onTap,
+      compacto: compacto,
     );
   }
 
