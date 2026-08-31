@@ -1,66 +1,57 @@
-## PrismHub v1.0.61 — PrismHub+: la app se adapta a tu aparato
+## PrismHub v1.0.62 — Arranca liviano, y el televisor por fin se siente un televisor
 
-> ⚡ **Nuevo: PrismHub+.** La app ahora mira en qué aparato está corriendo
-> —televisor, teléfono, tablet o PC— y se ajusta a lo que ese aparato puede dar.
-> Está en **Ajustes → PrismHub+**, con todo a la vista: qué aparato detectó,
-> con cuánta memoria y cuántos núcleos, y qué cambió por eso.
+> ⚡ **La app ya no levanta todo al abrirse.** Cada extensión corre en su propio
+> motor de JavaScript, y hasta ahora se levantaban TODOS al arrancar. Con
+> diecinueve instaladas eran diecinueve motores antes de que vieras nada. Ahora
+> se levanta el de una extensión cuando de verdad la usás, y se suelta cuando
+> dejás de usarla.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### ⚡ PrismHub+
+### ⚡ Arranque y memoria — en todas las plataformas
 
-Hasta ahora la app pedía lo mismo en todos lados: 1080p de vídeo, todas las
-peticiones a la vez, todos los efectos. Eso está bien en un teléfono nuevo y es
-demasiado en un televisor de 1 GB.
+- **Los motores se levantan al usarse, no al arrancar.** Cada uno carga unos
+  148 KB de librerías, así que con muchas extensiones el arranque era una
+  tormenta. Medido en un televisor de 0,9 GB: el sistema pedía memoria cuatro
+  veces en los primeros cuarenta segundos.
+- **Y se sueltan solos** cuando llevás un rato sin usar esa extensión —un minuto
+  en un aparato modesto, cinco en uno capaz—. Recorrer cinco zonas ya no deja
+  cinco motores vivos.
+- **Apagar o desinstalar una extensión devuelve su memoria** al momento.
+- **El fondo del Inicio ya no le pregunta a todas.** Le preguntaba a las
+  diecinueve para elegir una imagen; ahora a dos o cinco según el aparato.
+- **Y al buscar no se paga esa espera**: los motores se van preparando mientras
+  escribís, que es tiempo en que nadie espera nada.
 
-- **Pide la calidad que tu aparato puede mostrar y sostener.** En un televisor
-  de 720p pedir 1080p es decodificar un tercio más de imagen de la que se ve y
-  descargar casi el doble de datos para tirarlos. Es un **techo**, no un
-  objetivo: si la fuente solo tiene 720p, se ve 720p.
-- **Si el vídeo se corta dos veces, baja un escalón de calidad solo.** Ni el
-  aparato ni la pantalla dicen cuánto está llegando por la red en este momento;
-  eso solo lo dice que el vídeo se corte.
-- **Reparte las peticiones al abrir la app.** Todas las zonas piden sus
-  carruseles a la vez, y en un televisor con cuatro núcleos eso son más de cien
-  peticiones en catorce segundos peleándose entre ellas.
-- **Los carruseles construyen menos de más al deslizarse**, y los efectos caros
-  —el desenfoque del fondo, el crecido de las tarjetas— se ajustan al aparato.
-- **Y si la app va a tirones de todos modos, baja el nivel sola** y lo recuerda
-  para la próxima vez. Ya medíamos cada cuadro; ahora eso sirve para algo.
+### 📺 El televisor
 
-Esto no se apaga, porque no es una preferencia sino cómo la app se entera de con
-qué cuenta —pedir siempre la máxima calidad de vídeo, que sí es una preferencia,
-sigue en Reproducción—. Lo que sí podés hacer es **volver a medir el aparato**,
-por si alguna vez lo hubiera clasificado peor de lo que es.
+- **Las tarjetas ya no se cortan.** Al mover el foco, la app desplazaba lo
+  mínimo y lo seleccionado quedaba pegado al borde. Ahora queda con aire
+  alrededor, y por debajo se ve que la lista sigue.
+- **La flecha derecha ya no baja de fila sola** al llegar al final. Derecha es
+  derecha, en todas las zonas.
+- **El contorno de selección se ve.** En el carrusel del Inicio no se dibujaba
+  ninguno, y en Extensiones era el gris de Material, invisible desde el sillón.
+- **Se recupera casi una fila de pantalla**: el margen de seguridad se llevaba
+  el 5 % de arriba y de abajo, donde no protege de nada.
+- **Las filas llegan puestas.** Pedían su contenido justo al entrar en pantalla,
+  así que se veía el nombre de la extensión y debajo nada. Ahora piden una
+  pantalla antes.
+- **Películas, series y anime con tarjetas de televisor**: más grandes y como
+  mucho cuatro por fila, en vez de cinco o seis estampillas.
+- **La Zona +18 tiene su propia cabecera**, con botones grandes y el nombre
+  escrito al lado del icono.
+- **El PIN de la Zona entra en una pantalla**, apaisado y sin desplazar.
+- **La barra de espacio del teclado va a la derecha**, alcanzable desde
+  cualquier fila con una sola pulsación.
 
-### 🖥️ Ahora se mide el aparato en todas las plataformas
+### 🔎 Buscar
 
-Antes esto solo se calculaba en televisores. Un portátil de dos núcleos recibía
-el mismo trato que una máquina nueva, y un teléfono de 2 GB el mismo que uno de
-12.
-
-- Se miran la **memoria** y los **núcleos**, y ahora también los **físicos**:
-  ocho lógicos pueden ser cuatro reales, y dos hilos del mismo núcleo no
-  decodifican vídeo en paralelo.
-- **Un televisor potente ya puede contar como capaz.** Antes ninguno pasaba de
-  «medio», así que un Fire TV 4K recibía el mismo trato que un stick de 1 GB.
-- **«Pedir siempre la máxima calidad»** queda bloqueado, con el motivo, en los
-  aparatos donde solo puede romper la reproducción.
-
-### 📡 El registro de otro aparato ya no se pierde
-
-Al abrir el registro de un televisor caído decía «se cortó la conexión, lo de
-abajo es lo último que llegó» y abajo no había nada.
-
-Ahora se guarda en disco lo último que llegó de cada aparato y se muestra
-apenas se abre la pantalla, con una franja que dice **de qué día y hora es** —un
-registro viejo que parece de ahora lleva a mirar el fallo equivocado.
-
-### 🔎 Diagnóstico
-
-- **Se mide el desfase entre el audio y el vídeo**, con los milisegundos, hacia
-  qué lado, el códec, si decodifica por hardware y por dónde sale el audio.
-- El registro dice qué decidió PrismHub+ al arrancar, y avisa fuerte si está
-  apagado.
+- **Ya no dice «sin extensiones instaladas» cuando sí las tenés.** Confundía una
+  búsqueda sin resultados con no tener ninguna extensión, y mandaba a instalar
+  algo que ya estaba.
+- **La pantalla vacía invita a escribir** en vez de parecer colgada, y cuenta
+  qué va a pasar: que busca en todas tus extensiones a la vez y que los
+  resultados van apareciendo a medida que cada una contesta.
