@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/home_controller.dart';
@@ -690,11 +692,129 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
     return _buildContent(conCabecera: true);
   }
 
+  /// La Zona +18 en televisor.
+  ///
+  /// ── Por qué no sirve la de Android ──────────────────────────────────────
+  ///
+  /// La de Android usa una `AppBar` con tres botones de icono. Con un mando eso
+  /// es un problema doble: son blancos chicos pensados para el dedo, y ninguno
+  /// lleva el marco de foco de la app —son `IconButton` de Material— así que al
+  /// llegar arriba con el mando no se ve dónde se está parado.
+  ///
+  /// Acá la cabecera es una fila de botones grandes con su nombre escrito al
+  /// lado del icono: desde el sillón se lee qué hace cada uno sin adivinar por
+  /// el dibujo, y cada uno se enfoca con el mismo marco rojo que usa el resto
+  /// de esta zona.
+  ///
+  /// Y sin `AppBar`: dibuja su propia superficie con elevación, y sobre el
+  /// fondo de la zona eso se ve como una franja despareja cruzando la pantalla.
+  Widget _buildTv(BuildContext context) {
+    return Scaffold(
+      backgroundColor: HomeTheme.bg,
+      body: SafeArea(
+        child: Padding(
+          // El mismo margen que el resto del televisor: entero a los costados
+          // y un tercio arriba y abajo, para no regalar el alto de una fila.
+          padding: HomeTheme.margenTv(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'nsfw18.title'.i18n,
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                        color: HomeTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  _BotonTvZona(
+                    icono: Icons.search_rounded,
+                    texto: 'nsfw18.search-zone-title'.i18n,
+                    onTap: () =>
+                        openNsfw18Search(context, yaAutorizado: true),
+                  ),
+                  const SizedBox(width: 12),
+                  _BotonTvZona(
+                    icono: Icons.favorite_border_rounded,
+                    texto: 'home.favorite'.i18n,
+                    onTap: _favoritos,
+                  ),
+                  const SizedBox(width: 12),
+                  _BotonTvZona(
+                    icono: Icons.history_rounded,
+                    texto: 'home.history'.i18n,
+                    onTap: () => _openHistoryTab(0),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Expanded(child: _buildContent()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (PlatformTv.esTelevisionSync) return _buildTv(context);
     return PlatformBuildWidget(
       androidBuilder: _buildAndroid,
       desktopBuilder: _buildDesktop,
+    );
+  }
+}
+
+/// Un botón de la cabecera de la Zona en televisor: icono + nombre.
+///
+/// Con el nombre escrito y no solo el dibujo: desde tres metros, tres iconos
+/// seguidos son tres manchas: hay que acercarse para saber cuál es cuál. Y con
+/// el marco de foco de la app, que es lo que le faltaba a los `IconButton`.
+class _BotonTvZona extends StatelessWidget {
+  const _BotonTvZona({
+    required this.icono,
+    required this.texto,
+    required this.onTap,
+  });
+
+  final IconData icono;
+  final String texto;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableCard(
+      borderRadius: 999,
+      accent: HomeTheme.accentRed,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: HomeTheme.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, size: 22, color: HomeTheme.textPrimary),
+            const SizedBox(width: 10),
+            Text(
+              texto,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: HomeTheme.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
