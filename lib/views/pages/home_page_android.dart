@@ -462,6 +462,65 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// hubiera nada que mostrar.
   bool get _pistaVisible => !PlatformTv.esTelevisionSync && _p < 0.5;
 
+  // ── Auto-avance ────────────────────────────────────────────────────────
+  //
+  // Pedido explícito: que el destacado se mueva solo, y que tocarlo a mano
+  // (arrastrar, o las flechas del mando) lo pause — sin quedarse pausado
+  // para siempre, sigue solo un rato después de soltar.
+  //
+  // Un `Timer.periodic` normal, no un `AnimationController` con su propio
+  // reloj: lo único que hace falta es "cada tanto, si nadie tocó nada hace
+  // poco, andá a la siguiente" — reusando `_irA`, que ya es exactamente eso.
+  Timer? _autoAvance;
+
+  /// Cuándo fue la última vez que alguien movió esto A MANO.
+  DateTime _ultimaAccionManual = DateTime.fromMillisecondsSinceEpoch(0);
+
+  static const _cadenciaAuto = Duration(seconds: 7);
+  static const _pausaTrasManual = Duration(seconds: 6);
+
+  /// Alguien tocó el carrusel a mano: pausa el auto-avance por un rato.
+  ///
+  /// Se llama desde el arrastre y desde las flechas del mando — las dos
+  /// formas de moverlo "a mano" que existen.
+  void _marcarAccionManual() {
+    _ultimaAccionManual = DateTime.now();
+  }
+
+  void _arrancarAutoAvance() {
+    _autoAvance?.cancel();
+    // En un aparato de gama baja no: es una animación que corre para
+    // siempre sin que nadie la haya pedido, y ahí lo que sobra es
+    // justamente eso — trabajo de GPU que nadie pidió.
+    if (PrismHubMas.nivel == NivelDeAparato.bajo) return;
+    _autoAvance = Timer.periodic(_cadenciaAuto, (_) => _avanzarAuto());
+  }
+
+  void _avanzarAuto() {
+    if (!mounted) return;
+    // La pestaña de Inicio no es la que se ve ahora mismo, en televisor
+    // (`TickerMode(enabled: z == _categoria)` en home_page_tv.dart). El
+    // Timer no se entera solo de eso —no es un Ticker—, así que se
+    // pregunta acá: nada de avanzar una pantalla que nadie está mirando.
+    if (!TickerMode.valuesOf(context).enabled) return;
+    if (DateTime.now().difference(_ultimaAccionManual) < _pausaTrasManual) {
+      return;
+    }
+    // Ya hay un viaje en curso —el propio auto-avance anterior, o uno
+    // manual que todavía no terminó—: no se le monta otro encima.
+    if (_anim.isAnimating) return;
+    final grupos = widget.c.destacadosVisibles;
+    if (grupos.isEmpty) return;
+    final planos = _planos(grupos, porBloques: true);
+    if (planos.length < 2) return;
+    final ultimoReal = planos.length - 1;
+    // Infinito: al llegar a la última, vuelve a la primera. Sin entrar
+    // nunca a las tarjetas "fantasma" (las que esperan que llegue más
+    // contenido) — mostrar sola una tarjeta en esqueleto sería raro.
+    final destino = _p.round() >= ultimoReal ? 0 : _p.round() + 1;
+    _irA(destino.toDouble(), grupos);
+  }
+
   /// Prende o apaga el vaivén según corresponda ahora. Se llama después de
   /// cualquier cambio que pueda mover _pistaVisible (posición o arrastre):
   /// no tickear de más cuando nadie la ve es lo que importa, así que esto
@@ -484,6 +543,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   void initState() {
     super.initState();
     _actualizarPista();
+    _arrancarAutoAvance();
     _anim.addListener(() {
       // Tocar otra zona mientras el acordeón se está acomodando desmonta este
       // widget con la animación en curso. Sin esta guarda, el oyente llama a
@@ -498,6 +558,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
   @override
   void dispose() {
+    _autoAvance?.cancel();
     _anim.dispose();
     _pista.dispose();
     super.dispose();
@@ -1002,6 +1063,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
           // En el extremo se deja pasar la tecla: así el foco puede salir
           // del carrusel hacia el sidebar en vez de quedarse trabado.
           if (destino < 0 || destino > ultimo) return KeyEventResult.ignored;
+          _marcarAccionManual();
           _irA(destino.toDouble(), grupos);
           return KeyEventResult.handled;
         }
@@ -1032,6 +1094,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onHorizontalDragStart: (_) {
+                  _marcarAccionManual();
                   _anim.stop();
                 },
                 onHorizontalDragUpdate: (d) {
