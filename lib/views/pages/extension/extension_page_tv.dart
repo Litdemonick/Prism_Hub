@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/extension/extension_controller.dart';
+import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
@@ -239,7 +240,11 @@ class _ExtensionPageTvState extends State<ExtensionPageTv>
           OpcionDeColumna(
             icono: Icons.arrow_back_rounded,
             texto: 'extension.tv-volver'.i18n,
-            onTap: () => Get.back<void>(),
+            // Esta pantalla se abre de dos formas: como pestaña desde la
+            // barra de arriba del Inicio, o empujada desde Ajustes. `Get.back`
+            // a secas solo cubre la segunda — reportado en vivo: "le doy a
+            // volver y no hace nada". Ver MainController.volver.
+            onTap: () => MainController.volver(context),
           ),
         ]),
         GrupoDeColumna(
@@ -272,6 +277,7 @@ class _ExtensionPageTvState extends State<ExtensionPageTv>
               id: 'activar',
               icono: Icons.done_all_rounded,
               texto: 'extension.activar-todas'.i18n,
+              cargando: masivoEnCurso,
               onTap: () => unawaited(
                 conElPasoCerrado(() => cambiarTodas(true)),
               ),
@@ -280,6 +286,7 @@ class _ExtensionPageTvState extends State<ExtensionPageTv>
               id: 'desactivar',
               icono: Icons.remove_done_rounded,
               texto: 'extension.desactivar-todas'.i18n,
+              cargando: masivoEnCurso,
               onTap: () => unawaited(
                 conElPasoCerrado(() => cambiarTodas(false)),
               ),
@@ -288,6 +295,7 @@ class _ExtensionPageTvState extends State<ExtensionPageTv>
               id: 'actualizar',
               icono: Icons.system_update_alt_rounded,
               texto: 'extension.actualizar-todas'.i18n,
+              cargando: masivoEnCurso,
               onTap: () => unawaited(conElPasoCerrado(actualizarTodas)),
             ),
             OpcionDeColumna(
@@ -345,7 +353,7 @@ class _ExtensionPageTvState extends State<ExtensionPageTv>
       scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
       padding: const EdgeInsets.only(top: 4, bottom: 24),
       itemCount: visibles.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (context, i) => _FilaDeExtension(
         servicio: visibles[i],
         onAlternar: () => unawaited(_alternar(visibles[i])),

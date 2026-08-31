@@ -1025,7 +1025,22 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   // En escritorio la página es solo el cuerpo: el marco (barra de título,
   // panel de navegación y botón de atrás) lo pone el armazón de go_router.
   Widget _buildDesktop(BuildContext context) {
-    return Padding(
+    // ── Fondo propio, opaco, cubriendo TODO ────────────────────────────
+    //
+    // La transición entre pantallas (`_animation` en router.dart) usa
+    // `opaque: false` a propósito: evita un parpadeo blanco durante el
+    // fundido dejando que la pantalla anterior se siga pintando debajo
+    // mientras dura la animación. El problema es que esto NO es solo
+    // durante los 220 ms del fundido — mientras esta pantalla esté puesta,
+    // Ajustes sigue vivo y pintándose atrás todo el tiempo.
+    //
+    // Esta era la única pantalla de escritorio sin un `Container` de fondo
+    // propio: un `Padding` a secas dentro de un `Column`, así que cualquier
+    // hueco entre los widgets (bordes, separaciones) dejaba ver Ajustes por
+    // detrás. Reportado en vivo con foto: el título y las pestañas de este
+    // visor con las filas de Ajustes asomando debajo, a media transparencia.
+    return Container(
+      color: HomeTheme.bg,
       padding: const EdgeInsets.fromLTRB(30, 20, 30, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

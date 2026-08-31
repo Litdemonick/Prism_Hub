@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/utils/nsfw18_zone.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_pin_settings_tile.dart';
 import 'package:prismhub/utils/modo_app.dart';
@@ -130,31 +131,36 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
   /// `build`, así que el título queda tan arriba y tan a la izquierda como el
   /// televisor permite sin que lo recorte.
   Widget _titulo(BuildContext context) {
-    final puedeVolver = Navigator.of(context).canPop();
     return Row(
       children: [
-        if (puedeVolver) ...[
-          FocusableCard(
-            borderRadius: 999,
-            conCrecido: false,
-            onTap: () => Navigator.of(context).pop(),
-            child: Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: HomeTheme.cardSurface,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.arrow_back_rounded,
-                size: 22,
-                color: HomeTheme.textPrimary,
-              ),
+        // ── Siempre visible, no solo si `canPop()` ─────────────────────
+        //
+        // Ajustes en televisor es una PESTAÑA del shell (`MainController`,
+        // `changeTab(tabAjustes)`), no una ruta empujada — así que
+        // `Navigator.canPop()` casi nunca da true acá y con eso la flecha no
+        // llegaba a dibujarse nunca. `MainController.volver` ya resuelve los
+        // dos casos: si hay una ruta de verdad la desapila, si no, vuelve a
+        // la pestaña de la que se vino.
+        FocusableCard(
+          borderRadius: 999,
+          conCrecido: false,
+          onTap: () => MainController.volver(context),
+          child: Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: HomeTheme.cardSurface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.arrow_back_rounded,
+              size: 22,
+              color: HomeTheme.textPrimary,
             ),
           ),
-          const SizedBox(width: 14),
-        ],
+        ),
+        const SizedBox(width: 14),
         Text(
           'common.settings'.i18n,
           style: TextStyle(
@@ -577,7 +583,11 @@ class _FilaTv extends StatelessWidget {
     // como que la selección está corrida hacia abajo. Reportado con foto.
     //
     // Con la separación afuera, el marco cae exactamente sobre la tarjeta.
-    const separacion = EdgeInsets.only(bottom: 12);
+    //
+    // 14 y no 12: con el halo de foco (desenfoque 22 en televisor) tan cerca
+    // del borde de la fila siguiente, el resplandor de una opción se metía
+    // contra la de al lado. Mismo ajuste que en ColumnaDeAcciones.
+    const separacion = EdgeInsets.only(bottom: 14);
     if (onTap == null) return Padding(padding: separacion, child: fila);
     return Padding(
       padding: separacion,

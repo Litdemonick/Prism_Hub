@@ -37,6 +37,33 @@ class MainController extends GetxController {
     selectedTab.value = i;
   }
 
+  /// Vuelve de una pantalla que puede haber llegado empujada (`Get.to`,
+  /// `Navigator.push`) O como pestaña de este mismo shell (`changeTab`).
+  ///
+  /// ── Por qué hace falta esto y no alcanza con `Navigator.pop` ──────────
+  ///
+  /// Extensiones y Ajustes, en televisor, se abren de las DOS formas según
+  /// desde dónde se entra: desde la barra de arriba del Inicio son una
+  /// pestaña de este `IndexedStack` (no hay ninguna ruta que desapilar); desde
+  /// dentro de Ajustes, Extensiones se abre empujada con `Get.to` (ahí sí hay
+  /// una ruta). Un botón de «volver» escrito para un solo caso queda roto en
+  /// el otro — reportado en vivo: «en la zona de extensiones no me deja
+  /// regresar al inicio, le doy a volver y no hace nada».
+  ///
+  /// Mismo criterio que ya usa el botón atrás del sistema en `main_page.dart`
+  /// (`PopScope`): si hay una ruta empujada, se desapila; si no, es una
+  /// pestaña, y desde Ajustes se vuelve a `tabAnterior` —de dónde se vino—,
+  /// desde cualquier otra a Inicio.
+  static void volver(BuildContext context) {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return;
+    }
+    if (!Get.isRegistered<MainController>()) return;
+    final c = Get.find<MainController>();
+    c.changeTab(c.selectedTab.value == tabAjustes ? c.tabAnterior : tabHome);
+  }
+
   List<Widget> actions = <Widget>[].obs;
 
   setAcitons(List<Widget> list) async {

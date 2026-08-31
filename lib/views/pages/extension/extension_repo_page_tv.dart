@@ -164,6 +164,9 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
   }
 
   Future<void> _instalar(EntradaDelRepo e) async {
+    // Ya está en vuelo: sin esto, tocar la fila varias veces mientras
+    // instala disparaba una descarga por cada toque.
+    if (_enVuelo.contains(e.package)) return;
     if (e.instalada) {
       // Ya está: acá el botón desinstala. Es la única acción que queda para
       // una instalada, y tenerla acá evita ir a la otra pantalla solo para
@@ -349,6 +352,7 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
               texto: _instalandoTodas
                   ? 'extension-repo.tv-instalando'.i18n
                   : 'extension.instalar-todas'.i18n,
+              cargando: _instalandoTodas,
               onTap: () => unawaited(_instalarTodas()),
             ),
             OpcionDeColumna(
@@ -406,7 +410,7 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
       scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
       padding: const EdgeInsets.only(top: 4, bottom: 24),
       itemCount: visibles.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (context, i) => _FilaDelRepo(
         entrada: visibles[i],
         instalando: _enVuelo.contains(visibles[i].package),

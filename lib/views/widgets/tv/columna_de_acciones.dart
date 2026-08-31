@@ -153,6 +153,7 @@ class OpcionDeColumna extends StatelessWidget {
     this.icono,
     this.elegido = false,
     this.foco,
+    this.cargando = false,
   });
 
   /// Cómo se llama esta opción para la columna, con independencia de lo que
@@ -173,6 +174,16 @@ class OpcionDeColumna extends StatelessWidget {
   final bool elegido;
   final FocusNode? foco;
 
+  /// Está corriendo una acción larga (activar/desactivar/actualizar/instalar
+  /// todas) y esta es SU opción.
+  ///
+  /// Sin ninguna señal, tocar «Activar todas» y ver que no pasa nada visible
+  /// —la tanda tarda, y con el mando no hay cursor de espera— invita a
+  /// tocarlo de nuevo, que es justo lo que `AccionesMasivasDeExtensiones`
+  /// bloquea con su propio candado pero sin decir por qué. El ícono pasa a un
+  /// giro y la fila deja de reaccionar al mando hasta que termina.
+  final bool cargando;
+
   @override
   Widget build(BuildContext context) {
     // Opaco a propósito: el resplandor de foco de FocusableCard se dibuja
@@ -189,14 +200,25 @@ class OpcionDeColumna extends StatelessWidget {
             HomeTheme.bg,
           );
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      // Antes eran 6 px. El halo de foco en televisor tiene un desenfoque de
+      // 22 con 1,5 de extensión (ver FocusableCard) — con solo 6 px de aire,
+      // el resplandor de una opción se metía contra el borde de la siguiente
+      // y con varias pegadas se veía como una sola mancha rosada en vez de un
+      // brillo alrededor de UNA fila. Reportado en vivo: "cuando hay muchos
+      // botones pegados se ve raro, dale un poco más de espacio".
+      padding: const EdgeInsets.only(bottom: 14),
       child: FocusableCard(
         borderRadius: 10,
         focusNode: foco,
         // Ocupa el ancho entero de la columna: sin margen hacia donde crecer,
         // el crecido solo la pega contra los bordes. Ver conCrecido.
         conCrecido: false,
-        onTap: onTap,
+        // Sigue siendo enfocable con `cargando`: sacarle el foco justo cuando
+        // alguien lo tocó movería el marco a otra fila sin que nadie lo haya
+        // pedido. Lo único que cambia es que tocar de nuevo no hace nada —
+        // el candado real vive en `AccionesMasivasDeExtensiones`, esto es
+        // solo la señal.
+        onTap: cargando ? () {} : onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -206,7 +228,18 @@ class OpcionDeColumna extends StatelessWidget {
           ),
           child: Row(
             children: [
-              if (icono != null) ...[
+              if (cargando) ...[
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ] else if (icono != null) ...[
                 Icon(
                   icono,
                   size: 18,
@@ -222,8 +255,11 @@ class OpcionDeColumna extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: elegido ? FontWeight.w700 : FontWeight.w500,
-                    color:
-                        elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                    color: cargando
+                        ? HomeTheme.textMuted
+                        : elegido
+                            ? HomeTheme.accentPink
+                            : HomeTheme.textPrimary,
                   ),
                 ),
               ),
