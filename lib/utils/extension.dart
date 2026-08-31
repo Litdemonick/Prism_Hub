@@ -1390,6 +1390,52 @@ class ExtensionUtils {
   }
 
   // 初始化扩展
+  /// Deja listos los motores que se van a necesitar, sin que nadie espere.
+  ///
+  /// ── El caso que resuelve ────────────────────────────────────────────────
+  ///
+  /// Levantar el motor solo al usarlo arregló el arranque, pero deja un costo
+  /// donde más se nota: la primera BÚSQUEDA. Buscar consulta varias extensiones
+  /// a la vez, y si ninguna tiene su motor arriba hay que levantarlos todos en
+  /// ese momento, con la persona esperando.
+  ///
+  /// La solución no es levantarlos siempre —eso era el problema— sino
+  /// levantarlos ANTES, en un rato en que nadie espera nada. Abrir el buscador
+  /// es exactamente ese rato: entre que se abre y que alguien termina de
+  /// escribir pasan segundos, y en un televisor, escribiendo con el mando,
+  /// bastantes más.
+  ///
+  /// ── Con cuidado de no volver a ser el problema ──────────────────────────
+  ///
+  /// De a uno y cediendo el cuadro entre cada uno: levantar un motor es trabajo
+  /// de CPU que bloquea el hilo, y hacerlos todos de golpe congelaría la
+  /// pantalla — que es justo lo que pasaba al arrancar.
+  ///
+  /// Y se corta en cuanto la persona hace algo: si ya escribió y hay una
+  /// búsqueda en curso, esto se aparta y le deja el procesador.
+  static bool _precalentando = false;
+
+  static Future<void> precalentar(Iterable<ExtensionService> cuales) async {
+    if (_precalentando) return;
+    _precalentando = true;
+    try {
+      for (final servicio in cuales) {
+        if (servicio.motorListo) continue;
+        try {
+          await servicio.asegurarMotor();
+        } catch (e) {
+          // Una que no levante no puede frenar a las demás: cuando se la use
+          // de verdad, el error va a salir por su camino normal.
+          logger.info('[extensiones] no se pudo precalentar '
+              '${servicio.extension.package}: $e');
+        }
+        await cederElCuadro();
+      }
+    } finally {
+      _precalentando = false;
+    }
+  }
+
   static Timer? _barridoDeMotores;
 
   /// Suelta cada tanto los motores de extensión que ya nadie usa.

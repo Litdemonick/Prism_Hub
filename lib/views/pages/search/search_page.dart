@@ -95,6 +95,25 @@ class _SearchPageState extends State<SearchPage> {
       c.getRuntime();
     }
     _searchController.text = c.search.value;
+    // ── Se van dejando listos los motores mientras se escribe ───────────
+    //
+    // Buscar consulta varias extensiones a la vez. Con sus motores apagados,
+    // levantarlos cuesta, y ese costo caería justo cuando alguien acaba de
+    // apretar buscar y está esperando.
+    //
+    // Entre abrir esta pantalla y terminar de escribir pasan segundos —en un
+    // televisor, escribiendo con el mando, bastantes más—, y en ese rato no
+    // hay nadie esperando nada. Se aprovecha.
+    //
+    // Después del primer cuadro, para no competir con la entrada de la
+    // pantalla; y de a uno, cediendo el cuadro entre cada uno, para que la
+    // escritura no se trabe. Ver ExtensionUtils.precalentar.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        ExtensionUtils.precalentar(ExtensionUtils.enabledRuntimes.values),
+      );
+    });
     super.initState();
   }
 
