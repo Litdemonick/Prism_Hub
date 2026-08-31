@@ -20,6 +20,7 @@ import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
 class ExtensionTile extends StatefulWidget {
   const ExtensionTile(this.extension, {super.key});
@@ -390,7 +391,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
     // el medio de una pantalla enorme, y el interruptor —que es lo que uno
     // viene a tocar— es un blanco diminuto para el mando.
     final tv = PlatformTv.esTelevisionSync;
-    return ListTile(
+    final fila = ListTile(
       contentPadding:
           tv ? const EdgeInsets.symmetric(horizontal: 22, vertical: 14) : null,
       leading: tv
@@ -574,6 +575,30 @@ class _ExtensionTileState extends State<ExtensionTile> {
           ),
         ],
       ),
+    );
+    if (!tv) return fila;
+    // ── En televisor, con el marco de foco de la app ──────────────────
+    //
+    // Sin esto la fila se enfoca igual —es un ListTile y Material le pone
+    // su resaltado— pero ese resaltado es un GRIS apenas más claro que el
+    // fondo. Desde el sillón no se ve, y la selección se pierde: reportado
+    // en vivo, «la pusiste como gris, tenés que hacer que se vea».
+    //
+    // Con FocusableCard queda el mismo marco rosado y el mismo halo que en
+    // el resto de la app, así que el mando marca igual en todos lados.
+    return FocusableCard(
+      borderRadius: 14,
+      onTap: _enabled || _updateRequired
+          ? () => _openExtensionSearch(context)
+          : () {},
+      // SIN IgnorePointer, a diferencia de las filas de Ajustes.
+      //
+      // Esta fila tiene DOS acciones: abrirla, y su interruptor de encendido.
+      // Tapando los toques del hijo, el interruptor quedaba fuera del alcance
+      // del mando y no habría forma de apagar una extensión desde el
+      // televisor. Así el mando para primero en la fila —que la abre— y
+      // después en el interruptor.
+      child: fila,
     );
   }
 
