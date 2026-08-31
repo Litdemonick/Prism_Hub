@@ -412,16 +412,28 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
   // ─── Auxiliares ──────────────────────────────────────────────────────
 
   String _idiomaActual() {
-    final v = PrismHubStorage.getSetting(SettingKey.language);
-    return v == 'en' ? 'languages.en'.i18n : 'languages.es'.i18n;
+    // Validado y no crudo: si quedó guardado un idioma que la app ya no
+    // trae, esto devuelve el de respaldo y la fila muestra el que de verdad
+    // se está viendo. Leyendo el ajuste a pelo, decía uno y se veía otro.
+    return I18nUtils.currentLanguageCode == 'en'
+        ? 'languages.en'.i18n
+        : 'languages.es'.i18n;
   }
 
+  /// Alterna entre los dos idiomas que la app tiene traducidos.
+  ///
+  /// El `changeLanguage` es lo que faltaba y lo que se reportó en vivo: «le
+  /// doy al botón de idioma y no cambia nada». Se guardaba el ajuste y nadie
+  /// le avisaba a la app, así que el texto en pantalla seguía igual — sí
+  /// cambiaba, pero recién al volver a abrir la app, que desde el sillón se
+  /// ve exactamente como un botón que no hace nada.
+  ///
+  /// Solo pasaba en televisor: el desplegable de teléfono/PC y el de la
+  /// pantalla de bienvenida ya llamaban a los dos.
   Future<void> _alternarIdioma() async {
-    final actual = PrismHubStorage.getSetting(SettingKey.language);
-    await PrismHubStorage.setSetting(
-      SettingKey.language,
-      actual == 'en' ? 'es' : 'en',
-    );
+    final codigo = I18nUtils.currentLanguageCode == 'en' ? 'es' : 'en';
+    await PrismHubStorage.setSetting(SettingKey.language, codigo);
+    await I18nUtils.changeLanguage(codigo);
     if (mounted) setState(() {});
   }
 }
