@@ -111,6 +111,20 @@ class ExtensionService {
   /// algo que se acaba de liberar.
   int _enVuelo = 0;
 
+  /// Suelta el motor si se puede AHORA, sin mirar hace cuánto se usó.
+  ///
+  /// Para cuando el sistema está pidiendo memoria: ahí no hay un minuto que
+  /// esperar. Devuelve true si de verdad se soltó uno.
+  ///
+  /// Es un método y no un getter a propósito: esto SUELTA algo. Un getter se
+  /// lee como una pregunta —«¿está suelto?»— y quien lo leyera así no
+  /// esperaría que preguntarlo cambiara nada.
+  bool soltarSiSePuede() {
+    if (!_motorListo || _enVuelo > 0) return false;
+    soltarMotor();
+    return true;
+  }
+
   /// Si conviene soltar su motor por llevar rato sin usarse.
   bool get motorDeSobra {
     if (!_motorListo || _enVuelo > 0) return false;

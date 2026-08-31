@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
@@ -78,10 +79,52 @@ class AlivioDeMemoria with WidgetsBindingObserver {
   /// de siempre, y otra apenas se sabe qué aparato es esto.
   static void aplicarTechoDeImagenes() {
     final cache = PaintingBinding.instance.imageCache;
-    cache.maximumSizeBytes =
-        PrismHubMas.nivel.elegir(alto: 220, medio: 96, bajo: 48) << 20;
-    cache.maximumSize =
-        PrismHubMas.nivel.elegir(alto: 1000, medio: 400, bajo: 200);
+    final mb = _techoEnMb();
+    cache.maximumSizeBytes = mb << 20;
+    // La cuenta de imágenes acompaña al techo de bytes: en un aparato con poco
+    // sitio, permitir doscientas imágenes cuando en megas entran veinte solo
+    // hace que la caché se pase de largo entre una purga y la siguiente.
+    cache.maximumSize = (mb * 4).clamp(60, 1000);
+    logger.info('Techo de imágenes: $mb MB · ${cache.maximumSize} imágenes '
+        '(perfil ${PrismHubMas.nivel.name}, memoria '
+        '${PerfilDeAparato.memoriaTotalMb}MB)');
+  }
+
+  /// Cuántos MB puede guardar la caché de imágenes en ESTE aparato.
+  ///
+  /// ── Por qué no puede ser un número fijo ─────────────────────────────────
+  ///
+  /// Era 48 MB para todo aparato «modesto». Medido en un televisor real de
+  /// 893 MB que Android marca como de poca memoria: a un aparato así el sistema
+  /// le da un montón de alrededor de 96 MB para TODA la app. O sea que el techo
+  /// de imágenes se llevaba la mitad de todo lo que la app tiene para existir —
+  /// más el motor de Flutter, el vídeo y los motores de las extensiones.
+  ///
+  /// El resultado está en el registro de ese televisor: el sistema pidió
+  /// memoria tres veces, se bajó el techo a 28 MB, y doce segundos después
+  /// Android mató la app en medio de la navegación.
+  ///
+  /// Un televisor de 893 MB y uno de 1900 caen los dos en «bajo» y no pueden
+  /// gastar lo mismo. Ahora el techo es una parte de lo que de verdad hay.
+  ///
+  /// ── De dónde sale la proporción ─────────────────────────────────────────
+  ///
+  /// Una cuarentava parte de la memoria total. Android le da a una app entre un
+  /// octavo y un sexto de la memoria del aparato, y de eso las imágenes no
+  /// pueden ser más de un cuarto: el resto es el motor, el vídeo y lo demás.
+  /// Sale ~22 MB en el televisor de 893 y ~50 en uno de 2 GB.
+  ///
+  /// Con el techo del perfil como límite de arriba, para que un aparato con
+  /// mucha memoria no se dispare, y un piso de 16 MB, porque por debajo de eso
+  /// la caché deja de servir de caché y las portadas se redecodifican sin
+  /// parar — que cuesta más CPU de la que ahorra en memoria.
+  static int _techoEnMb() {
+    final porPerfil = PrismHubMas.nivel.elegir(alto: 220, medio: 96, bajo: 48);
+    final total = PerfilDeAparato.memoriaTotalMb;
+    if (total <= 0) return porPerfil;
+    final porMemoria = total ~/ 40;
+    final elegido = porMemoria < porPerfil ? porMemoria : porPerfil;
+    return elegido < 16 ? 16 : elegido;
   }
 
   /// Suelta las imágenes guardadas ANTES de abrir el reproductor.
@@ -180,6 +223,24 @@ class AlivioDeMemoria with WidgetsBindingObserver {
     CacheNetWorkImagePic.olvidarLoRecordado();
     PortadasPerdidas.olvidarLoMirado();
 
+    // ── Y los motores de las extensiones que no están trabajando ────────
+    //
+    // Acá es donde hay megas de verdad. Las imágenes las vacía Flutter solo;
+    // lo que NO suelta nadie es el motor de JavaScript de cada extensión, con
+    // su pila y con CryptoJS, jsencrypt y md5 analizados adentro.
+    //
+    // El barrido de siempre los suelta al minuto de no usarse, pero cuando el
+    // sistema está pidiendo memoria no hay un minuto que esperar: si no lo va
+    // a usar nadie ahora mismo, se suelta ahora mismo.
+    //
+    // Medido en un televisor de 893 MB: el sistema pidió memoria tres veces y
+    // doce segundos después mató la app en medio de la navegación. Estos
+    // motores estaban ahí, sin que nadie los estuviera usando.
+    //
+    // Nunca uno con una consulta en curso — eso no sería una consulta que
+    // falla, sería la librería nativa trabajando sobre algo recién liberado.
+    final motores = ExtensionUtils.soltarMotoresQuePueda();
+
     // ── Dos avisos seguidos son un solo apretón ─────────────────────────
     //
     // Android manda `onTrimMemory` con varios niveles a la vez, así que esto
@@ -204,7 +265,9 @@ class AlivioDeMemoria with WidgetsBindingObserver {
     // nueve avisos.
     logger.info(
       'El sistema pidió memoria ($_cuantasVeces.ª vez): se soltaron '
-      '$vivas imágenes en uso · perfil ${PerfilDeAparato.nivel.name}',
+      '$vivas imágenes en uso'
+      '${motores > 0 ? ' y $motores motores de extensión' : ''}'
+      ' · perfil ${PerfilDeAparato.nivel.name}',
     );
     // También al rastro del centinela.
     //

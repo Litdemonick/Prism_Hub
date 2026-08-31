@@ -1436,6 +1436,23 @@ class ExtensionUtils {
     }
   }
 
+  /// Suelta YA todos los motores que no estén trabajando. Devuelve cuántos.
+  ///
+  /// A diferencia del barrido de cada medio minuto, esto no mira hace cuánto se
+  /// usaron: se llama cuando el sistema está pidiendo memoria, y ahí no hay un
+  /// minuto que esperar. Si no lo está usando nadie ahora mismo, se suelta.
+  ///
+  /// Nunca uno con una consulta en curso. La extensión que estaba trabajando
+  /// sigue trabajando; las demás se levantan solas la próxima vez.
+  static int soltarMotoresQuePueda() {
+    var soltados = 0;
+    for (final servicio in runtimes.values) {
+      if (!servicio.soltarSiSePuede()) continue;
+      soltados++;
+    }
+    return soltados;
+  }
+
   static Timer? _barridoDeMotores;
 
   /// Suelta cada tanto los motores de extensión que ya nadie usa.

@@ -136,6 +136,14 @@ class PerfilDeAparato {
   /// resolverlo, la app se comporta como se comportaba hasta ahora.
   static NivelDeAparato nivel = NivelDeAparato.alto;
 
+  /// Cuánta memoria tiene el aparato, en MB. 0 si no se pudo averiguar.
+  ///
+  /// Se guarda además del nivel porque hay decisiones que necesitan el número y
+  /// no la categoría: el techo de la caché de imágenes tiene que ser una parte
+  /// de lo que hay, no un valor fijo. Un televisor de 893 MB y uno de 1900
+  /// caen los dos en «bajo» y no pueden gastar lo mismo.
+  static int memoriaTotalMb = 0;
+
   /// Atajo para lo más común: «¿esto es un aparato que hay que cuidar?».
   static bool get esModesto => nivel != NivelDeAparato.alto;
 
@@ -185,6 +193,7 @@ class PerfilDeAparato {
     required int memoriaTotalMb,
     required int nucleos,
   }) {
+    PerfilDeAparato.memoriaTotalMb = memoriaTotalMb;
     nivel = _decidir(
       esTelevision: esTelevision,
       bajaMemoria: bajaMemoria,
