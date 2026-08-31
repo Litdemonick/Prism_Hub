@@ -79,6 +79,15 @@ enum _CategoriaTV {
 double _anchoSidebarTv(Ancho a) =>
     a.elegir(compacto: 84, medio: 168, amplio: 190, enorme: 210);
 
+/// El ancho del sidebar CONTRAÍDO — solo los íconos.
+///
+/// Vive acá y no adentro de `_SidebarTVState` porque el panel de contenido
+/// también lo necesita: reserva ese mismo ancho como margen fijo para que
+/// las tarjetas nunca queden debajo del sidebar. Un solo número para las
+/// dos partes, para que no puedan desincronizarse.
+double _anchoSidebarContraidoTv(Ancho a) =>
+    a.elegir<double>(compacto: 64, medio: 72, amplio: 76, enorme: 80);
+
 /// El margen "TV-safe" contra el borde de la pantalla (overscan).
 ///
 /// Estaba escrito acá y en `detail_page_tv.dart` con el mismo cuerpo — ahora
@@ -199,6 +208,12 @@ class _HomeTVState extends State<HomeTV> {
   @override
   Widget build(BuildContext context) {
     final overscan = _overscanTv(context);
+    // Cuánto le deja SIEMPRE reservado a los íconos del sidebar — nunca
+    // cambia con `_expandido`. Ver el `Stack` más abajo: el contenido usa
+    // esto como margen fijo, así que expandir el sidebar no lo mueve ni lo
+    // achica un píxel.
+    final margenParaElSidebar =
+        _anchoSidebarContraidoTv(Ancho.de(context)) + overscan * 1.5;
     // ── La barra de arriba manda en TODA la pantalla ────────────────────
     //
     // Estaba dentro del panel de contenido, así que entrar a una zona sin
@@ -221,21 +236,26 @@ class _HomeTVState extends State<HomeTV> {
                       ? const _SinExtensiones()
                       : const _HomeEsperando(conCabecera: false);
                 }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                // ── Superpuesto, no empujado ───────────────────────────
+                //
+                // Antes esto era un `Row`: el sidebar y el contenido se
+                // repartían el ancho, así que expandir el menú ACHICABA la
+                // grilla — entraban menos columnas, las tarjetas se
+                // reacomodaban, todo se corría. Pedido explícito: «mejor que
+                // no mueva las cosas, todo sea estático».
+                //
+                // Con un `Stack`, el contenido usa SIEMPRE el mismo ancho
+                // —el que le queda descontando `margenParaElSidebar`, fijo,
+                // sin importar si el sidebar está expandido o no— y el
+                // sidebar se dibuja ENCIMA, en su propia capa. Contraído
+                // (solo íconos) cabe entero dentro de ese margen y no tapa
+                // ninguna tarjeta; expandido, sí las tapa —las que quedan
+                // debajo suyo—, que es la idea: mientras se está eligiendo
+                // una categoría no hace falta ver esas tarjetas.
+                return Stack(
                   children: [
-                    _SidebarTV(
-                      c: widget.c,
-                      primerFoco: _primerFoco,
-                      elegida: _categoria,
-                      onElegir: _elegir,
-                    ),
-                    // Aire de verdad entre el sidebar y el contenido: con
-                    // solo el overscan, la primera tarjeta de cada fila
-                    // quedaba pegada a las categorías y las dos cosas se
-                    // leían como una sola.
-                    SizedBox(width: overscan * 1.5),
-                    Expanded(
+                    Padding(
+                      padding: EdgeInsets.only(left: margenParaElSidebar),
                       // ── IndexedStack y no AnimatedSwitcher ────────────
                       //
                       // El switcher DESTRUYE la zona que se deja: al volver,
@@ -323,6 +343,21 @@ class _HomeTVState extends State<HomeTV> {
                               ),
                           ],
                         ),
+                      ),
+                    ),
+                    // Encima del contenido, no al lado — ver la nota de
+                    // arriba. `Positioned` con los tres lados verticales fija
+                    // el alto a la columna entera; el ancho lo decide el
+                    // propio `_SidebarTV` con su `AnimatedContainer`.
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: _SidebarTV(
+                        c: widget.c,
+                        primerFoco: _primerFoco,
+                        elegida: _categoria,
+                        onElegir: _elegir,
                       ),
                     ),
                   ],
@@ -516,46 +551,48 @@ class _SidebarTVState extends State<_SidebarTV> {
     // tiene su propio límite de repintado en `_ZonaQueAparece`), y en un
     // aparato modesto sigue siendo barata — es un `Transform`/tamaño, no un
     // repintado del texto ni de los íconos.
-    final anchoContraido = a.elegir<double>(
-      compacto: 64,
-      medio: 72,
-      amplio: 76,
-      enorme: 80,
-    );
-    final anchoObjetivo = _expandido ? _anchoSidebarTv(a) : anchoContraido;
+    final anchoObjetivo =
+        _expandido ? _anchoSidebarTv(a) : _anchoSidebarContraidoTv(a);
     return RepaintBoundary(
-      child: AnimatedContainer(
-        width: anchoObjetivo,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        child: Focus(
-          canRequestFocus: false,
-          skipTraversal: true,
-          onKeyEvent: _frenarEnLosBordes,
-          // Centrado vertical: son pocas categorías fijas, no una lista que
-          // pueda crecer, así que no hace falta que puedan desplazarse —
-          // alcanza con un Column centrado en el alto disponible, más
-          // prolijo que dejarlas pegadas arriba con el resto de la
-          // pantalla vacío debajo.
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (final (i, categoria) in _CategoriaTV.values.indexed)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: FocusableCard(
-                    focusNode: _nodos[i],
-                    autofocus: pedirFoco && categoria == _CategoriaTV.inicio,
-                    borderRadius: 14,
-                    onTap: () => widget.onElegir(categoria),
-                    child: _ItemSidebarTV(
-                      categoria: categoria,
-                      elegido: widget.elegida == categoria,
-                      expandido: _expandido,
+      // Fondo propio, opaco: el sidebar ahora se dibuja ENCIMA de las
+      // tarjetas (ver el `Stack` en `HomeTV`), así que sin esto se vería el
+      // póster de una tarjeta asomando detrás de sus propios íconos.
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: HomeTheme.bg),
+        child: AnimatedContainer(
+          width: anchoObjetivo,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          child: Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: _frenarEnLosBordes,
+            // Centrado vertical: son pocas categorías fijas, no una lista que
+            // pueda crecer, así que no hace falta que puedan desplazarse —
+            // alcanza con un Column centrado en el alto disponible, más
+            // prolijo que dejarlas pegadas arriba con el resto de la
+            // pantalla vacío debajo.
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (final (i, categoria) in _CategoriaTV.values.indexed)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: FocusableCard(
+                      focusNode: _nodos[i],
+                      autofocus:
+                          pedirFoco && categoria == _CategoriaTV.inicio,
+                      borderRadius: 14,
+                      onTap: () => widget.onElegir(categoria),
+                      child: _ItemSidebarTV(
+                        categoria: categoria,
+                        elegido: widget.elegida == categoria,
+                        expandido: _expandido,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
