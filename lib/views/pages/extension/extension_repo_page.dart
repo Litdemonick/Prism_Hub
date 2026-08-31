@@ -12,8 +12,9 @@ import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/views/pages/extension/catalogo_del_repo.dart';
+import 'package:prismhub/views/pages/extension/extension_repo_page_tv.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/search_appbar.dart';
@@ -22,14 +23,32 @@ import 'package:prismhub/views/pages/nsfw18/nsfw18_access.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
-class ExtensionRepoPage extends StatefulWidget {
+/// El repositorio de extensiones.
+///
+/// Se reparte acá, en un envoltorio sin estado, por lo mismo que
+/// `ExtensionPage`: son cuatro sitios que la abren, y con la decisión en un
+/// solo lugar no puede quedar una entrada abriendo la pantalla equivocada.
+/// Sin estado para que la que NO corresponde ni siquiera arme su controlador
+/// de desplazamiento ni su menú de filtros.
+class ExtensionRepoPage extends StatelessWidget {
   const ExtensionRepoPage({super.key});
 
   @override
-  State<ExtensionRepoPage> createState() => _ExtensionRepoPageState();
+  Widget build(BuildContext context) => PlatformTv.esTelevisionSync
+      ? const ExtensionRepoPageTv()
+      : const _ExtensionRepoPageTactil();
 }
 
-class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
+/// La de teléfono, tablet y PC: tres secciones paginadas, el menú de cinco
+/// filtros y tarjetas con toda la ficha de cada extensión.
+class _ExtensionRepoPageTactil extends StatefulWidget {
+  const _ExtensionRepoPageTactil();
+
+  @override
+  State<_ExtensionRepoPageTactil> createState() => _ExtensionRepoPageState();
+}
+
+class _ExtensionRepoPageState extends State<_ExtensionRepoPageTactil> {
   late ExtensionRepoPageController c;
 
   // Alias a ExtensionUtils.videoTypes/readingTypes (único lugar con esta
@@ -734,120 +753,44 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
       ));
     }
 
-    final extensionCards = c.extensions
-        .where((e) =>
-            e['package'] != null &&
-            e['name'] != null &&
-            e['version'] != null &&
-            e['lang'] != null)
-        .map((e) {
-      final type = ExtensionType.values.firstWhere(
-        (element) => element.toString() == 'ExtensionType.${e['type']}',
-        orElse: () => ExtensionType.bangumi,
-      );
-      return ExtensionCard(
-          key: ValueKey(e['package']),
-          name: e['name'] ?? '',
-          icon: e['icon'],
-          version: e['version'] ?? '',
-          package: e['package'] ?? '',
-          lang: e['lang'] ?? 'all',
-          // El catálogo de prism+ trae la URL del bundle en `script`;
-          // repos antiguos usaban `url`. Soportar ambos.
-          url: e['script'] ?? e['url'],
-          webSite: e['webSite'],
-          license: e['license'],
-          description: e['description'],
-          // Firma Ed25519 de prism+ — la card verifica antes de instalar.
-          signature: e['signature'],
-          nsfw: e['nsfw'] == 'true' || e['nsfw'] == true,
-          // Una extensión que declara `minProtocol` mayor al que entiende este
-          // app se trata como no instalable, reusando el mismo bloqueo que ya
-          // existe para `unstable` — pero con el motivo correcto: acá lo que
-          // falta es actualizar PrismHub, no esperar un arreglo de la
-          // extensión. Sin esto se instalaría y fallaría de forma confusa.
-          unstable: e['unstable'] == 'true' ||
-              e['unstable'] == true ||
-              ExtensionUtils.entryNeedsNewerApp(e),
-          // El motivo lo publica el catalogo (unstableReason). Antes se
-          // ignoraba y salia siempre el generico "en espera de actualizacion",
-          // aunque el sitio estuviera simplemente en mantenimiento.
-          blockedReasonKey: ExtensionUtils.entryNeedsNewerApp(e)
-              ? 'extension.needs-newer-app'
-              : ExtensionUtils.claveMotivoInestable(e['unstableReason']),
-          unstableReason: e['unstableReason'] as String?,
-          type: type);
-    }).toList();
-    // 过滤 — nombre tolerante a tildes/orden, O categoría/tipo si la
-    // búsqueda menciona un sinónimo conocido ("anime", "manga", etc):
-    // permite filtrar por tipo escribiendo en el mismo buscador, sin tener
-    // que usar el chip "Tipo" aparte.
-    if (c.search.value.isNotEmpty) {
-      final inferredTypes = SearchText.inferTypeFromQuery(
-        c.search.value,
-        _videoTypes,
-        _readingTypes,
-      );
-      extensionCards.removeWhere((element) {
-        final nameMatches =
-            SearchText.matchesQuery(element.name, c.search.value);
-        final categoryMatches =
-            inferredTypes != null && inferredTypes.contains(element.type);
-        return !(nameMatches || categoryMatches);
-      });
-    }
-    if (c.searchType.value != null) {
-      extensionCards.removeWhere(
-        (element) => !c.searchType.value!.contains(element.type),
-      );
-    }
-    if (c.searchZona.value != null) {
-      // Sin clasificar (zonasDe da vacío) queda AFUERA de este filtro a
-      // propósito — mismo criterio que en toda la app: sin @contentKind
-      // declarado no se puede asegurar a qué zona pertenece, así que no
-      // se arriesga a mostrarla en una que quizás no le corresponde. Sigue
-      // viéndose igual en "Todas".
-      extensionCards.removeWhere((element) => !ExtensionUtils.zonasDe(
-            element.package,
-          ).contains(c.searchZona.value));
-    }
-    if (c.searchLang.value != 'all') {
-      extensionCards.removeWhere(
-        (element) =>
-            !ExtensionUtils.coincideIdioma(element.lang, c.searchLang.value),
-      );
-    }
-    if (c.searchLevel.value != 'all') {
-      final wantUnstable = c.searchLevel.value == 'unstable';
-      extensionCards.removeWhere(
-        (element) => element.unstable != wantUnstable,
-      );
-    }
-    if (c.searchNsfw.value != 'all') {
-      final quiereNsfw = c.searchNsfw.value == 'nsfw';
-      extensionCards.removeWhere((element) => element.nsfw != quiereNsfw);
-    }
-    // Discreción: sin el PIN de esta visita, las +18 no aparecen aunque el
-    // filtro de arriba diga 'all' o 'nsfw' — se pide en el propio selector,
-    // ver _elegirFiltroNsfw.
-    if (!_nsfwDesbloqueado) {
-      extensionCards.removeWhere((element) => element.nsfw);
-    }
-    switch (c.searchInstalled.value) {
-      case 'installed':
-        extensionCards.removeWhere(
-          (e) => !ExtensionUtils.runtimes.containsKey(e.package),
-        );
-      case 'available':
-        extensionCards.removeWhere(
-          (e) => ExtensionUtils.runtimes.containsKey(e.package),
-        );
-      case 'new':
-        // "Nueva" = no estaba en el catálogo la última vez que se abrió esta
-        // pantalla. El índice no trae fecha de publicación, así que no se puede
-        // deducir de los datos — ver ExtensionRepoPageController.esNueva.
-        extensionCards.removeWhere((e) => !c.esNueva(e.package));
-    }
+    // Leer el catálogo y aplicar los siete filtros vive en
+    // `catalogo_del_repo.dart`, compartido con la pantalla de televisor. Acá
+    // estaba escrito dentro de este `build`, y copiarlo a la otra pantalla
+    // habría dejado dos versiones de la compuerta +18.
+    final entradas = FiltrosDelRepo(
+      texto: c.search.value,
+      tipos: c.searchType.value,
+      zona: c.searchZona.value,
+      idioma: c.searchLang.value,
+      nivel: c.searchLevel.value,
+      nsfw: c.searchNsfw.value,
+      instalacion: c.searchInstalled.value,
+      nsfwDesbloqueado: _nsfwDesbloqueado,
+    ).aplicar(
+      EntradaDelRepo.leerTodas(c.extensions),
+      esNueva: c.esNueva,
+    );
+    final extensionCards = [
+      for (final e in entradas)
+        ExtensionCard(
+          key: ValueKey(e.package),
+          name: e.name,
+          icon: e.icon,
+          version: e.version,
+          package: e.package,
+          lang: e.lang,
+          url: e.url,
+          webSite: e.webSite,
+          license: e.license,
+          description: e.description,
+          signature: e.signature,
+          nsfw: e.nsfw,
+          unstable: e.unstable,
+          blockedReasonKey: e.claveDelBloqueo,
+          unstableReason: e.motivoInestable,
+          type: e.type,
+        ),
+    ];
 
     if (extensionCards.isEmpty) {
       return Center(child: Text('extension-repo.empty'.i18n));
