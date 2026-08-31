@@ -277,7 +277,7 @@ class _HomeTVState extends State<HomeTV> {
                           index: _CategoriaTV.values.indexOf(_categoria),
                           children: [
                             for (final z in _CategoriaTV.values)
-                              // ── Y cada zona con su reloj apagado ────────
+                              // ── Y cada zona con su reloj apagado, y su foco cerrado ──
                               //
                               // `IndexedStack` esconde con `Offstage`, que NO
                               // toca `TickerMode`: sin esto, las zonas que no
@@ -285,21 +285,41 @@ class _HomeTVState extends State<HomeTV> {
                               // segundo. Es el mismo cuidado que ya tiene la
                               // barra principal (ver main_page.dart), que acá
                               // faltaba.
-                              TickerMode(
-                                enabled: z == _categoria,
-                                child: !_visitadas.contains(z)
-                                    // Todavía no se entró nunca: no hay nada
-                                    // que armar. Ver [_visitadas].
-                                    ? const SizedBox.shrink()
-                                    : switch (z) {
-                                        final e when e.enConstruccion =>
-                                          ZonaEnCreacion(titulo: e.etiqueta()),
-                                        _CategoriaTV.biblioteca =>
-                                          const LibraryPage(),
-                                        final e when e.zona != null =>
-                                          _ZonaTv(zona: e.zona!),
-                                        _ => _ContenidoTV(c: widget.c),
-                                      },
+                              //
+                              // Y tampoco toca el FOCO. `IndexedStack` no
+                              // pinta las zonas que no se muestran, pero las
+                              // sigue midiendo en el MISMO lugar que la que sí
+                              // se ve —ocupan la misma celda del Stack—. Sin
+                              // `ExcludeFocus`, una tarjeta de una zona
+                              // escondida es un candidato geométricamente
+                              // válido para el salto del mando: está "ahí
+                              // mismo", superpuesta con la que se ve.
+                              //
+                              // Reportado en vivo: moverse con el mando en una
+                              // zona y, de golpe, "empieza a cargar contenido
+                              // raro" — el foco se había ido a una tarjeta de
+                              // OTRA zona, invisible pero viva, y esa zona
+                              // arrancaba a pedir su catálogo al recibir el
+                              // foco por primera vez.
+                              ExcludeFocus(
+                                excluding: z != _categoria,
+                                child: TickerMode(
+                                  enabled: z == _categoria,
+                                  child: !_visitadas.contains(z)
+                                      // Todavía no se entró nunca: no hay nada
+                                      // que armar. Ver [_visitadas].
+                                      ? const SizedBox.shrink()
+                                      : switch (z) {
+                                          final e when e.enConstruccion =>
+                                            ZonaEnCreacion(
+                                                titulo: e.etiqueta()),
+                                          _CategoriaTV.biblioteca =>
+                                            const LibraryPage(),
+                                          final e when e.zona != null =>
+                                            _ZonaTv(zona: e.zona!),
+                                          _ => _ContenidoTV(c: widget.c),
+                                        },
+                                ),
                               ),
                           ],
                         ),
