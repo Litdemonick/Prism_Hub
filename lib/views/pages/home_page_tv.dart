@@ -446,22 +446,27 @@ class _SidebarTVState extends State<_SidebarTV> {
     super.dispose();
   }
 
-  /// Arriba en la primera y abajo en la última NO hacen nada.
+  /// Abajo en la última categoría no hace nada. Arriba en la primera, sí.
   ///
-  /// Sin esto, bajar desde la última categoría mandaba el foco al panel de
-  /// la derecha —lo más cercano hacia abajo— y con él se iba el scroll del
-  /// contenido: se sentía como que la lista "se movía sola" mientras uno
-  /// solo estaba recorriendo el menú. El menú es una lista cerrada: al
-  /// llegar al final, se queda ahí.
+  /// Sin frenar el ABAJO, bajar desde la última categoría mandaba el foco al
+  /// panel de la derecha —lo más cercano hacia abajo— y con él se iba el
+  /// scroll del contenido: se sentía como que la lista "se movía sola"
+  /// mientras uno solo estaba recorriendo el menú.
+  ///
+  /// El ARRIBA estaba frenado igual, por simetría, y era un error: encima del
+  /// menú está la barra con buscar, extensiones, favoritos, historial y
+  /// ajustes. Frenarlo dejaba esos cinco botones inalcanzables desde el menú
+  /// — estando en Inicio, que es la primera categoría, no había ninguna tecla
+  /// que llevara arriba. Reportado en vivo: «puedo bajar, pero cuando quiero
+  /// subir el foco no me deja».
   KeyEventResult _frenarEnLosBordes(FocusNode node, KeyEvent evento) {
     if (evento is! KeyDownEvent) return KeyEventResult.ignored;
-    final tecla = evento.logicalKey;
-    final baja = tecla == LogicalKeyboardKey.arrowDown;
-    final sube = tecla == LogicalKeyboardKey.arrowUp;
-    if (!baja && !sube) return KeyEventResult.ignored;
-    if (baja && _nodos.last.hasFocus) return KeyEventResult.handled;
-    if (sube && _nodos.first.hasFocus) return KeyEventResult.handled;
-    return KeyEventResult.ignored;
+    if (evento.logicalKey != LogicalKeyboardKey.arrowDown) {
+      return KeyEventResult.ignored;
+    }
+    return _nodos.last.hasFocus
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
   }
 
   @override
