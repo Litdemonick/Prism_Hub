@@ -955,6 +955,9 @@
   "history": {
     "favorites-video": "Fav. Video",
     "favorites-reading": "Fav. Reading",
+    "tv-grupo-estado": "Status",
+    "tv-grupo-cuando": "When you watched it",
+    "tv-grupo-pestanas": "What to show",
     "state-all": "All",
     "state-pending": "Pending",
     "state-completed": "Completed",

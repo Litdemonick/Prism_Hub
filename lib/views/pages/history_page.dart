@@ -24,7 +24,10 @@ import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/widgets/tv/columna_de_acciones.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/tv/pantalla_tv.dart';
+import 'package:prismhub/views/widgets/tv/teclado_tv.dart';
 
 // "Ver todo" destination for Home's Continuar section — one place with
 // every history/favorite item, filterable by tab, searchable by title, and
@@ -1144,6 +1147,207 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
+  // ─── Televisor ──────────────────────────────────────
+
+  /// El teclado ocupa el sitio de la columna mientras se escribe.
+  bool _escribiendoTv = false;
+
+  /// Historial, Favoritos y la Zona +18, con el molde de televisor.
+  ///
+  /// Las tres son ESTA pantalla con banderas distintas, así que las tres se
+  /// arreglan de una. Hasta ahora las tres caían en `_buildAndroid` —un
+  /// Android TV es Android— y se veían con la franja fina de teléfono, su
+  /// flecha de volver corrida hacia adentro y trece pastillas de filtro
+  /// escondidas detrás de un botón. Reportado en vivo: «la zona de favoritos
+  /// sigue siendo la misma vaina, la flecha no está centrada arriba a la
+  /// izquierda».
+  ///
+  /// El molde es el mismo que el resto del televisor: título arriba a la
+  /// izquierda con su flecha, las funciones en la columna de la izquierda, y
+  /// las tarjetas a la derecha con todo el ancho. Los filtros dejan de estar
+  /// detrás de un botón: en la columna se ven todos a la vez y se cambian con
+  /// una pulsación, que es lo que un mando puede hacer bien.
+  ///
+  /// La grilla es la MISMA `_buildGrid()` de las otras plataformas. Lo que
+  /// cambia en televisor es cómo se llega a las cosas, no cómo se ven las
+  /// tarjetas — y esa grilla ya sabe medirse sola.
+  Widget _buildTv(BuildContext context) {
+    return Obx(() {
+      // Igual que en `_buildBody`: los Rx se leen acá, síncrono, porque
+      // `_buildGrid` los lee dentro de un LayoutBuilder y eso corre en la fase
+      // de layout, fuera de lo que Obx rastrea. Sin esta lectura previa, Obx
+      // no encuentra ninguna observable y tira «improper use of a GetX».
+      // ignore: unused_local_variable
+      final _ = _c.resents.length + _c.favorites.length + _c.allHistory.length;
+      return PantallaTv(
+        fondo: AnimatedBackgroundGlow(accent: _accent),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_escribiendoTv) _tecladoTv() else _columnaTv(),
+            const SizedBox(width: 24),
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  const SliverToBoxAdapter(child: SizedBox(height: 4)),
+                  _buildGrid(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _columnaTv() {
+    final etiquetasEstado = {
+      _EstadoFiltro.todos: 'history.state-all'.i18n,
+      _EstadoFiltro.pendiente: 'history.state-pending'.i18n,
+      _EstadoFiltro.completado: 'history.state-completed'.i18n,
+      _EstadoFiltro.finalizado: 'history.state-finished'.i18n,
+    };
+    final etiquetasOrden = {
+      _Orden.recientes: 'history.sort-recent'.i18n,
+      _Orden.antiguos: 'history.sort-oldest'.i18n,
+      _Orden.az: 'history.sort-az'.i18n,
+      _Orden.za: 'history.sort-za'.i18n,
+    };
+    final etiquetasRango = {
+      _Rango.siempre: 'history.range-all'.i18n,
+      _Rango.dia: 'history.range-day'.i18n,
+      _Rango.semana: 'history.range-week'.i18n,
+      _Rango.mes: 'history.range-month'.i18n,
+      _Rango.ano: 'history.range-year'.i18n,
+    };
+    return ColumnaDeAcciones(
+      titulo: widget.soloFavoritos
+          ? 'home.favorite'.i18n
+          : widget.zone
+              ? 'nsfw18.title'.i18n
+              : 'home.history'.i18n,
+      grupos: [
+        GrupoDeColumna(opciones: [
+          OpcionDeColumna(
+            icono: Icons.arrow_back_rounded,
+            texto: 'extension.tv-volver'.i18n,
+            onTap: () {
+              if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+            },
+          ),
+          OpcionDeColumna(
+            id: 'buscar',
+            icono: Icons.search_rounded,
+            texto: _query.isEmpty
+                ? 'common.search'.i18n
+                : '«$_query»',
+            elegido: _query.isNotEmpty,
+            onTap: () => setState(() => _escribiendoTv = true),
+          ),
+        ]),
+        // Las pestañas, solo si hay más de una. Con una sola, un grupo entero
+        // con una única opción que no se puede cambiar es una fila de ruido.
+        if (_pestanas.length > 1)
+          GrupoDeColumna(
+            titulo: 'history.tv-grupo-pestanas'.i18n,
+            opciones: [
+              for (final global in _pestanas)
+                OpcionDeColumna(
+                  id: 'tab-$global',
+                  texto: _etiqueta(global),
+                  elegido: global == _tabIndex,
+                  onTap: () => setState(() => _tabIndex = global),
+                ),
+            ],
+          ),
+        // Estado y «desde cuándo» no van en Favoritos, mismo motivo que en las
+        // otras plataformas: ahí la fecha es la de guardado y el estado de
+        // visto no aplica.
+        if (!_onFavoritesTab)
+          GrupoDeColumna(
+            titulo: 'history.tv-grupo-estado'.i18n,
+            opciones: [
+              for (final e in _EstadoFiltro.values)
+                OpcionDeColumna(
+                  id: 'estado-${e.name}',
+                  texto: etiquetasEstado[e]!,
+                  elegido: _estado == e,
+                  onTap: () => setState(() => _estado = e),
+                ),
+            ],
+          ),
+        if (!_onFavoritesTab)
+          GrupoDeColumna(
+            titulo: 'history.tv-grupo-cuando'.i18n,
+            opciones: [
+              for (final r in _Rango.values)
+                OpcionDeColumna(
+                  id: 'rango-${r.name}',
+                  texto: etiquetasRango[r]!,
+                  elegido: _rango == r,
+                  onTap: () => setState(() => _rango = r),
+                ),
+            ],
+          ),
+        GrupoDeColumna(
+          titulo: 'history.sort'.i18n,
+          opciones: [
+            for (final o in _Orden.values)
+              OpcionDeColumna(
+                id: 'orden-${o.name}',
+                texto: etiquetasOrden[o]!,
+                elegido: _orden == o,
+                onTap: () => setState(() => _orden = o),
+              ),
+          ],
+        ),
+        GrupoDeColumna(
+          opciones: [
+            OpcionDeColumna(
+              icono: Icons.delete_sweep_outlined,
+              texto: 'common.delete-all'.i18n,
+              onTap: _confirmClearAll,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _tecladoTv() {
+    return SizedBox(
+      width: ColumnaDeAcciones.ancho + 130,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: OpcionDeColumna(
+                icono: Icons.arrow_back_rounded,
+                texto: 'extension.tv-volver-a-filtros'.i18n,
+                onTap: () => setState(() => _escribiendoTv = false),
+              ),
+            ),
+            TecladoTv(
+              texto: _query,
+              ancho: ColumnaDeAcciones.ancho + 130,
+              accent: _accent,
+              onCambio: (t) {
+                // El controlador de texto se mantiene al día igual que en las
+                // otras plataformas: es el mismo estado, y si se quedara
+                // atrás, salir del televisor y volver mostraría una búsqueda
+                // que ya no está puesta.
+                _searchController.text = t;
+                setState(() => _query = t);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
@@ -1262,6 +1466,11 @@ class _HistoryPageState extends State<HistoryPage> {
     // estilo de fallback feo — rojo con subrayado amarillo) y deja la página
     // sin botón para volver. El estado vacío se maneja dentro de _buildGrid,
     // que ya corre dentro del Scaffold normal.
+    // El televisor se pregunta ANTES que Android: un Android TV es Android,
+    // asi que sin esto cae en `_buildAndroid` -- que es exactamente lo que
+    // pasaba, y por eso esta pantalla se veia con la franja fina y los chips
+    // de telefono en un televisor.
+    if (PlatformTv.esTelevisionSync) return _buildTv(context);
     return PlatformBuildWidget(
       androidBuilder: _buildAndroid,
       desktopBuilder: _buildDesktop,
