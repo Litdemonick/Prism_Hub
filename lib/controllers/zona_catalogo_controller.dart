@@ -706,8 +706,42 @@ class ZonaCatalogoController extends GetxController {
   bool get seAgotoDeVerdad =>
       fuentes.isNotEmpty && fuentes.every((f) => f.agotada);
 
+  /// Cuándo terminó el último `cargarMas()`, para el respiro de abajo.
+  DateTime? _ultimaCargaMas;
+
+  /// Cuánto tiene que pasar entre el final de un `cargarMas()` y el
+  /// principio del siguiente.
+  ///
+  /// ── El bug que esto cierra ───────────────────────────────────────────
+  ///
+  /// `cargando.value || cargandoMas.value` evita que DOS pedidos corran a
+  /// la vez, pero no pone ningún piso entre uno y el siguiente. Bajando
+  /// rápido y sin soltar el mando, cada `cargarMas()` termina, la lista
+  /// sigue sin llenar la pantalla que falta, y el próximo arranca en el
+  /// MISMO cuadro — sin que la interfaz llegue a respirar entre uno y otro.
+  ///
+  /// Cada `cargarMas()` reparte el pedido entre varias extensiones a la vez
+  /// (`_pedir`), y evaluar el guion de cada una es trabajo de CPU en el
+  /// mismo isolate que dibuja la pantalla. Encadenados sin respiro, eso es
+  /// varios segundos seguidos sin que la interfaz responda — reportado en
+  /// vivo en un televisor de cuatro núcleos: «empezó a moverse, salirse
+  /// todo raro, se fue la zona, el panel regresa, un montón de frames
+  /// lentos» y, en el aparato más débil, el cierre de la app. En un
+  /// televisor más potente el mismo encadenado se nota como tirones; en uno
+  /// de gama baja, como un cuelgue que el sistema termina matando.
+  ///
+  /// Nunca se nota como demora real: mientras dura, la grilla ya muestra
+  /// las tarjetas en esqueleto (`cargandoMas`), así que se ve como que
+  /// sigue cargando, no como que se congeló.
+  static const _respiroEntreCargas = Duration(milliseconds: 700);
+
   Future<void> cargarMas() async {
     if (cargando.value || cargandoMas.value) return;
+    final ultima = _ultimaCargaMas;
+    if (ultima != null &&
+        DateTime.now().difference(ultima) < _respiroEntreCargas) {
+      return;
+    }
     final candidatas =
         fuentes.where((f) => !f.agotada && f.pagina < _maxPaginas).toList();
     if (candidatas.isEmpty) return;
@@ -719,6 +753,7 @@ class ZonaCatalogoController extends GetxController {
       await _pedir(candidatas);
     } finally {
       cargandoMas.value = false;
+      _ultimaCargaMas = DateTime.now();
     }
   }
 

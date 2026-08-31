@@ -347,7 +347,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                   // Este recorte devuelve un rectángulo más alto que la fila:
                   // corta a izquierda y derecha —donde molesta— y deja pasar
                   // arriba y abajo, que es por donde sale la sombra.
-                  : ClipRect(
+                  : _conDesvanecido(ClipRect(
                       clipper: _SoloCostados(
                         aireLateral: widget.conFocoTv ? 24 : 0,
                       ),
@@ -449,7 +449,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                           );
                         },
                       ),
-                    ),
+                    )),
             ),
           ],
         ),
@@ -535,6 +535,37 @@ class _FilaWindowsState extends State<_FilaWindows> {
               icono: Icons.chevron_right_rounded, onTap: () => _correr(1)),
         ],
       ),
+    );
+  }
+
+  /// Un desvanecido a los dos costados, solo en televisor.
+  ///
+  /// Sin esto la tarjeta del borde queda cortada en seco contra el margen —
+  /// pedido explícito: «dale ese degradado de que se pierde las cards». El
+  /// `ShaderMask` no recorta nada nuevo: sobre la franja que YA deja
+  /// `_SoloCostados`, baja la opacidad hacia los dos extremos, así que la
+  /// tarjeta del borde se sigue viendo entera pero atenuada, como asomando
+  /// en vez de terminar en un filo recto.
+  ///
+  /// Solo en TV: con mouse, la fila entera ya se ve completa apenas se
+  /// desliza un poco, y un desvanecido ahí solo restaría contraste sin
+  /// avisar de nada que el usuario no sepa.
+  Widget _conDesvanecido(Widget fila) {
+    if (!widget.conFocoTv) return fila;
+    return ShaderMask(
+      shaderCallback: (rect) => const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Colors.transparent,
+          Colors.black,
+          Colors.black,
+          Colors.transparent,
+        ],
+        stops: [0, 0.04, 0.96, 1],
+      ).createShader(rect),
+      blendMode: BlendMode.dstIn,
+      child: fila,
     );
   }
 }
