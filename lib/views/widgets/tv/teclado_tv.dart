@@ -128,18 +128,46 @@ class _TecladoTvState extends State<TecladoTv> {
             ],
           ),
           const SizedBox(height: 12),
-          for (final fila in filas) ...[
-            Row(
-              children: [
-                for (final letra in fila) ...[
-                  _tecla(letra, onTap: () => _escribir(letra)),
-                  const SizedBox(width: 8),
+          // ── El espacio va A LA DERECHA, no debajo del teclado ────────
+          //
+          // Estaba como una barra ancha al pie. Con un mando eso obliga a
+          // bajar todas las filas de letras cada vez que hace falta un
+          // espacio, y a volver a subir para la palabra siguiente — en una
+          // búsqueda de tres palabras son un montón de pulsaciones.
+          //
+          // A la derecha se llega desde CUALQUIER fila con la flecha derecha,
+          // que es un movimiento y siempre el mismo. Alta como el teclado
+          // entero para que sea el blanco más fácil de acertar.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final fila in filas) ...[
+                    Row(
+                      children: [
+                        for (final letra in fila) ...[
+                          _tecla(letra, onTap: () => _escribir(letra)),
+                          const SizedBox(width: 8),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ],
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-          _tecla(' ', onTap: () => _escribir(' '), ancho: 160, etiqueta: '␣'),
+              ),
+              _tecla(
+                ' ',
+                onTap: () => _escribir(' '),
+                ancho: 74,
+                // Tres filas de 44 más los dos huecos de 8 que las separan.
+                alto: 44 * filas.length + 8 * (filas.length - 1),
+                etiqueta: '␣',
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -149,6 +177,7 @@ class _TecladoTvState extends State<TecladoTv> {
     String letra, {
     required VoidCallback onTap,
     double ancho = 44,
+    double alto = 44,
     String? etiqueta,
   }) {
     return FocusableCard(
@@ -157,7 +186,7 @@ class _TecladoTvState extends State<TecladoTv> {
       onTap: onTap,
       child: Container(
         width: ancho,
-        height: 44,
+        height: alto,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: HomeTheme.cardSurface,
