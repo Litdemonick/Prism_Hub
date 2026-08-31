@@ -101,7 +101,10 @@ class _HomeSectionState extends State<HomeSection> {
     // (ej. la horizontal 16:9 del Home de escritorio) se veía recortada y
     // parecía un bug del diseño cuando en realidad era el alto reservado acá.
     final effWidth = widget.itemWidth ?? cardWidth;
-    final effHeight = widget.itemHeight ?? cardHeight;
+    // Y el alto reservado incluye ese aire: si no, el relleno de arriba empuja
+    // la tarjeta hacia abajo y lo que se recorta es el borde de abajo.
+    final effHeight = (widget.itemHeight ?? cardHeight) +
+        (PlatformTv.esTelevisionSync ? 28 : 0);
     final list = ListView.builder(
       scrollDirection: Axis.horizontal,
       controller: _controller,
@@ -116,10 +119,19 @@ class _HomeSectionState extends State<HomeSection> {
       //
       // Null es «lo que decida Flutter», o sea lo de siempre. Ver PrismHubMas.
       scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
-      // Espacio arriba para la elevación de 4px que hace la card al pasar el
-      // mouse: sin esto la lista la recortaba justo por ese borde y parecía
-      // que se comía la tarjeta.
-      padding: const EdgeInsets.only(top: 6),
+      // Aire arriba y abajo para lo que la tarjeta crece al enfocarse.
+      //
+      // Eran 6 px arriba y nada abajo, calculados para la elevación de 4 px del
+      // ratón. Con un mando la tarjeta enfocada se AGRANDA un 3 % y además le
+      // sale un halo alrededor: en una tarjeta de 328 px de alto, ese 3 % son
+      // unos 10 px que se reparten arriba y abajo, más el halo.
+      //
+      // Sin sitio para eso, la fila recorta a la tarjeta justo cuando se la
+      // elige — que es el único momento en que uno la está mirando. Reportado
+      // en vivo: «corta las cards, que tengan su espacio».
+      padding: EdgeInsets.symmetric(
+        vertical: PlatformTv.esTelevisionSync ? 14 : 6,
+      ),
       itemCount: widget.itemCount,
       itemBuilder: (context, index) => Padding(
         padding: const EdgeInsets.only(right: 16),

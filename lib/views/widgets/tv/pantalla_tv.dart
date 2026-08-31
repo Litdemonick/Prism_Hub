@@ -38,7 +38,6 @@ class PantallaTv extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final overscan = HomeTheme.overscanTv(context);
     return Scaffold(
       backgroundColor: HomeTheme.bg,
       body: Stack(
@@ -46,7 +45,10 @@ class PantallaTv extends StatelessWidget {
           if (fondo != null) Positioned.fill(child: fondo!),
           SafeArea(
             child: Padding(
-              padding: EdgeInsets.all(overscan),
+              // Un solo sitio decide el margen. Ver HomeTheme.margenTv:
+              // a los costados va entero, arriba y abajo un tercio, para no
+              // regalar el 18 % de la altura de la pantalla.
+              padding: HomeTheme.margenTv(context),
               child: FocusTraversalGroup(child: child),
             ),
           ),
