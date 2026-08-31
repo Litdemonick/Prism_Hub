@@ -222,9 +222,14 @@ class ZonaCatalogoController extends GetxController {
     super.onClose();
   }
 
-  /// Mismo tope que ya usa el Home para su carrusel — evita pedir para
-  /// siempre a una extensión con un catálogo enorme.
-  static const _maxPaginas = 25;
+  /// Evita pedir para siempre a una extensión con un catálogo enorme.
+  ///
+  /// Bajado de 25 a 20, pedido explícito: con muchas extensiones activas en
+  /// una zona, cada página de más es una ronda completa de peticiones a
+  /// TODAS —el mismo costo que ya obligó al respiro de `cargarMas` entre
+  /// una carga y la siguiente—. Sin necesidad real de bajar tanto: son
+  /// varios cientos de tarjetas por extensión antes de llegar al tope.
+  static const _maxPaginas = 20;
 
   // ── De vuelta a pedir el catálogo apenas se crea el controller ────────
   //
