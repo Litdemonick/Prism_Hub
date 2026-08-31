@@ -241,7 +241,7 @@ class _SelectorDeFechaTvState extends State<_SelectorDeFechaTv> {
         onKeyEvent: _tecla,
         child: SafeArea(
           child: Padding(
-            padding: EdgeInsets.all(HomeTheme.overscanTv(context)),
+            padding: HomeTheme.margenTv(context),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

@@ -359,6 +359,27 @@ class HomeTheme {
   static double overscanTv(BuildContext context) =>
       (MediaQuery.sizeOf(context).width * 0.05).clamp(16, 64);
 
+  /// El margen contra el borde de la pantalla, repartido como corresponde.
+  ///
+  /// ── Por qué NO es el mismo por los cuatro lados ─────────────────────────
+  ///
+  /// Se usaba `EdgeInsets.all(overscanTv)`, o sea el 5 % del ancho arriba,
+  /// abajo y a los costados. En una pantalla de 1280x720 son 64 px arriba y 64
+  /// abajo: el 18 % de la altura, regalado. Reportado en vivo: «usá toda la
+  /// pantalla del televisor, veo que usás una porción».
+  ///
+  /// El recorte de los televisores viejos —lo que este margen existe para
+  /// esquivar— se lleva sobre todo los costados, que es donde se pierde texto.
+  /// En vertical, además, las pantallas de la app son desplazables o tienen su
+  /// propio aire arriba, así que ahí ese margen no protege: solo achica.
+  ///
+  /// Queda un tercio arriba y abajo: alcanza para que nada toque el borde, sin
+  /// perder el alto de una fila entera.
+  static EdgeInsets margenTv(BuildContext context) {
+    final m = overscanTv(context);
+    return EdgeInsets.fromLTRB(m, m / 3, m, m / 3);
+  }
+
   /// El título de una ficha, o de un destacado grande. Mucho más grande que
   /// en PC/teléfono a propósito: se lee de un vistazo desde el sillón, no de
   /// cerca.

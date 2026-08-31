@@ -92,12 +92,11 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
 
   @override
   Widget build(BuildContext context) {
-    final overscan = HomeTheme.overscanTv(context);
     return Scaffold(
       backgroundColor: HomeTheme.bg,
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.all(overscan),
+          padding: HomeTheme.margenTv(context),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -455,7 +454,6 @@ class _FilaTv extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = acento ?? HomeTheme.accentPink;
     final fila = Container(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
       decoration: BoxDecoration(
         color: HomeTheme.cardSurface,
@@ -499,15 +497,27 @@ class _FilaTv extends StatelessWidget {
         ],
       ),
     );
-    if (onTap == null) return fila;
-    return FocusableCard(
-      borderRadius: 14,
-      accent: acento,
-      onTap: onTap!,
-      // El hijo no atiende toques por su cuenta: de eso se encarga la
-      // FocusableCard de afuera, que además es la que sabe del foco del
-      // mando.
-      child: IgnorePointer(child: fila),
+    // ── La separación entre filas va POR FUERA del marco de foco ────────
+    //
+    // Estaba como `margin` del Container, o sea DENTRO de lo que enfoca la
+    // FocusableCard. El marco se dibujaba entonces alrededor de una caja doce
+    // píxeles más alta que la tarjeta que se ve, y desde el sillón eso se lee
+    // como que la selección está corrida hacia abajo. Reportado con foto.
+    //
+    // Con la separación afuera, el marco cae exactamente sobre la tarjeta.
+    const separacion = EdgeInsets.only(bottom: 12);
+    if (onTap == null) return Padding(padding: separacion, child: fila);
+    return Padding(
+      padding: separacion,
+      child: FocusableCard(
+        borderRadius: 14,
+        accent: acento,
+        onTap: onTap!,
+        // El hijo no atiende toques por su cuenta: de eso se encarga la
+        // FocusableCard de afuera, que además es la que sabe del foco del
+        // mando.
+        child: IgnorePointer(child: fila),
+      ),
     );
   }
 }

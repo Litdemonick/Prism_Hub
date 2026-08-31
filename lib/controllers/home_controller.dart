@@ -368,6 +368,22 @@ class HomePageController extends GetxController {
     // una extensión +18 (reportado en vivo). El mismo criterio exacto que ya
     // usan las secciones de contenido de más arriba (isNsfwOf(e) == nsfwOnly).
     exts.removeWhere((element) => element.extension.nsfw != nsfwOnly);
+    // ── En televisor, ninguna que sea SOLO de lectura ────────────────────
+    //
+    // El televisor entrega vídeo y nada más: sus zonas ya dejan fuera las
+    // extensiones que solo traen manga o novela. Pero el fondo del Inicio no
+    // las filtraba, así que podía elegir una de ellas — y con eso levantaba su
+    // motor de JavaScript para conseguir una portada que después nunca se
+    // puede abrir desde ahí.
+    //
+    // Una extensión MIXTA sí entra: trae vídeo además de lectura, y en el
+    // televisor se muestra su parte de vídeo. Por eso se pregunta por «solo
+    // lectura» y no por «tiene lectura».
+    if (PlatformTv.esTelevisionSync) {
+      exts.removeWhere(
+        (e) => ExtensionUtils.esSoloLectura(e.extension.package),
+      );
+    }
     if (exts.isEmpty) {
       _extensionPool = [];
       _hasLoadedPoolOnce = true;

@@ -208,27 +208,8 @@ class _HomeTVState extends State<HomeTV> {
     // están el nombre y los botones.
     return SafeArea(
       child: Padding(
-        // ── El margen de seguridad va a los COSTADOS, no arriba y abajo ───
-        //
-        // Era `EdgeInsets.all(overscan)`, o sea el 5 % del ancho por los cuatro
-        // lados. En un televisor de 1280x720 son 64 px arriba y 64 abajo: el
-        // 18 % de la altura, perdido. Reportado: «usá toda la pantalla del
-        // televisor, veo que usás una porción».
-        //
-        // El overscan de verdad —el borde que algunos televisores viejos
-        // recortan— importa a los costados, que es donde se pierde texto. En
-        // vertical la barra de arriba ya tiene su propio aire y la lista es
-        // desplazable, así que ahí ese margen no protege nada: solo achica la
-        // pantalla y hace que entre una fila menos.
-        //
-        // Abajo se deja un tercio: alcanza para que la última fila no quede
-        // pegada al borde, sin regalar el espacio de una fila entera.
-        padding: EdgeInsets.fromLTRB(
-          overscan,
-          overscan / 3,
-          overscan,
-          overscan / 3,
-        ),
+        // Un solo sitio decide este margen. Ver HomeTheme.margenTv.
+        padding: HomeTheme.margenTv(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
