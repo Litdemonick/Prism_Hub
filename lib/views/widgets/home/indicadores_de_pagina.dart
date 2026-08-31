@@ -60,17 +60,25 @@ class IndicadoresDePagina extends StatelessWidget {
       // El aire va ADENTRO del área de toque, no entre widgets: así lo que
       // se puede tocar es más grande que la raya sin que las rayas queden
       // separadas de más.
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: esTv ? 6 : 4, vertical: 8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
-        width: i == actual ? 30 : 20,
-        height: 3,
+        // En televisor, casi el doble de gruesas y más largas.
+        //
+        // Reportado en vivo: «las rayitas de abajo, chiquititas». Tres
+        // píxeles de alto se miran de cerca; a tres metros de un televisor son
+        // una línea gris en la que no se distingue cuál está encendida, que es
+        // justo lo único que estas rayas vienen a decir.
+        width: esTv
+            ? (i == actual ? 46 : 30)
+            : (i == actual ? 30 : 20),
+        height: esTv ? 6 : 3,
         decoration: BoxDecoration(
           color: i == actual
               ? HomeTheme.accentPink
               : HomeTheme.contraste.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(2),
+          borderRadius: BorderRadius.circular(esTv ? 3 : 2),
         ),
       ),
     );

@@ -349,7 +349,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                   // arriba y abajo, que es por donde sale la sombra.
                   : ClipRect(
                       clipper: _SoloCostados(
-                        aireLateral: widget.conFocoTv ? 12 : 0,
+                        aireLateral: widget.conFocoTv ? 24 : 0,
                       ),
                       child: ListView.separated(
                         controller: _scroll,
@@ -366,7 +366,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                         // contra el recorte de la fila.
                         padding: EdgeInsets.symmetric(
                           horizontal: widget.conFocoTv
-                              ? _margen(context) + 14
+                              ? _margen(context) + 26
                               : _margen(context),
                         ),
                         // ── Y dos brillando al final si está trayendo ──
