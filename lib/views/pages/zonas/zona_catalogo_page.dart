@@ -2,11 +2,13 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/zona_catalogo_controller.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/breakpoints.dart';
+import 'package:prismhub/views/widgets/home/rejilla_de_tarjetas.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -142,20 +144,15 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
   /// falta para que la celda tenga la forma correcta y no desborde.
   ({int columnas, double ancho}) _rejilla(
       BuildContext context, double disponible) {
-    final ideal = TarjetaDeCatalogo.anchoPara(Ancho.de(context));
-    const separacion = 16.0;
-    // En televisor, tope de cuatro columnas.
-    //
-    // La cuenta de arriba mete todas las que entren, y en una pantalla ancha
-    // eso puede dar seis o siete aunque la tarjeta sea grande. Desde el sillón
-    // más de cuatro por fila obliga a recorrer con el mando media pantalla
-    // para cruzar una fila, y las portadas quedan chicas.
-    final tope = PlatformTv.esTelevisionSync ? 4 : 10;
-    final columnas = ((disponible + separacion) / (ideal + separacion))
-        .floor()
-        .clamp(2, tope);
-    final ancho = (disponible - separacion * (columnas - 1)) / columnas;
-    return (columnas: columnas, ancho: ancho);
+    // La cuenta vive en `RejillaDeTarjetas`, una sola vez para toda la app y
+    // con prueba propia. Acá estaba copiada, y difería de la de Inicio en
+    // televisor justo en lo que importa.
+    return RejillaDeTarjetas.calcular(
+      disponible: disponible,
+      separacion: 16,
+      televisor: PlatformTv.esTelevisionSync,
+      pantalla: Ancho.de(context),
+    );
   }
 
   List<ZonaItem> _ordenados() {
@@ -363,7 +360,8 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
               // llegara a decodificarse. El doble de alto de tarjeta para
               // arriba y para abajo le da tiempo a la imagen sin pedir
               // tarjetas de más que nunca se llegan a ver.
-              scrollCacheExtent: ScrollCacheExtent.pixels(alto * 2),
+              scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
+                  ScrollCacheExtent.pixels(alto * 2),
               controller: _scroll,
               // El de abajo suma el inset real de la barra flotante — con
               // `SafeArea(bottom: false)` en el build() de arriba, nada más

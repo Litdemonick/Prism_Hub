@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/breakpoints.dart';
+import 'package:prismhub/views/widgets/home/rejilla_de_tarjetas.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/panel_info_hover.dart';
@@ -105,45 +106,65 @@ class TarjetaDeCatalogo extends StatefulWidget {
   /// desalineada de la cuadrícula o se saldría de la celda.
   final double? ancho;
 
-  /// El ancho del póster, según cuánto lugar hay.
+  /// El ancho ideal de una tarjeta de catálogo, EN ESTA pantalla.
   ///
-  /// Va por ANCHO DE PANTALLA y no por sistema operativo: una tablet y un
-  /// teléfono son el mismo `Platform`, y una ventana de escritorio achicada a
-  /// la mitad se parece más a la tablet. Además acompaña en vivo cuando el
-  /// usuario arrastra el borde de la ventana, cosa que el sistema operativo
-  /// nunca puede contestar.
-  // Subido de 126/150/176/196: pedido explícito de tarjetas más grandes
-  // (estilo Crunchyroll) en las filas de Inicio — mismos cuatro
-  // breakpoints, solo más aire por tarjeta. Como todo el resto (alto de
-  // portada, alto total de la fila) se calcula A PARTIR de este número,
-  // cambiar solo acá alcanza para las tres plataformas.
-  /// El ancho ideal de una tarjeta de catálogo.
+  /// Fuera de televisor sale del breakpoint y punto: el ancho en píxeles y la
+  /// distancia a la que se mira van juntos, así que un número por tamaño
+  /// alcanza. Esos peldaños están subidos respecto de 126/150/176/196 por un
+  /// pedido explícito de tarjetas más grandes en las filas de Inicio.
   ///
-  /// ── En televisor se mide en distancia, no en píxeles ────────────────────
+  /// ── En televisor no alcanza un número ───────────────────────────────────
   ///
-  /// Los peldaños de abajo están pensados para una pantalla que se mira de
-  /// cerca. Un televisor de 1280 de ancho cae en `enorme` y con 240 px por
-  /// tarjeta entran cinco columnas — a tres metros del sillón, cinco portadas
-  /// por fila son cinco estampillas, y el título debajo no se lee.
+  /// Acá había 320 px fijos, con este argumento: un televisor de 1280 cae en
+  /// `enorme` y con 240 px entran cinco columnas, que desde el sillón son
+  /// cinco estampillas.
   ///
-  /// Con 320 entran tres o cuatro según el ancho real, que es lo que hacen las
-  /// apps de televisor: menos por fila y cada una grande.
-  static double anchoPara(Ancho a) => PlatformTv.esTelevisionSync
-      ? 320
-      : a.elegir(
-          compacto: 150,
-          medio: 180,
-          amplio: 210,
-          enorme: 240,
-        );
+  /// El argumento era correcto y el arreglo no: los televisores le declaran a
+  /// Flutter anchos lógicos muy distintos —960, 1280, 1920— y todos se miran
+  /// desde la misma distancia. Con 320 fijos, el televisor donde se mide
+  /// entraba en DOS columnas, con las portadas ocupando la pantalla entera y
+  /// sin ver la fila de abajo ni la de arriba. Reportado con foto.
+  ///
+  /// Entonces en televisor el ancho sale de dividir la pantalla, con la misma
+  /// cuenta que usa la grilla (`RejillaDeTarjetas`) — así una fila horizontal
+  /// y una grilla muestran tarjetas del mismo tamaño en la misma pantalla.
+  ///
+  /// Recibe el `BuildContext` y no un `Ancho` justamente por eso: en televisor
+  /// hace falta el ancho REAL, no el peldaño en el que cae.
+  static double anchoPara(BuildContext context) {
+    final pantalla = MediaQuery.sizeOf(context).width;
+    final a = Ancho.desde(pantalla);
+    if (!PlatformTv.esTelevisionSync) {
+      return RejillaDeTarjetas.anchoIdealFueraDeTv(a);
+    }
+    return RejillaDeTarjetas.calcular(
+      disponible: pantalla - _alrededorEnTv,
+      separacion: 20,
+      televisor: true,
+      pantalla: a,
+    ).ancho;
+  }
 
-  static double altoPortadaPara(Ancho a) => anchoPara(a) * 3 / 2;
+  /// Lo que en televisor NO es franja de tarjetas: la barra lateral contraída
+  /// (64–80 según la pantalla), el aire que la separa del contenido y los
+  /// márgenes de `HomeTheme.margenTv`.
+  ///
+  /// Es una estimación a propósito. Las grillas miden su franja de verdad con
+  /// un `LayoutBuilder`; las filas horizontales no pueden —el ancho de la
+  /// tarjeta se necesita ANTES, para reservar el alto de la fila— y una
+  /// estimación de más acá solo hace la tarjeta unos píxeles más angosta, que
+  /// no rompe nada.
+  static const _alrededorEnTv = 170.0;
+
+  static double altoPortadaPara(BuildContext context) =>
+      anchoPara(context) * 3 / 2;
 
   /// Portada + aire + dos líneas de título + una de subtítulo.
   ///
   /// Se calcula acá y no en la fila para que las dos no puedan discrepar: si
   /// la fila reservara menos de lo que la tarjeta mide, se recorta el texto.
-  static double altoTotalPara(Ancho a) => altoTotalDeAncho(anchoPara(a));
+  static double altoTotalPara(BuildContext context) =>
+      altoTotalDeAncho(anchoPara(context));
 
   /// Lo mismo, pero partiendo de un ancho ya decidido — el de una celda.
   static double altoTotalDeAncho(double ancho) => ancho * 3 / 2 + 8 + 36 + 16;
@@ -172,8 +193,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
 
   @override
   Widget build(BuildContext context) {
-    final a = Ancho.de(context);
-    final ancho = widget.ancho ?? TarjetaDeCatalogo.anchoPara(a);
+    final ancho = widget.ancho ?? TarjetaDeCatalogo.anchoPara(context);
     final altoPortada = ancho * 3 / 2;
     final radio = BorderRadius.circular(8);
 

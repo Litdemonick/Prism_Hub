@@ -662,7 +662,8 @@ class _ContenidoTV extends StatelessWidget {
               // horizontales, donde construir de más es trabajo perdido. Acá lo
               // que se adelanta no es dibujado sino una petición de red, que es
               // justo lo que conviene adelantar.
-              scrollCacheExtent: const ScrollCacheExtent.viewport(1),
+              scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
+                  const ScrollCacheExtent.viewport(1),
               // +1: el destacado.
               itemCount: (visibles.isEmpty ? 2 : visibles.length) + 1,
               itemBuilder: (context, i) => switch (i) {
@@ -785,23 +786,21 @@ class _ZonaTvState extends State<_ZonaTv> {
     // encima del final, y bajando rápido con el mando se llegaba al fondo
     // antes de que llegara nada. Dos tarjetas de alto dan margen de sobra
     // para que la página nueva entre sin que se note el corte.
-    final altoTarjeta = TarjetaDeCatalogo.altoTotalPara(Ancho.de(context));
+    final altoTarjeta = TarjetaDeCatalogo.altoTotalPara(context);
     if (restante < altoTarjeta * 2) {
       unawaited(c.cargarMas());
     }
   }
 
-  /// Cuántas columnas entran y qué ancho tiene la celda — misma cuenta que
-  /// `ZonaCatalogoPage._rejilla`, copiada acá porque es privada de ese
-  /// archivo (no se puede importar entre librerías distintas).
+  /// Cuántas columnas entran y qué ancho tiene la celda.
   ({int columnas, double ancho}) _rejillaTv(
       BuildContext context, double disponible) {
-    final ideal = TarjetaDeCatalogo.anchoPara(Ancho.de(context));
-    const separacion = 20.0;
-    final columnas =
-        ((disponible + separacion) / (ideal + separacion)).floor().clamp(2, 10);
-    final ancho = (disponible - separacion * (columnas - 1)) / columnas;
-    return (columnas: columnas, ancho: ancho);
+    return RejillaDeTarjetas.calcular(
+      disponible: disponible,
+      separacion: 20,
+      televisor: PlatformTv.esTelevisionSync,
+      pantalla: Ancho.de(context),
+    );
   }
 
   @override
@@ -855,7 +854,8 @@ class _ZonaTvState extends State<_ZonaTv> {
             // Mismo margen de precarga generoso que ZonaCatalogoPage: con
             // tarjetas altas, el default de Flutter (250px) apenas cubre
             // una fila de sobra.
-            scrollCacheExtent: ScrollCacheExtent.pixels(alto * 2),
+            scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
+                ScrollCacheExtent.pixels(alto * 2),
             slivers: [
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(margen, 8, margen, 0),

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
-import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
@@ -163,7 +162,7 @@ class _UltimasActualizacionesMangaDexPageState
   /// cambio de app. Se reparte el sobrante entre las columnas en vez de dejar
   /// un hueco al costado.
   ({int columnas, double ancho}) _rejilla(double disponible) {
-    final ideal = TarjetaDeCatalogo.anchoPara(Ancho.de(context));
+    final ideal = TarjetaDeCatalogo.anchoPara(context);
     const separacion = 16.0;
     final columnas =
         ((disponible + separacion) / (ideal + separacion)).floor().clamp(2, 10);

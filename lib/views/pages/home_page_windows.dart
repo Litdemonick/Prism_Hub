@@ -66,7 +66,8 @@ class HomeWindows extends StatelessWidget {
           child: ListView.builder(
             // Una pantalla de adelanto: cada fila pide lo suyo al construirse, así
             // que esto adelanta la PETICIÓN, no el dibujado. Ver home_page_tv.dart.
-            scrollCacheExtent: const ScrollCacheExtent.viewport(1),
+            scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
+                const ScrollCacheExtent.viewport(1),
             physics: const AlwaysScrollableScrollPhysics(),
             // Arriba también: el acordeón arrancaba pegado al borde de la
             // ventana, sin nada entre la barra de título y la primera portada.
@@ -205,7 +206,7 @@ class _FilaWindows extends StatefulWidget {
 /// que la tarjeta enfocada crezca sin pisar el título de la siguiente,
 /// sigue siendo el mismo).
 double _anchoTarjetaTv(BuildContext context) =>
-    TarjetaDeCatalogo.anchoPara(Ancho.de(context)) * 1.05;
+    TarjetaDeCatalogo.anchoPara(context) * 1.05;
 
 double _altoFilaTv(BuildContext context) =>
     TarjetaDeCatalogo.altoTotalDeAncho(_anchoTarjetaTv(context)) + 28;
@@ -298,7 +299,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
               // porque solo cambia el número que le pasan.
               height: widget.conFocoTv
                   ? _altoFilaTv(context)
-                  : TarjetaDeCatalogo.altoTotalPara(Ancho.de(context)) + 28,
+                  : TarjetaDeCatalogo.altoTotalPara(context) + 28,
               // Bloques grises con la forma de las tarjetas, igual que en
               // celular: dicen QUÉ va a aparecer y dónde, así que al llegar el
               // contenido nada se mueve. Y salen también con contenido en
@@ -329,7 +330,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                   ? EsqueletoDeFila(
                       ancho: widget.conFocoTv
                           ? _anchoTarjetaTv(context)
-                          : TarjetaDeCatalogo.anchoPara(Ancho.de(context)),
+                          : TarjetaDeCatalogo.anchoPara(context),
                       separacion: 14,
                       padding:
                           EdgeInsets.symmetric(horizontal: _margen(context)),
@@ -389,8 +390,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                               child: EsqueletoTarjeta(
                                 ancho: widget.conFocoTv
                                     ? _anchoTarjetaTv(context)
-                                    : TarjetaDeCatalogo.anchoPara(
-                                        Ancho.de(context)),
+                                    : TarjetaDeCatalogo.anchoPara(context),
                               ),
                             );
                           }
