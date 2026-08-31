@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/nsfw18_zone.dart';
 import 'package:prismhub/utils/router.dart';
@@ -285,6 +286,99 @@ class _PinDialogState extends State<_PinDialog> {
         ),
       ],
     );
+
+    // ── En televisor, apaisado: lo que se escribe a la izquierda y los
+    //    botones a la derecha ─────────────────────────────────────────────
+    //
+    // El modo compacto de arriba se enciende con poca ALTURA, que es el caso
+    // del teléfono acostado con el teclado abierto. Un televisor tiene altura
+    // de sobra, así que caía en el modo vertical: título, dos campos y dos
+    // botones apilados, con un desplazamiento para llegar al final.
+    //
+    // Desde el sillón eso es lo peor que se puede pedir: hay que bajar con el
+    // mando para encontrar el botón de guardar, y no se ve todo junto.
+    //
+    // Acá va a lo ancho, que es lo que sobra en una pantalla de televisor:
+    // a la izquierda el título y los dos campos, a la derecha los botones,
+    // todo a la vista y sin desplazar nada.
+    if (PlatformTv.esTelevisionSync) {
+      return Dialog(
+        insetPadding: HomeTheme.margenTv(context),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.pin_outlined,
+                              color: HomeTheme.accentRed, size: 26),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              widget.title,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      pinField,
+                      confirmField,
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 28),
+                // Los botones en columna a la derecha: con un mando se llega a
+                // ellos con una sola pulsación desde el segundo campo, y se
+                // ven los dos a la vez sin desplazar.
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Confirmar arriba: es lo que se viene a hacer.
+                      PlatformFilledButton(
+                        onPressed: _save,
+                        child: Text('common.confirm'.i18n),
+                      ),
+                      const SizedBox(height: 12),
+                      PlatformTextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text('common.cancel'.i18n),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Dialog(
       insetPadding: EdgeInsets.symmetric(

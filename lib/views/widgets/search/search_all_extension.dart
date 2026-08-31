@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/extension.dart';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -37,6 +40,40 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
   @override
   Widget build(BuildContext context) {
     if (widget.runtimeList.isEmpty) {
+      // ── Lista vacía NO quiere decir «no hay extensiones» ────────────────
+      //
+      // Acá llega la lista de RESULTADOS, no la de extensiones instaladas. Con
+      // el buscador recién abierto —o con una búsqueda que no encontró nada—
+      // esa lista está vacía, y se mostraba «Sin extensiones instaladas» con
+      // un botón para ir a instalar.
+      //
+      // Reportado en vivo en el televisor: «en buscar me sale sin extensiones
+      // instaladas cuando sí hay». Y es de lo peor que puede decir una app:
+      // manda a arreglar algo que no está roto.
+      //
+      // Son tres situaciones distintas y ahora se dicen distinto.
+      final hayInstaladas = ExtensionUtils.enabledRuntimes.isNotEmpty;
+      if (hayInstaladas) {
+        return SizedBox(
+          height: 300,
+          width: double.infinity,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                widget.kw.trim().isEmpty
+                    ? 'search.escribi-algo'.i18n
+                    : 'search.nada-encontrado'.i18n,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: PlatformTv.esTelevisionSync ? 18 : 14,
+                  color: HomeTheme.textMuted,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
       return SizedBox(
         height: 300,
         width: double.infinity,

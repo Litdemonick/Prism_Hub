@@ -201,7 +201,9 @@
     "recent": "Búsquedas recientes",
     "empty-hint": "Escribí algo para buscar en todas tus extensiones",
     "most-relevant": "Resultados más relevantes",
-    "search-in-extension": "O buscá directo en una extensión"
+    "search-in-extension": "O buscá directo en una extensión",
+    "escribi-algo": "Escribí algo para buscar en tus extensiones.",
+    "nada-encontrado": "No se encontró nada con eso. Probá con otras palabras."
   },
   "extension": {
     "import": {
