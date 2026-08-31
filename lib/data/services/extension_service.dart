@@ -108,6 +108,33 @@ class ExtensionService {
     });
   }
 
+  /// Suelta el motor de JavaScript de esta extensión.
+  ///
+  /// ── Cuándo, y por qué hace falta ────────────────────────────────────────
+  ///
+  /// El motor se levanta solo cuando la extensión se usa, pero una vez arriba
+  /// se quedaba para siempre. Si alguien la DESACTIVA, ese motor ya no lo va a
+  /// usar nadie —las zonas y el buscador solo miran las activas— y sin embargo
+  /// se sigue quedando con lo suyo: su pila, y CryptoJS, jsencrypt y md5
+  /// analizados en memoria. En un televisor con poca memoria eso importa.
+  ///
+  /// Después de soltarlo, la extensión queda como recién arrancada la app: si
+  /// se la vuelve a activar y a usar, se levanta de nuevo sola.
+  void soltarMotor() {
+    if (!_motorListo) return;
+    _motorListo = false;
+    _levantando = null;
+    isinit = false;
+    try {
+      runtime.dispose();
+    } catch (e) {
+      // Que no se pueda soltar no puede tumbar nada: la referencia se suelta
+      // igual y el recolector se lleva lo que pueda.
+      logger.info('[extensiones] no se pudo soltar el motor de '
+          '${extension.package}: $e');
+    }
+  }
+
   Future<void> _levantarMotor() async {
     final rutaGuion = _rutaGuion;
     // 读取文件

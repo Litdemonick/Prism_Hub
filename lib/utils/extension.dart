@@ -1151,6 +1151,19 @@ class ExtensionUtils {
     }
     if (cambiadas == 0) return 0;
     await PrismHubStorage.setSetting(SettingKey.disabledExtensions, lista);
+    // ── Lo que se apaga, se suelta ──────────────────────────────────────
+    //
+    // Una extensión desactivada ya no la consulta nadie: las zonas y el
+    // buscador solo miran las activas. Pero si se había usado antes, su motor
+    // de JavaScript seguía en memoria con su pila y con CryptoJS, jsencrypt y
+    // md5 analizados adentro.
+    //
+    // Apagar una extensión tiene que devolver esa memoria, que es justo lo que
+    // uno espera al apagarla — y en un televisor con poca memoria es la
+    // diferencia entre que la app respire o no.
+    for (final package in lista) {
+      runtimes[package]?.soltarMotor();
+    }
     _pedirReload();
     return cambiadas;
   }
@@ -1359,6 +1372,10 @@ class ExtensionUtils {
               !nativePackages.contains(pkg)) {
             try {
               await File(f.path).delete();
+              // Se suelta el motor ANTES de olvidarla: con solo soltar la
+              // referencia, lo nativo del motor de JavaScript no se libera
+              // hasta que alguien lo pida. Ver ExtensionService.soltarMotor.
+              runtimes[pkg]?.soltarMotor();
               runtimes.remove(pkg);
               debugPrint('Extensión oficial huérfana eliminada: $pkg');
             } catch (_) {}
@@ -1392,6 +1409,10 @@ class ExtensionUtils {
         debugPrint('extension event: ${event.path} ${event.type}');
         switch (event.type) {
           case FileSystemEvent.delete:
+            // Se suelta el motor ANTES de olvidarla: con solo soltar la
+            // referencia, lo nativo del motor de JavaScript no se libera
+            // hasta que alguien lo pida. Ver ExtensionService.soltarMotor.
+            runtimes[package]?.soltarMotor();
             runtimes.remove(package);
             extensionErrorMap.remove(event.path);
             _recargarConCalma();
@@ -1443,6 +1464,10 @@ class ExtensionUtils {
         Timer(const Duration(milliseconds: 300), () async {
       _relojesDeArchivo.remove(package);
       if (_loading.contains(package)) return;
+      // Se suelta el motor ANTES de olvidarla: con solo soltar la
+      // referencia, lo nativo del motor de JavaScript no se libera
+      // hasta que alguien lo pida. Ver ExtensionService.soltarMotor.
+      runtimes[package]?.soltarMotor();
       runtimes.remove(package);
       extensionErrorMap.remove(ruta);
       try {
@@ -1762,6 +1787,10 @@ class ExtensionUtils {
     } catch (e) {
       // Init failed — remove the bad runtime and file so it doesn't persist
       // and break loading on the next launch.
+      // Se suelta el motor ANTES de olvidarla: con solo soltar la
+      // referencia, lo nativo del motor de JavaScript no se libera
+      // hasta que alguien lo pida. Ver ExtensionService.soltarMotor.
+      runtimes[pkg]?.soltarMotor();
       runtimes.remove(pkg);
       try {
         await File(savePath).delete();
