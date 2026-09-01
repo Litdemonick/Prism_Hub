@@ -660,10 +660,19 @@ class _ItemSidebarTV extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: elegido
-            ? HomeTheme.accentPink.withValues(alpha: 0.16)
-            : Colors.transparent,
+        // Antes era un relleno plano rosa — pedido explícito: que la
+        // elegida se note con un resplandor suave, como el halo de foco
+        // del resto del app (`FocusableCard`), no con una caja de color.
         borderRadius: BorderRadius.circular(14),
+        boxShadow: elegido
+            ? [
+                BoxShadow(
+                  color: HomeTheme.accentPink.withValues(alpha: 0.45),
+                  blurRadius: 18,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
       ),
       child: Row(
         mainAxisAlignment:
@@ -810,7 +819,11 @@ class _FilaMedianasTv extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: HomeMediaCard.altoTotalAncha,
+      // `altoImagenAncha`, no `altoTotalAncha`: en la variante horizontal
+      // el título va superpuesto sobre la imagen (como el resto de estas
+      // medianas), no debajo — `altoTotalAncha` reserva espacio de más
+      // pensado para la variante vertical, que sí tiene texto aparte.
+      height: HomeMediaCard.altoImagenAncha,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
@@ -857,8 +870,12 @@ class _CabeceraZonaTv extends StatelessWidget {
               final anchoMitad = heroSecundario == null
                   ? caja.maxWidth
                   : (caja.maxWidth - 14) / 2;
-              final alto =
-                  _medirCarrusel(context, anchoMitad, conFocoTv: true).alto;
+              final alto = _medirCarrusel(
+                context,
+                anchoMitad,
+                conFocoTv: true,
+                compartido: true,
+              ).alto;
               return SizedBox(
                 height: alto,
                 child: Row(
@@ -982,6 +999,7 @@ class _ContenidoTV extends StatelessWidget {
                                 context,
                                 anchoMitad,
                                 conFocoTv: true,
+                                compartido: true,
                               ).alto;
                               return Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -990,6 +1008,7 @@ class _ContenidoTV extends StatelessWidget {
                                     child: _CarruselAndroid(
                                       c: c,
                                       conFocoTv: true,
+                                      sinVecinos: true,
                                     ),
                                   ),
                                   const SizedBox(width: 14),
