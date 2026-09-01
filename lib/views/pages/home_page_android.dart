@@ -1091,231 +1091,232 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
         return Column(
           children: [
-            _conRecorte(
-              m,
-              caja.maxWidth,
-              SizedBox(
-                height: m.alto,
-                // ── El carrusel es SU PROPIO enfocable ────────────────────
-                //
-                // El primer intento fue envolverlo por fuera en FocusableCard
-                // y manejar las flechas en un Focus interno. No funciona: los
-                // eventos de teclado salen del nodo ENFOCADO y suben por sus
-                // ancestros, nunca bajan a los hijos — así que el Focus de
-                // adentro no veía una sola tecla y el carrusel quedaba mudo.
-                //
-                // Siendo él mismo el nodo que recibe el foco, las teclas
-                // llegan directo.
-                child: Focus(
-                  canRequestFocus: widget.conFocoTv,
-                  skipTraversal: !widget.conFocoTv,
-                  onKeyEvent: widget.conFocoTv ? manejarTecla : null,
-                  onFocusChange: widget.conFocoTv
-                      ? (tiene) {
-                          if (mounted) setState(() => _enfocado = tiene);
-                        }
-                      : null,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onHorizontalDragStart: (_) {
-                      _marcarAccionManual();
-                      _anim.stop();
-                    },
-                    onHorizontalDragUpdate: (d) {
-                      final paso = (m.ancho + m.anchoChico) / 2 + _aire;
-                      setState(() {
-                        _p = (_p - (d.primaryDelta ?? 0) / paso)
-                            .clamp(0.0, ultimo);
-                      });
-                      _actualizarPista();
-                    },
-                    onHorizontalDragEnd: (d) {
-                      final v = d.primaryVelocity ?? 0;
-                      // Con impulso se salta a la siguiente aunque el dedo no haya
-                      // llegado a la mitad: es lo que espera un deslizar rápido.
-                      var destino = _p.roundToDouble();
-                      if (v.abs() > 380) {
-                        destino = v < 0
-                            ? _p.floorToDouble() + 1
-                            : _p.ceilToDouble() - 1;
+            SizedBox(
+              height: m.alto,
+              // ── El carrusel es SU PROPIO enfocable ────────────────────
+              //
+              // El primer intento fue envolverlo por fuera en FocusableCard
+              // y manejar las flechas en un Focus interno. No funciona: los
+              // eventos de teclado salen del nodo ENFOCADO y suben por sus
+              // ancestros, nunca bajan a los hijos — así que el Focus de
+              // adentro no veía una sola tecla y el carrusel quedaba mudo.
+              //
+              // Siendo él mismo el nodo que recibe el foco, las teclas
+              // llegan directo.
+              child: Focus(
+                canRequestFocus: widget.conFocoTv,
+                skipTraversal: !widget.conFocoTv,
+                onKeyEvent: widget.conFocoTv ? manejarTecla : null,
+                onFocusChange: widget.conFocoTv
+                    ? (tiene) {
+                        if (mounted) setState(() => _enfocado = tiene);
                       }
-                      _irA(destino.clamp(0.0, ultimo), grupos);
-                      // ── Traer más cuando queda poco ──────────────────────
-                      //
-                      // Al soltar y no en cada píxel del arrastre: así se pide una
-                      // vez por gesto y no cincuenta.
-                      //
-                      // El margen se cuenta desde la última REAL, no desde el tope
-                      // con fantasmas: si se contara desde el tope, las tres
-                      // tarjetas en espera se comerían el aviso y el pedido saldría
-                      // tres tarjetas más tarde, justo cuando ya se ve el final.
-                      //
-                      // A quién pedirle y cuándo lo decide _pedirMasSiHaceFalta:
-                      // primero termina la extensión que se está mirando.
-                      _pedirMasSiHaceFalta(planos, destino, ultimoReal);
-                    },
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          // ── Recorta a los costados, NO arriba y abajo ────────
-                          //
-                          // Cada tarjeta lleva una sombra desplazada ocho píxeles
-                          // hacia abajo. Con un recorte rectangular común, esa
-                          // sombra se corta al ras del borde inferior: se ve media
-                          // sombra terminando en seco, en línea recta, debajo de
-                          // cada portada. Con trece tarjetas al lado se leía como
-                          // una banda sucia cruzando el carrusel.
-                          //
-                          // Este recorte deja escapar arriba y abajo justo para
-                          // eso. Ya existía para las filas horizontales, que tienen
-                          // el mismo problema con la sombra del ratón encima.
-                          child: _conPuntasDifuminadas(
-                            ClipRect(
-                              clipper: const _SoloCostados(),
-                              child: _acordeon(
-                                  planos, m, caja.maxWidth, grupos, fantasmas),
-                            ),
-                          ),
-                        ),
-                        // ── Flechas solo con mouse ─────────────────────────────
+                    : null,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragStart: (_) {
+                    _marcarAccionManual();
+                    _anim.stop();
+                  },
+                  onHorizontalDragUpdate: (d) {
+                    final paso = (m.ancho + m.anchoChico) / 2 + _aire;
+                    setState(() {
+                      _p = (_p - (d.primaryDelta ?? 0) / paso)
+                          .clamp(0.0, ultimo);
+                    });
+                    _actualizarPista();
+                  },
+                  onHorizontalDragEnd: (d) {
+                    final v = d.primaryVelocity ?? 0;
+                    // Con impulso se salta a la siguiente aunque el dedo no haya
+                    // llegado a la mitad: es lo que espera un deslizar rápido.
+                    var destino = _p.roundToDouble();
+                    if (v.abs() > 380) {
+                      destino = v < 0
+                          ? _p.floorToDouble() + 1
+                          : _p.ceilToDouble() - 1;
+                    }
+                    _irA(destino.clamp(0.0, ultimo), grupos);
+                    // ── Traer más cuando queda poco ──────────────────────
+                    //
+                    // Al soltar y no en cada píxel del arrastre: así se pide una
+                    // vez por gesto y no cincuenta.
+                    //
+                    // El margen se cuenta desde la última REAL, no desde el tope
+                    // con fantasmas: si se contara desde el tope, las tres
+                    // tarjetas en espera se comerían el aviso y el pedido saldría
+                    // tres tarjetas más tarde, justo cuando ya se ve el final.
+                    //
+                    // A quién pedirle y cuándo lo decide _pedirMasSiHaceFalta:
+                    // primero termina la extensión que se está mirando.
+                    _pedirMasSiHaceFalta(planos, destino, ultimoReal);
+                  },
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        // ── Recorta a los costados, NO arriba y abajo ────────
                         //
-                        // Arrastrar con el mouse funciona —el gesto es el mismo—
-                        // pero nadie lo intenta: en escritorio uno espera hacer
-                        // clic. Sin flechas, en PC el acordeón parecía una imagen
-                        // fija con tres portadas al lado.
+                        // Cada tarjeta lleva una sombra desplazada ocho píxeles
+                        // hacia abajo. Con un recorte rectangular común, esa
+                        // sombra se corta al ras del borde inferior: se ve media
+                        // sombra terminando en seco, en línea recta, debajo de
+                        // cada portada. Con trece tarjetas al lado se leía como
+                        // una banda sucia cruzando el carrusel.
                         //
-                        // En pantalla táctil no van: el dedo ya arrastra, y dos
-                        // botones encima taparían justo las tarjetas de los
-                        // costados, que son las que invitan a deslizar.
-                        // Con su propio fondo: la flecha suelta es un ícono gris
-                        // claro, y acá cae encima de una portada. Sobre una imagen
-                        // oscura desaparece y sobre una clara tampoco se lee. El
-                        // disco la separa del fondo sea cual sea la portada.
-                        if (!_esTactil) ...[
-                          // Mientras la pista está puesta, esta flecha no va: al
-                          // principio no hay nada a la izquierda de la primera
-                          // tarjeta, así que un botón "volver" ahí no hacía nada.
-                          // La pista ocupa este mismo lugar hasta el primer
-                          // arrastre (ver más abajo); recién ahí vuelve.
-                          if (!_pistaVisible)
-                            Positioned(
-                              left: 8,
-                              top: 0,
-                              bottom: 0,
-                              child: Center(
-                                child: _discoDeFlecha(
-                                  _FlechaDeFila(
-                                    icono: Icons.chevron_left_rounded,
-                                    onTap: () => _irA(
-                                        (_p.roundToDouble() - 1)
-                                            .clamp(0.0, ultimo),
-                                        grupos),
-                                  ),
+                        // Este recorte deja escapar arriba y abajo justo para
+                        // eso. Ya existía para las filas horizontales, que tienen
+                        // el mismo problema con la sombra del ratón encima.
+                        // Compartiendo fila con el hero secundario no hay
+                        // acordeón: una sola tarjeta grande, y lo que
+                        // cambia es la imagen de adentro. Ver `_unaSola`.
+                        child: widget.sinVecinos
+                            ? _unaSola(planos, m, caja.maxWidth, grupos)
+                            : _conPuntasDifuminadas(
+                                ClipRect(
+                                  clipper: const _SoloCostados(),
+                                  child: _acordeon(planos, m, caja.maxWidth,
+                                      grupos, fantasmas),
                                 ),
                               ),
-                            ),
+                      ),
+                      // ── Flechas solo con mouse ─────────────────────────────
+                      //
+                      // Arrastrar con el mouse funciona —el gesto es el mismo—
+                      // pero nadie lo intenta: en escritorio uno espera hacer
+                      // clic. Sin flechas, en PC el acordeón parecía una imagen
+                      // fija con tres portadas al lado.
+                      //
+                      // En pantalla táctil no van: el dedo ya arrastra, y dos
+                      // botones encima taparían justo las tarjetas de los
+                      // costados, que son las que invitan a deslizar.
+                      // Con su propio fondo: la flecha suelta es un ícono gris
+                      // claro, y acá cae encima de una portada. Sobre una imagen
+                      // oscura desaparece y sobre una clara tampoco se lee. El
+                      // disco la separa del fondo sea cual sea la portada.
+                      if (!_esTactil) ...[
+                        // Mientras la pista está puesta, esta flecha no va: al
+                        // principio no hay nada a la izquierda de la primera
+                        // tarjeta, así que un botón "volver" ahí no hacía nada.
+                        // La pista ocupa este mismo lugar hasta el primer
+                        // arrastre (ver más abajo); recién ahí vuelve.
+                        if (!_pistaVisible)
                           Positioned(
-                            right: 8,
+                            left: 8,
                             top: 0,
                             bottom: 0,
                             child: Center(
                               child: _discoDeFlecha(
                                 _FlechaDeFila(
-                                  icono: Icons.chevron_right_rounded,
-                                  onTap: () {
-                                    _irA(
-                                        (_p.roundToDouble() + 1)
-                                            .clamp(0.0, ultimo),
-                                        grupos);
-                                    // Misma regla que al soltar el dedo: si queda
-                                    // poco por delante, se pide la página siguiente.
-                                    // Sin esto, quien navega a puro clic se choca
-                                    // contra el final y no pasa nada.
-                                    if (_p >= ultimoReal - 10) {
-                                      unawaited(widget.c.traerMas());
-                                    }
-                                  },
+                                  icono: Icons.chevron_left_rounded,
+                                  onTap: () => _irA(
+                                      (_p.roundToDouble() - 1)
+                                          .clamp(0.0, ultimo),
+                                      grupos),
                                 ),
                               ),
                             ),
                           ),
-                        ],
-                        // ── La pista de «esto se desliza» ──────────────────────
-                        //
-                        // En el HUECO vacío a la izquierda de la tarjeta en
-                        // foco, centrada en ESE espacio y no en el acordeón
-                        // entero —ahí, sobre la tarjeta, no hay nada vacío que
-                        // señalar—. Se calcula del ancho real del hueco
-                        // (caja.maxWidth - m.ancho, la tarjeta grande), no de
-                        // una fracción fija: así cae en el lugar correcto sea
-                        // cual sea el tamaño de pantalla o la proporción de la
-                        // tarjeta en ese aparato.
-                        //
-                        // En escritorio, mientras está puesta, tampoco se dibuja
-                        // la flecha de clic hacia la izquierda (ver arriba) — las
-                        // dos a la vez serían dos avisos distintos diciendo lo
-                        // mismo.
-                        //
-                        // Se queda montada siempre (no solo mientras
-                        // _pistaVisible) para que el desvanecido de
-                        // AnimatedOpacity tenga algo que animar en vez de
-                        // desaparecer de un salto.
-                        Builder(builder: (context) {
-                          final huecoAncho = ((caja.maxWidth - m.ancho) / 2)
-                              .clamp(0.0, caja.maxWidth);
-                          final centroHueco =
-                              (huecoAncho / 2).clamp(16.0, caja.maxWidth - 16);
-                          // Un poco más grande que antes, y por tramo de ancho:
-                          // lo mismo que ya usa _proporcionChicaDe más arriba,
-                          // así el ícono se nota en un teléfono de pie, en uno
-                          // acostado, en una tablet y en escritorio, sin quedar
-                          // ni diminuto ni fuera de proporción en ninguno.
-                          final tamIcono = Ancho.de(context).elegir(
-                            compacto: 26.0,
-                            medio: 30.0,
-                            amplio: 34.0,
-                            enorme: 36.0,
-                          );
-                          return Positioned(
-                            left: centroHueco - (tamIcono + 12) / 2,
-                            top: 0,
-                            bottom: 0,
-                            child: IgnorePointer(
-                              child: Center(
-                                child: AnimatedOpacity(
-                                  opacity: _pistaVisible ? 1 : 0,
-                                  duration: const Duration(milliseconds: 450),
-                                  curve: Curves.easeOut,
-                                  child: AnimatedBuilder(
-                                    animation: _pista,
-                                    builder: (context, child) =>
-                                        Transform.translate(
-                                      // El vaivén: como una manito empujando la
-                                      // tarjeta hacia la izquierda y volviendo,
-                                      // invitando a seguirla.
-                                      offset: Offset(
-                                        -Curves.easeInOut
-                                                .transform(_pista.value) *
-                                            8,
-                                        0,
-                                      ),
-                                      child: child,
+                        Positioned(
+                          right: 8,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: _discoDeFlecha(
+                              _FlechaDeFila(
+                                icono: Icons.chevron_right_rounded,
+                                onTap: () {
+                                  _irA(
+                                      (_p.roundToDouble() + 1)
+                                          .clamp(0.0, ultimo),
+                                      grupos);
+                                  // Misma regla que al soltar el dedo: si queda
+                                  // poco por delante, se pide la página siguiente.
+                                  // Sin esto, quien navega a puro clic se choca
+                                  // contra el final y no pasa nada.
+                                  if (_p >= ultimoReal - 10) {
+                                    unawaited(widget.c.traerMas());
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      // ── La pista de «esto se desliza» ──────────────────────
+                      //
+                      // En el HUECO vacío a la izquierda de la tarjeta en
+                      // foco, centrada en ESE espacio y no en el acordeón
+                      // entero —ahí, sobre la tarjeta, no hay nada vacío que
+                      // señalar—. Se calcula del ancho real del hueco
+                      // (caja.maxWidth - m.ancho, la tarjeta grande), no de
+                      // una fracción fija: así cae en el lugar correcto sea
+                      // cual sea el tamaño de pantalla o la proporción de la
+                      // tarjeta en ese aparato.
+                      //
+                      // En escritorio, mientras está puesta, tampoco se dibuja
+                      // la flecha de clic hacia la izquierda (ver arriba) — las
+                      // dos a la vez serían dos avisos distintos diciendo lo
+                      // mismo.
+                      //
+                      // Se queda montada siempre (no solo mientras
+                      // _pistaVisible) para que el desvanecido de
+                      // AnimatedOpacity tenga algo que animar en vez de
+                      // desaparecer de un salto.
+                      Builder(builder: (context) {
+                        final huecoAncho = ((caja.maxWidth - m.ancho) / 2)
+                            .clamp(0.0, caja.maxWidth);
+                        final centroHueco =
+                            (huecoAncho / 2).clamp(16.0, caja.maxWidth - 16);
+                        // Un poco más grande que antes, y por tramo de ancho:
+                        // lo mismo que ya usa _proporcionChicaDe más arriba,
+                        // así el ícono se nota en un teléfono de pie, en uno
+                        // acostado, en una tablet y en escritorio, sin quedar
+                        // ni diminuto ni fuera de proporción en ninguno.
+                        final tamIcono = Ancho.de(context).elegir(
+                          compacto: 26.0,
+                          medio: 30.0,
+                          amplio: 34.0,
+                          enorme: 36.0,
+                        );
+                        return Positioned(
+                          left: centroHueco - (tamIcono + 12) / 2,
+                          top: 0,
+                          bottom: 0,
+                          child: IgnorePointer(
+                            child: Center(
+                              child: AnimatedOpacity(
+                                opacity: _pistaVisible ? 1 : 0,
+                                duration: const Duration(milliseconds: 450),
+                                curve: Curves.easeOut,
+                                child: AnimatedBuilder(
+                                  animation: _pista,
+                                  builder: (context, child) =>
+                                      Transform.translate(
+                                    // El vaivén: como una manito empujando la
+                                    // tarjeta hacia la izquierda y volviendo,
+                                    // invitando a seguirla.
+                                    offset: Offset(
+                                      -Curves.easeInOut
+                                              .transform(_pista.value) *
+                                          8,
+                                      0,
                                     ),
-                                    child: _discoDeFlecha(
-                                      Icon(
-                                        Icons.swipe_left_alt_rounded,
-                                        color: Colors.white,
-                                        size: tamIcono,
-                                      ),
+                                    child: child,
+                                  ),
+                                  child: _discoDeFlecha(
+                                    Icon(
+                                      Icons.swipe_left_alt_rounded,
+                                      color: Colors.white,
+                                      size: tamIcono,
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          );
-                        }),
-                      ],
-                    ),
+                          ),
+                        );
+                      }),
+                    ],
                   ),
                 ),
               ),
@@ -1355,17 +1356,52 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     });
   }
 
-  /// Ver `_CarruselAndroid.sinVecinos`: recorta desde afuera a solo la
-  /// tarjeta en foco, centrada, sin tocar en nada el ancho/posición que el
-  /// acordeón ya calcula por su cuenta.
-  Widget _conRecorte(_MedidasCarrusel m, double anchoUtil, Widget child) {
-    if (!widget.sinVecinos) return child;
-    return ClipRect(
-      child: Align(
-        child: SizedBox(
-          width: m.ancho,
-          height: m.alto,
-          child: OverflowBox(maxWidth: anchoUtil, child: child),
+  /// UNA sola tarjeta grande, la que está en foco — sin acordeón.
+  ///
+  /// Ver `_CarruselAndroid.sinVecinos`. Compartiendo fila con el hero
+  /// secundario no hay lugar para el acordeón: pedido explícito, "es 1
+  /// grande y cuando cambia, cambia solo la imagen". Así que acá no se
+  /// recorta ni se esconde nada — directamente se dibuja una sola, del
+  /// ancho entero de la caja, y el cambio es un fundido.
+  ///
+  /// De paso pesa mucho menos: el acordeón dibuja hasta nueve tarjetas a
+  /// la vez y CADA UNA decodifica su portada al ancho de la grande. Acá
+  /// hay una sola (dos por un instante, mientras dura el fundido).
+  Widget _unaSola(
+    List<(String, ExtensionListItem)> planos,
+    _MedidasCarrusel m,
+    double anchoUtil,
+    List<(String, List<ExtensionListItem>)> grupos,
+  ) {
+    final i = _p.round();
+    // Todavía no llegó (fantasma): un bloque brillando en su lugar, igual
+    // que hace el acordeón.
+    if (i < 0 || i >= planos.length) {
+      return Esqueleto(radio: 20, width: anchoUtil, height: m.alto);
+    }
+    final (paquete, item) = planos[i];
+    final fuente = ExtensionUtils.runtimes[paquete]?.extension.name ?? '';
+    return _ConMarcoDeFoco(
+      marcado: _enfocado,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 380),
+        // Solo la imagen cambia: la tarjeta que sale y la que entra ocupan
+        // exactamente el mismo lugar, así que se funden una sobre la otra
+        // sin que nada se mueva.
+        layoutBuilder: (actual, anteriores) => Stack(
+          fit: StackFit.expand,
+          children: [...anteriores, if (actual != null) actual],
+        ),
+        child: KeyedSubtree(
+          key: ValueKey('$paquete|${item.url}'),
+          child: _TarjetaGrande(
+            ancho: anchoUtil,
+            item: item,
+            fuente: fuente,
+            cabeceras: _cabeceras(paquete),
+            anchoTexto: anchoUtil,
+            onTap: () => _abrir(context, item, paquete),
+          ),
         ),
       ),
     );
@@ -1674,6 +1710,25 @@ _MedidasCarrusel _medirCarrusel(
   final a = Ancho.de(context);
   final bajo = altoPantalla < 500;
 
+  // ── Compartiendo fila: UNA sola tarjeta, del ancho entero ────────────
+  //
+  // Acá no hay acordeón que medir (ver `_unaSola`): la tarjeta ocupa toda
+  // la caja que le toque, así que el ancho no se reparte con nadie y el
+  // alto sale de la proporción del boceto (230 de alto para 610 de ancho
+  // ≈ 0.38), con tope contra la pantalla para que abajo entren las
+  // medianas y la primera fila sin desplazarse.
+  if (compartido) {
+    var alto = anchoUtil * 0.4;
+    final topeCompartido = altoPantalla * 0.34;
+    if (alto > topeCompartido) alto = topeCompartido;
+    if (alto < 140) alto = 140;
+    return _MedidasCarrusel(
+      ancho: anchoUtil,
+      anchoChico: anchoUtil,
+      alto: alto,
+    );
+  }
+
   // ── La forma cambia con la orientación ─────────────────────────────
   //
   // De pie, la tarjeta es un poco más alta que ancha. Acostado no puede
@@ -1690,24 +1745,11 @@ _MedidasCarrusel _medirCarrusel(
   // en el que cae cualquier televisor) está pensado para un monitor de
   // escritorio, que se mira de cerca. A tres metros, ese 0.34 es una
   // portada chica en el medio de una pantalla enorme.
-  // ── Compartiendo fila con el hero secundario ────────────────────────
-  //
-  // El 0.44 de acá abajo está pensado para el ancho ENTERO de la
-  // pantalla, con lugar de sobra a los costados para las tiras del
-  // acordeón. Compartiendo fila, el carrusel recibe apenas la mitad —con
-  // ese mismo 0.44 la tarjeta en foco quedaba chica y encogida contra un
-  // hero secundario que sí llena toda su mitad. Con esto casi toda la
-  // mitad es "la tarjeta", y `sinVecinos` recorta lo poquito que sobra a
-  // los costados.
-  final parte = compartido
-      ? 0.94
-      : conFocoTv
-          ? 0.44
-          : (bajo
-              ? a.elegir(
-                  compacto: 0.46, medio: 0.36, amplio: 0.34, enorme: 0.28)
-              : a.elegir(
-                  compacto: 0.66, medio: 0.5, amplio: 0.42, enorme: 0.34));
+  final parte = conFocoTv
+      ? 0.44
+      : (bajo
+          ? a.elegir(compacto: 0.46, medio: 0.36, amplio: 0.34, enorme: 0.28)
+          : a.elegir(compacto: 0.66, medio: 0.5, amplio: 0.42, enorme: 0.34));
 
   var ancho = anchoUtil * parte;
   var alto = ancho * relacion;
@@ -1727,22 +1769,10 @@ _MedidasCarrusel _medirCarrusel(
   // escritorio el destacado quedaba como una tira fina arriba, sin ser el
   // destacado de nada. Se le da más de la mitad de la pantalla, que es lo
   // que hace cualquier app de televisor.
-  // ── El tope de alto, mucho más chico cuando comparte fila ────────────
-  //
-  // 0.58 es el tope pensado para cuando el carrusel es lo ÚNICO arriba,
-  // dueño de toda la fila. Con el hero secundario y la fila de medianas
-  // debajo, ese mismo 0.58 dejaba el destacado solo ocupando más de medio
-  // televisor y todo lo demás (medianas, primera fila de pósters) fuera
-  // de la pantalla sin desplazarse — reportado en vivo: "no se ve todo a
-  // simple vista". 0.32 calca la proporción del boceto (230 de 720).
   final tope = altoPantalla *
-      (compartido
-          ? 0.32
-          : conFocoTv
-              ? 0.58
-              : (bajo
-                  ? 0.66
-                  : a.elegir(compacto: 0.4, medio: 0.42, amplio: 0.55)));
+      (conFocoTv
+          ? 0.58
+          : (bajo ? 0.66 : a.elegir(compacto: 0.4, medio: 0.42, amplio: 0.55)));
   if (alto > tope) {
     alto = tope;
     ancho = alto / relacion;

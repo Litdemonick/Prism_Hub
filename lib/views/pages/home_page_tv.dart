@@ -94,6 +94,21 @@ double _anchoSidebarContraidoTv(Ancho a) =>
 /// las dos apuntan a la única definición, en `HomeTheme.overscanTv`.
 double _overscanTv(BuildContext context) => HomeTheme.overscanTv(context);
 
+/// Escucha el aviso de «me estoy quedando sin memoria» del sistema y suelta
+/// las zonas que no se están viendo.
+///
+/// Aparte y no en el propio State para no obligar a `_HomeTVState` a ser un
+/// `WidgetsBindingObserver` entero (con sus catorce métodos) por un solo
+/// aviso.
+class _AlivioDeZonasTv extends WidgetsBindingObserver {
+  _AlivioDeZonasTv(this.soltar);
+
+  final VoidCallback soltar;
+
+  @override
+  void didHaveMemoryPressure() => soltar();
+}
+
 class HomeTV extends StatefulWidget {
   const HomeTV({super.key, required this.c});
 
@@ -132,10 +147,53 @@ class _HomeTVState extends State<HomeTV> {
   /// Con esto, una zona se arma recién la primera vez que se entra. Lo que el
   /// `IndexedStack` vino a dar se conserva entero: una vez armada se queda
   /// viva, así que volver la encuentra tal cual se dejó.
+  /// ── Y por qué en un aparato modesto NO se quedan vivas ─────────────────
+  ///
+  /// Mantenerlas vivas es cómodo (volver encuentra la zona tal cual se dejó)
+  /// pero cada zona viva sostiene sus portadas DECODIFICADAS: mientras el
+  /// widget está montado, esas imágenes cuentan como «vivas» para
+  /// `ImageCache` y **no se pueden desalojar por más que se pase del techo**
+  /// (ver `alivio_de_memoria.dart`). Con Inicio + Películas + Series + Anime
+  /// abiertas, son cuatro pantallas enteras de portadas que la caché no
+  /// puede soltar aunque el sistema esté pidiendo memoria a gritos.
+  ///
+  /// Reportado en vivo, televisor de 893 MB: «al navegar se cierra el app,
+  /// al ir a otra zona me saca». En un aparato así la comodidad no vale el
+  /// cierre: se conserva SOLO la que se está viendo, y volver a otra la
+  /// vuelve a armar. Los datos no se pierden —el `ZonaCatalogoController`
+  /// sigue registrado en GetX con todo lo cargado—, así que volver es
+  /// rearmar widgets con lo que ya está en memoria, sin pedir red de nuevo.
   final Set<_CategoriaTV> _visitadas = {_CategoriaTV.inicio};
+
+  /// Si este aparato no puede permitirse tener varias zonas montadas.
+  bool get _memoriaJusta => PrismHubMas.nivel == NivelDeAparato.bajo;
+
+  @override
+  void initState() {
+    super.initState();
+    _alivio = _AlivioDeZonasTv(_soltarLasQueNoSeVen);
+    WidgetsBinding.instance.addObserver(_alivio);
+  }
+
+  late final _AlivioDeZonasTv _alivio;
+
+  /// Deja montada solo la zona que se está viendo. Se llama al cambiar de
+  /// zona (en aparatos modestos) y cuando el sistema pide memoria (en
+  /// todos): ahí el ahorro vale más que la comodidad, sea cual sea el
+  /// aparato.
+  void _soltarLasQueNoSeVen() {
+    if (!mounted) return;
+    if (_visitadas.length <= 1) return;
+    setState(() {
+      _visitadas
+        ..clear()
+        ..add(_categoria);
+    });
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(_alivio);
     _primerFoco.dispose();
     super.dispose();
   }
@@ -150,7 +208,10 @@ class _HomeTVState extends State<HomeTV> {
     CentinelaDeArranque.marcar('va a la zona ${categoria.name}');
     setState(() {
       _categoria = categoria;
-      // A partir de acá esta zona se arma y se queda viva. Ver [_visitadas].
+      // A partir de acá esta zona se arma. En un aparato con memoria justa
+      // se suelta la anterior; en el resto se quedan vivas, que es lo que
+      // hace instantáneo volver. Ver [_visitadas].
+      if (_memoriaJusta) _visitadas.clear();
       _visitadas.add(categoria);
     });
     // ── Y si la zona quedó vacía, se le pide de nuevo ──────────────────
@@ -749,57 +810,70 @@ class _HeroSecundarioTv extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radio = BorderRadius.circular(20);
-    return GestureDetector(
-      onTap: () => _abrir(context, item, package),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: radio,
-          border: Border.all(
-            color: HomeTheme.accentPink.withValues(alpha: 0.55),
-            width: 2,
+    // ── El ancho para decodificar sale de la CAJA, no de la pantalla ────
+    //
+    // Estaba con el ancho de la pantalla entera: en un televisor de 1280
+    // eso decodifica una portada de 1280 de ancho para una tarjeta que
+    // mide la mitad — más del doble de ancho, casi siete veces los
+    // píxeles, y encima queda VIVA en la caché mientras la tarjeta esté
+    // montada (no se puede desalojar). En un aparato de 893 MB eso solo
+    // ya es una mordida enorme del techo de imágenes.
+    return LayoutBuilder(builder: (context, caja) {
+      final anchoUtil = caja.maxWidth.isFinite
+          ? caja.maxWidth
+          : MediaQuery.sizeOf(context).width;
+      return GestureDetector(
+        onTap: () => _abrir(context, item, package),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: radio,
+            border: Border.all(
+              color: HomeTheme.accentPink.withValues(alpha: 0.55),
+              width: 2,
+            ),
           ),
-        ),
-        child: ClipRRect(
-          borderRadius: radio,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CacheNetWorkImagePic(
-                item.cover ?? '',
-                fit: BoxFit.cover,
-                cacheWidth: (MediaQuery.sizeOf(context).width *
-                        MediaQuery.devicePixelRatioOf(context))
-                    .ceil()
-                    .clamp(1, 4096),
-                headers: _cabeceras(package),
-                placeholder: const Esqueleto(radio: 20),
-              ),
-              Align(
-                alignment: Alignment.bottomLeft,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                  child: Text(
-                    item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      height: 1.2,
-                      fontWeight: FontWeight.w800,
-                      color: HomeTheme.sobrePortada,
-                      shadows: [
-                        Shadow(blurRadius: 3, color: Color(0xE6000000)),
-                        Shadow(blurRadius: 12, color: Color(0x99000000)),
-                      ],
+          child: ClipRRect(
+            borderRadius: radio,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CacheNetWorkImagePic(
+                  item.cover ?? '',
+                  fit: BoxFit.cover,
+                  cacheWidth:
+                      (anchoUtil * MediaQuery.devicePixelRatioOf(context))
+                          .ceil()
+                          .clamp(1, 4096),
+                  headers: _cabeceras(package),
+                  placeholder: const Esqueleto(radio: 20),
+                ),
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                    child: Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                        color: HomeTheme.sobrePortada,
+                        shadows: [
+                          Shadow(blurRadius: 3, color: Color(0xE6000000)),
+                          Shadow(blurRadius: 12, color: Color(0x99000000)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    });
   }
 }
 
