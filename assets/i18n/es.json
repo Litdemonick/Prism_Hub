@@ -998,5 +998,31 @@
         "falta-clave": "falta la clave de TMDB. Se pone en Ajustes › Red.",
         "zona-caida": "la fuente no respondió. Deslizá hacia abajo para reintentar.",
         "sin-catalogo": "No se pudo cargar el catálogo. Revisá tu conexión, o esperá un momento: a veces es la fuente y vuelve sola."
+    },
+    "import": {
+        "title": "Importar lecturas",
+        "subtitle": "Pegá tus links de manga, manhwa o novela. Se importan como favoritos.",
+        "paste": "Pegar portapapeles",
+        "load-file": "Cargar archivo .txt",
+        "file-loaded": "{name} — {lines} líneas",
+        "file-too-large": "El archivo es demasiado grande (máximo 2 MB)",
+        "file-replace-confirm": "Ya hay texto escrito. ¿Reemplazar con el contenido del archivo?",
+        "text-hint": "Pegá tus links acá, uno por línea o todos juntos...",
+        "import-button": "Importar",
+        "importing": "Importando…",
+        "progress": "Procesando {current} de {total}…",
+        "done-title": "Importación completa",
+        "imported": "{count} títulos importados",
+        "duplicates": "{count} ya estaban en tu biblioteca",
+        "nsfw": "{count} enviados a la Zona +18",
+        "errors": "{count} links con error",
+        "skipped": "{count} links descartados (no son URLs válidas)",
+        "no-urls": "No se encontraron URLs válidas en el texto",
+        "limit-reached": "Se procesaron los primeros 500 links. Si necesitás importar más, hacelo en tandas.",
+        "no-extension": "Sin extensión instalada para {domain}",
+        "from-extension": "de {name}",
+        "error-details": "Detalle de errores",
+        "empty-text": "El texto está vacío",
+        "cancel-confirm": "¿Cancelar la importación en curso?"
     }
 }

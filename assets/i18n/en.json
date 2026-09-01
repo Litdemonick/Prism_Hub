@@ -998,5 +998,31 @@
         "falta-clave": "the TMDB key is missing. Set it in Settings › Network.",
         "zona-caida": "the source did not respond. Pull down to retry.",
         "sin-catalogo": "Could not load the catalog. Check your connection, or wait a moment: sometimes it is the source and it comes back on its own."
+    },
+    "import": {
+        "title": "Import library",
+        "subtitle": "Paste your manga, manhwa or novel links. They will be imported as favorites.",
+        "paste": "Paste clipboard",
+        "load-file": "Load .txt file",
+        "file-loaded": "{name} — {lines} lines",
+        "file-too-large": "The file is too large (maximum 2 MB)",
+        "file-replace-confirm": "There is already text written. Replace with file content?",
+        "text-hint": "Paste your links here, one per line or all together...",
+        "import-button": "Import",
+        "importing": "Importing…",
+        "progress": "Processing {current} of {total}…",
+        "done-title": "Import complete",
+        "imported": "{count} titles imported",
+        "duplicates": "{count} already in your library",
+        "nsfw": "{count} sent to the +18 Zone",
+        "errors": "{count} links failed",
+        "skipped": "{count} links skipped (not valid URLs)",
+        "no-urls": "No valid URLs were found in the text",
+        "limit-reached": "The first 500 links were processed. If you need to import more, do it in batches.",
+        "no-extension": "No extension installed for {domain}",
+        "from-extension": "from {name}",
+        "error-details": "Error details",
+        "empty-text": "The text is empty",
+        "cancel-confirm": "Cancel current import?"
     }
 }

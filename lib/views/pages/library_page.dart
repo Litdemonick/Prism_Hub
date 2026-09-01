@@ -22,6 +22,8 @@ import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_section.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/utils/import_platform_guard.dart';
+import 'package:prismhub/views/dialogs/import_dialog.dart';
 
 // Card ancha estilo Crunchyroll: solo en escritorio (Windows/Linux). En
 // Android se mantiene la vertical, que es la que entra bien en pantallas
@@ -413,6 +415,18 @@ class _LibraryPageState extends State<LibraryPage> {
                                       ),
                                     ),
                                   ),
+                                  if (importDisponible)
+                                    IconButton(
+                                      tooltip: 'import.title'.i18n,
+                                      onPressed: () async {
+                                        await showImportDialog(context);
+                                        c.onRefresh();
+                                      },
+                                      icon: Icon(
+                                        Icons.playlist_add_rounded,
+                                        color: HomeTheme.textPrimary,
+                                      ),
+                                    ),
                                   // Favoritos, alineado con el título.
                                   //
                                   // Acá y no escondido en otro lado: la
