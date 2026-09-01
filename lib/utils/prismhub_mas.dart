@@ -78,8 +78,13 @@ class PrismHubMas {
   /// nunca hay que soltar uno que se está usando. Ver
   /// `ExtensionUtils.limitarMotoresVivos`.
   static int get motoresVivosALaVez => switch (nivel) {
-        NivelDeAparato.bajo => 3,
-        NivelDeAparato.medio => 8,
+        // Seis y no tres: con tres, el Inicio y las zonas —que le piden a
+        // media docena de extensiones seguidas— soltaban y volvían a
+        // levantar un motor cada dos segundos, y cada levantada vuelve a
+        // analizar 148 KB de JavaScript. El tope está para cortar la cola
+        // larga (doce vivos), no para pelearse con lo que se está usando.
+        NivelDeAparato.bajo => 6,
+        NivelDeAparato.medio => 10,
         NivelDeAparato.alto => 0,
       };
 
@@ -152,7 +157,10 @@ class PrismHubMas {
   /// Un minuto en un aparato modesto, donde la memoria es lo escaso; cinco en
   /// uno capaz, donde lo escaso es la paciencia.
   static Duration get cuantoDuraUnMotorSinUsar => switch (nivel) {
-        NivelDeAparato.bajo => const Duration(minutes: 1),
+        // Medio minuto en el aparato justo: con uno entero, pasear por dos
+        // zonas dejaba media docena de motores esperando su turno de
+        // barrido mientras el sistema ya pedía memoria.
+        NivelDeAparato.bajo => const Duration(seconds: 30),
         NivelDeAparato.medio => const Duration(minutes: 3),
         NivelDeAparato.alto => const Duration(minutes: 5),
       };

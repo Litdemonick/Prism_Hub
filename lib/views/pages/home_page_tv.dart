@@ -86,7 +86,7 @@ double _anchoSidebarTv(Ancho a) =>
 /// las tarjetas nunca queden debajo del sidebar. Un solo número para las
 /// dos partes, para que no puedan desincronizarse.
 double _anchoSidebarContraidoTv(Ancho a) =>
-    a.elegir<double>(compacto: 42, medio: 46, amplio: 50, enorme: 50);
+    a.elegir<double>(compacto: 48, medio: 54, amplio: 58, enorme: 58);
 
 /// El aire entre el rail de íconos y donde arranca el contenido.
 ///
@@ -727,11 +727,18 @@ class _SidebarTVState extends State<_SidebarTV> {
               children: [
                 for (final (i, categoria) in _CategoriaTV.values.indexed)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
+                    // Más aire entre uno y otro: pedido explícito, "no tan
+                    // pegados y más grandes".
+                    padding: const EdgeInsets.only(bottom: 18),
                     child: FocusableCard(
                       focusNode: _nodos[i],
                       autofocus: pedirFoco && categoria == _CategoriaTV.inicio,
-                      borderRadius: 14,
+                      borderRadius: 12,
+                      // Sin el borde de acento: acá lo que se elige es un
+                      // ícono suelto con aire alrededor, no una tarjeta
+                      // entre muchas iguales. El recuadro rosado lo
+                      // encajonaba. Queda solo el resplandor.
+                      conMarco: false,
                       onTap: () => widget.onElegir(categoria),
                       child: _ItemSidebarTV(
                         categoria: categoria,
@@ -781,14 +788,14 @@ class _ItemSidebarTV extends StatelessWidget {
     final apagado = !elegido;
     final icono = Icon(
       categoria.icono,
-      size: 22,
+      size: 27,
       color: elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
     );
     return Container(
       width: double.infinity,
       padding: expandido
-          ? const EdgeInsets.symmetric(horizontal: 9, vertical: 7)
-          : const EdgeInsets.all(5),
+          ? const EdgeInsets.symmetric(horizontal: 10, vertical: 9)
+          : const EdgeInsets.all(8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(9),
         boxShadow: elegido

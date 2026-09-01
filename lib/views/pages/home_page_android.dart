@@ -1047,7 +1047,11 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
         if (!caja.maxWidth.isFinite || caja.maxWidth < 120) {
           return const SizedBox(height: 12);
         }
-        final m = _medir(context, caja.maxWidth);
+        final m = _medir(
+          context,
+          caja.maxWidth,
+          altoDisponible: caja.maxHeight.isFinite ? caja.maxHeight : null,
+        );
         final tanda = grupos[widget.c.carruselExt].$2;
         final base = _indiceGlobal(grupos) - widget.c.carruselPos;
 
@@ -1685,12 +1689,17 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// Delega en `_medirCarrusel` (función libre, sin estado): así el hero
   /// secundario de TV puede calcular EXACTAMENTE la misma altura para el
   /// mismo ancho, sin duplicar la fórmula ni adivinar un número aparte.
-  _MedidasCarrusel _medir(BuildContext context, double anchoUtil) =>
+  _MedidasCarrusel _medir(
+    BuildContext context,
+    double anchoUtil, {
+    double? altoDisponible,
+  }) =>
       _medirCarrusel(
         context,
         anchoUtil,
         conFocoTv: widget.conFocoTv,
         compartido: widget.sinVecinos,
+        altoDisponible: altoDisponible,
       );
 }
 
@@ -1705,6 +1714,15 @@ _MedidasCarrusel _medirCarrusel(
   double anchoUtil, {
   required bool conFocoTv,
   bool compartido = false,
+
+  /// El alto que le dio quien lo puso, si es que se lo dio.
+  ///
+  /// Compartiendo fila, el alto lo decide la pantalla (ver `_altoGrandesTv`
+  /// en home_page_tv.dart) y la tarjeta tiene que LLENARLO. Sin esto el
+  /// carrusel calculaba su propio alto, más chico, y la portada quedaba
+  /// nadando arriba de una caja más alta — reportado en vivo: «la card no
+  /// está rellenada toda, solo una parte».
+  double? altoDisponible,
 }) {
   final altoPantalla = MediaQuery.sizeOf(context).height;
   final a = Ancho.de(context);
@@ -1718,9 +1736,11 @@ _MedidasCarrusel _medirCarrusel(
   // ≈ 0.38), con tope contra la pantalla para que abajo entren las
   // medianas y la primera fila sin desplazarse.
   if (compartido) {
-    var alto = anchoUtil * 0.4;
-    final topeCompartido = altoPantalla * 0.34;
-    if (alto > topeCompartido) alto = topeCompartido;
+    var alto = altoDisponible ?? anchoUtil * 0.4;
+    if (altoDisponible == null) {
+      final topeCompartido = altoPantalla * 0.34;
+      if (alto > topeCompartido) alto = topeCompartido;
+    }
     if (alto < 140) alto = 140;
     return _MedidasCarrusel(
       ancho: anchoUtil,

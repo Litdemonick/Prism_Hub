@@ -38,6 +38,7 @@ class FocusableCard extends StatefulWidget {
     this.accent,
     this.altoMarco,
     this.conCrecido = true,
+    this.conMarco = true,
   }) : assert(
           child != null || builder != null,
           'FocusableCard necesita child o builder',
@@ -57,6 +58,15 @@ class FocusableCard extends StatefulWidget {
   ///
   /// En esas filas el resplandor solo ya dice todo lo que hay que decir.
   final bool conCrecido;
+
+  /// Si al enfocarse se le dibuja el borde nítido de acento.
+  ///
+  /// El borde existe para señalar UNA tarjeta entre muchas iguales. En el
+  /// rail de categorías no hace falta —ahí lo que se elige es un ícono
+  /// suelto, con todo su aire alrededor— y encima quedaba como un recuadro
+  /// rosado encajonando el ícono. Pedido explícito: «sin marco rosado, solo
+  /// esa sombra, limpio». Con esto queda el resplandor y nada más.
+  final bool conMarco;
 
   /// Alto del resplandor de selección, cuando NO tiene que abarcar al hijo
   /// entero.
@@ -387,7 +397,7 @@ class _FocusableCardState extends State<FocusableCard> {
                 // 2. El borde nítido, encima — SOLO en TV. En PC el hover
                 // sigue sin ningún marco, pedido explícito de que se vea
                 // igual que siempre (solo el resplandor).
-                if (esTv)
+                if (esTv && widget.conMarco)
                   Positioned(
                     left: 0,
                     right: 0,
@@ -426,7 +436,6 @@ class _FocusableCardState extends State<FocusableCard> {
     return RepaintBoundary(child: tarjeta);
   }
 }
-
 
 /// El resplandor del foco.
 ///

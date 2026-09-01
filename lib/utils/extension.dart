@@ -1478,19 +1478,70 @@ class ExtensionUtils {
   /// El tope es más alto que la cantidad de peticiones que corren a la vez en
   /// ese mismo aparato, así que nunca se pelea con lo que se está usando:
   /// siempre queda sitio para las que están en vuelo.
+  /// Cuánto tiene que llevar un motor sin que nadie lo toque antes de que
+  /// el tope por cantidad lo pueda soltar.
+  ///
+  /// ── Por qué NO se suelta al instante ────────────────────────────────────
+  ///
+  /// La primera versión de esto soltaba en cuanto sobraba uno, mirando solo
+  /// `motorOcupado` (`_enVuelo > 0`). No alcanza: `_enVuelo` cubre la llamada
+  /// mientras dura, pero una extensión puede dejar funciones de JavaScript
+  /// registradas que se invocan DESPUÉS, ya con el contador en cero. Soltar
+  /// el motor ahí es justo lo que avisaban los comentarios de este archivo:
+  /// la librería nativa termina trabajando sobre algo recién liberado.
+  ///
+  /// Medido en el televisor, con el tope recién puesto:
+  ///
+  ///   [extensiones] tope de motores (3): se soltaron 1 · latanime
+  ///   SEVERE InternalError: JSValue released
+  ///         new JSError (package:flutter_js/quickjs/object.dart:92)
+  ///
+  /// Y además se veía el otro síntoma: un motor soltado cada dos segundos y
+  /// vuelto a levantar enseguida —cada levantada vuelve a analizar 148 KB de
+  /// JavaScript—, que es trabajo puro perdido en el aparato que menos puede
+  /// permitírselo.
+  ///
+  /// Con esta gracia, el tope solo toca lo que de verdad quedó frío. Si no
+  /// hay nada frío, no fuerza nada: prefiere pasarse un momento del tope
+  /// antes que arrancarle el motor a algo que lo está usando.
+  static const _graciaAntesDeSoltar = Duration(seconds: 10);
+
+  /// Deja vivos como mucho los motores que este aparato puede sostener.
+  ///
+  /// ── El agujero que esto tapa ────────────────────────────────────────────
+  ///
+  /// Los motores se levantan solos al usar una extensión y se sueltan por
+  /// TIEMPO (el barrido de cada 30 s) o cuando el sistema ya está pidiendo
+  /// memoria. Faltaba un tope por CANTIDAD: si en el mismo minuto se le pide
+  /// algo a doce extensiones —que es abrir el Inicio y pasear por las
+  /// zonas— quedan doce motores vivos y ninguno cumple todavía el plazo del
+  /// barrido.
+  ///
+  /// Medido en el registro del televisor de 893 MB, antes de que el sistema
+  /// matara la app: «se soltaron 0 imágenes en uso y 12 motores de
+  /// extensión».
+  ///
+  /// Suelta primero el que hace más rato que no se usa, nunca uno ocupado y
+  /// nunca uno tocado hace menos de [_graciaAntesDeSoltar].
   static int limitarMotoresVivos() {
     final tope = PrismHubMas.motoresVivosALaVez;
     if (tope <= 0) return 0;
     final vivos = runtimes.values.where((s) => s.motorVivo).toList();
     if (vivos.length <= tope) return 0;
-    // Del más viejo al más nuevo: los primeros de la lista son los que
-    // primero se sueltan.
+    final ahora = DateTime.now();
+    // Del más viejo al más nuevo: los primeros son los que primero se
+    // sueltan.
     vivos.sort((a, b) => a.ultimoUso.compareTo(b.ultimoUso));
     var sobran = vivos.length - tope;
     final soltados = <String>[];
     for (final servicio in vivos) {
       if (sobran <= 0) break;
       if (servicio.motorOcupado) continue;
+      if (ahora.difference(servicio.ultimoUso) < _graciaAntesDeSoltar) {
+        // De acá en adelante son todos más nuevos todavía (la lista está
+        // ordenada), así que no hay nada más que soltar en esta pasada.
+        break;
+      }
       servicio.soltarMotor();
       soltados.add(servicio.extension.package);
       sobran--;
@@ -1547,9 +1598,14 @@ class ExtensionUtils {
         e.value.soltarMotor();
         soltados.add(e.key);
       }
-      if (soltados.isEmpty) return;
-      logger.info('[extensiones] se soltaron ${soltados.length} motores sin '
-          'usar: ${soltados.join(', ')}');
+      if (soltados.isNotEmpty) {
+        logger.info('[extensiones] se soltaron ${soltados.length} motores sin '
+            'usar: ${soltados.join(', ')}');
+      }
+      // Y de paso el tope por cantidad: con la gracia de diez segundos, una
+      // tanda de motores recién usados no se toca en el momento — este
+      // barrido es el que la alcanza después, ya fría.
+      limitarMotoresVivos();
     });
   }
 
