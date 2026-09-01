@@ -1127,17 +1127,6 @@ class _ZonaTvState extends State<_ZonaTv> {
     }
   }
 
-  /// Cuántas columnas entran y qué ancho tiene la celda.
-  ({int columnas, double ancho}) _rejillaTv(
-      BuildContext context, double disponible) {
-    return RejillaDeTarjetas.calcular(
-      disponible: disponible,
-      separacion: 20,
-      televisor: PlatformTv.esTelevisionSync,
-      pantalla: Ancho.de(context),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // ── Refresco al VOLVER a esta categoría, no solo al crearla ─────────
@@ -1187,116 +1176,188 @@ class _ZonaTvState extends State<_ZonaTv> {
       // ── Cabecera de la zona: hero + hero secundario + medianas ─────────
       //
       // Mismo vestido visual que Inicio, con los primeros ítems de la
-      // MISMA lista entrelazada que ya arma la grilla — nada de un pool
-      // aparte. A diferencia de Inicio, acá NINGUNO de los dos destacados
-      // es el carrusel infinito: son fijos (no hay temporizador), porque
-      // "solo en inicio la primera es infinita" (pedido explícito). El
-      // mecanismo de paginación/caché de la grilla no se toca: esto solo
-      // decide qué se pinta arriba, y la grilla se salta esos mismos
-      // ítems para no repetirlos.
+      // MISMA lista entrelazada. A diferencia de Inicio, acá NINGUNO de
+      // los dos destacados es el carrusel infinito: son fijos (no hay
+      // temporizador), porque "solo en Inicio la primera es infinita"
+      // (pedido explícito). Se superponen con lo que después aparece en
+      // las filas de abajo — mismo criterio que ya acepta Inicio entre su
+      // destacado y sus propias filas, nunca se trató como un problema
+      // ahí.
       final arriba = todos.take(6).toList();
-      final items = todos.skip(arriba.length).toList();
-      return LayoutBuilder(
-        builder: (context, restricciones) {
-          const margen = 24.0;
-          final disponible = restricciones.maxWidth - margen * 2;
-          if (disponible <= 0) return const SizedBox.shrink();
-          final rejilla = _rejillaTv(context, disponible);
-          final alto = TarjetaDeCatalogo.altoTotalDeAncho(rejilla.ancho);
-          final cargandoMas = c.cargandoMas.value;
-          final extra = cargandoMas ? rejilla.columnas : 0;
+      // ── Una fila por extensión, no una grilla mezclada ─────────────────
+      //
+      // Pedido explícito, calcando el boceto: cada extensión con su
+      // propio título arriba (como ya hace Inicio), no todas revueltas en
+      // una sola grilla. La paginación/caché de cada fuente
+      // (`ZonaCatalogoController.cargarMas`) no se toca — sigue pidiendo
+      // más para TODAS las fuentes por igual; esto solo cambia cómo se
+      // dibuja lo que ya hay.
+      final fuentes = c.fuentes;
+      final cargandoMas = c.cargandoMas.value;
+      return ListView.builder(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
+            const ScrollCacheExtent.viewport(1),
+        // Cabecera + una por fuente + el pie.
+        itemCount: fuentes.length + 2,
+        itemBuilder: (context, i) => switch (i) {
+          0 => arriba.isEmpty
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                  child: _CabeceraZonaTv(arriba: arriba),
+                ),
+          _ when i - 1 < fuentes.length => _FilaZonaTv(
+              key: ValueKey(fuentes[i - 1].package),
+              fuente: fuentes[i - 1],
+            ),
           // ── Un pie que diga en qué estado está la lista ────────────────
           //
           // Reportado en vivo: "al ir bajando no se da cuenta si están
-          // cargando cards o si ya terminó". Con solo una fila de
-          // esqueletos, bajando rápido con el mando se llega al fondo antes
-          // de que aparezcan, y ahí la grilla simplemente se corta: no hay
-          // forma de distinguir "esperá que viene más" de "esto es todo".
-          //
-          // El pie va SIEMPRE al final y dice una de las dos cosas. Ocupa
-          // una fila entera de la grilla para no dejar un hueco raro al
-          // lado de las tarjetas.
-          return CustomScrollView(
-            controller: _scroll,
-            // Mismo margen de precarga generoso que ZonaCatalogoPage: con
-            // tarjetas altas, el default de Flutter (250px) apenas cubre
-            // una fila de sobra.
-            scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
-                ScrollCacheExtent.pixels(alto * 2),
-            slivers: [
-              if (arriba.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(margen, 8, margen, 0),
-                    child: _CabeceraZonaTv(arriba: arriba),
-                  ),
-                ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(margen, 8, margen, 0),
-                sliver: SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: rejilla.columnas,
-                    childAspectRatio: rejilla.ancho / alto,
-                    crossAxisSpacing: 20,
-                    mainAxisSpacing: 28,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    childCount: items.length + extra,
-                    (context, i) {
-                      if (i >= items.length) {
-                        return EsqueletoTarjeta(ancho: rejilla.ancho);
-                      }
-                      final zi = items[i];
-                      // Sin isAdultOption: a diferencia de ZonaCatalogoPage (que
-                      // también representa la Zona +18 con `zona: null`), acá
-                      // `zona` nunca es null — la Zona +18 de TV vive aparte, en
-                      // Ajustes, con su propio PIN.
-                      void abrir() => ExtensionUtils.openExtensionDetail(
-                            context,
-                            package: zi.package,
-                            url: zi.item.url,
-                            cover: zi.item.cover,
-                            coverHeaders: zi.item.headers,
-                          );
-                      return FocusableCard(
-                        onTap: abrir,
-                        altoMarco: rejilla.ancho * 3 / 2,
-                        // `builder` y no `child`: la tarjeta necesita saber si TIENE
-                        // el foco ahora mismo para mostrar el panel de info (ver
-                        // `TarjetaDeCatalogo.tvFoco`) — lo mismo que ya se ve al
-                        // pasar el mouse en PC, pedido explícito de "replicar lo
-                        // que tiene Windows a Android TV, sin duplicar el
-                        // resaltado".
-                        builder: (tieneFoco) => TarjetaDeCatalogo(
-                          titulo: zi.item.title,
-                          subtitulo: zi.item.update,
-                          // Imprescindible acá: a diferencia de una fila con
-                          // título propio, esta grilla mezcla varias fuentes en la
-                          // misma pantalla.
-                          encabezado: zi.nombre,
-                          fecha: zi.item.update,
-                          portada: zi.item.cover,
-                          cabeceras: zi.item.headers,
-                          ancho: rejilla.ancho,
-                          tvFoco: tieneFoco,
-                        ),
-                      );
-                    },
-                  ),
-                ),
+          // cargando cards o si ya terminó". El pie va SIEMPRE al final y
+          // dice una de las dos cosas.
+          _ => Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+              child: _PieDeZonaTv(
+                cargando: cargandoMas,
+                hayMas: c.puedeTraerMas,
+                seAgotoDeVerdad: c.seAgotoDeVerdad,
               ),
-              SliverToBoxAdapter(
-                child: _PieDeZonaTv(
-                  cargando: cargandoMas,
-                  hayMas: c.puedeTraerMas,
-                  seAgotoDeVerdad: c.seAgotoDeVerdad,
-                ),
-              ),
-            ],
-          );
+            ),
         },
       );
     });
+  }
+}
+
+/// Una fila de la zona: el nombre de la extensión arriba, sus portadas
+/// abajo — mismo molde visual que `_FilaWindows` en Inicio, adaptado a
+/// `ZonaFuente` (el modelo de `ZonaCatalogoController`, más simple: sin
+/// `estadoExt` ni `refrescando`, solo `isFetching`/`agotada`).
+class _FilaZonaTv extends StatefulWidget {
+  const _FilaZonaTv({super.key, required this.fuente});
+
+  final ZonaFuente fuente;
+
+  @override
+  State<_FilaZonaTv> createState() => _FilaZonaTvState();
+}
+
+class _FilaZonaTvState extends State<_FilaZonaTv> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = widget.fuente;
+    if (f.items.isEmpty) {
+      // Ya se sabe que esta fuente no tiene nada para esta zona: no vale
+      // la pena dejar un título con nada debajo para siempre.
+      if (f.agotada && !f.isFetching) return const SizedBox.shrink();
+      return RepaintBoundary(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 34),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _EncabezadoFilaZonaTv(nombre: f.nombre),
+              const SizedBox(height: 18),
+              EsqueletoDeFila(
+                ancho: _anchoTarjetaTv(context),
+                separacion: 14,
+                padding: EdgeInsets.symmetric(horizontal: _margen(context)),
+                paddingDeCadaUno: const EdgeInsets.only(top: 10),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 34),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _EncabezadoFilaZonaTv(nombre: f.nombre),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: _altoFilaTv(context),
+              child: ListView.separated(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                padding: EdgeInsets.symmetric(
+                  horizontal: _margen(context) + 26,
+                ),
+                itemCount: f.items.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 14),
+                itemBuilder: (context, i) {
+                  final item = f.items[i];
+                  // Sin isAdultOption: la Zona +18 de TV vive aparte, en
+                  // Ajustes, con su propio PIN — acá `f` nunca es esa zona.
+                  void abrir() => ExtensionUtils.openExtensionDetail(
+                        context,
+                        package: f.package,
+                        url: item.url,
+                        cover: item.cover,
+                        coverHeaders: item.headers,
+                      );
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: FocusableCard(
+                      onTap: abrir,
+                      altoMarco: _anchoTarjetaTv(context) * 3 / 2,
+                      // `builder` y no `child`: mismo motivo que en Inicio —
+                      // la tarjeta necesita saber si TIENE el foco para
+                      // mostrar el panel con el nombre de la extensión.
+                      builder: (tieneFoco) => TarjetaDeCatalogo(
+                        titulo: item.title,
+                        encabezado: f.nombre,
+                        fecha: item.update,
+                        portada: item.cover,
+                        cabeceras: item.headers,
+                        ancho: _anchoTarjetaTv(context),
+                        tvFoco: tieneFoco,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// El título de una fila de zona: solo el nombre de la extensión, sin
+/// subtítulo — a diferencia de Inicio, acá no hay un "modo" (recientes/
+/// populares) que mostrar debajo. Pedido explícito: "en anime, películas,
+/// etc no debes poner subtítulo, solo es título de la extensión y listo".
+class _EncabezadoFilaZonaTv extends StatelessWidget {
+  const _EncabezadoFilaZonaTv({required this.nombre});
+
+  final String nombre;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: _margen(context)),
+      child: Text(
+        nombre,
+        style: HomeTheme.tituloDeFilaTv(context)
+            .copyWith(fontWeight: FontWeight.w700),
+      ),
+    );
   }
 }
 

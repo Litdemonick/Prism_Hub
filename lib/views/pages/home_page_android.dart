@@ -2567,6 +2567,11 @@ class _CarruselEsperando extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // En TV la forma final es otra (hero + hero secundario + medianas, no
+    // una grande centrada con dos tiras a los costados) — sin esto, el
+    // esqueleto mostraba una forma y el contenido real llegaba con otra,
+    // que es justo el salto que se reportó ("se ve como el anterior").
+    if (PlatformTv.esTelevisionSync) return const _HeroTvEsperando();
     return LayoutBuilder(builder: (context, caja) {
       if (!caja.maxWidth.isFinite || caja.maxWidth < 120) {
         return const SizedBox(height: 12);
@@ -2614,6 +2619,56 @@ class _CarruselEsperando extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      );
+    });
+  }
+}
+
+/// La forma del hero de TV mientras todavía no llegó nada: dos rectángulos
+/// lado a lado (hero + hero secundario) y, debajo, la fila de medianas.
+/// Misma fórmula de alto que el hero real (`_medirCarrusel`) para que no
+/// cambie de tamaño cuando el contenido de verdad llegue.
+class _HeroTvEsperando extends StatelessWidget {
+  const _HeroTvEsperando();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, caja) {
+      if (!caja.maxWidth.isFinite || caja.maxWidth < 120) {
+        return const SizedBox(height: 12);
+      }
+      final anchoMitad = (caja.maxWidth - 14) / 2;
+      final alto = _medirCarrusel(context, anchoMitad, conFocoTv: true).alto;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: alto,
+            child: Row(
+              children: [
+                Expanded(child: Esqueleto(radio: 20, height: alto)),
+                const SizedBox(width: 14),
+                Expanded(child: Esqueleto(radio: 20, height: alto)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: HomeMediaCard.altoImagenAncha,
+            child: Row(
+              children: [
+                for (var i = 0; i < 4; i++) ...[
+                  if (i > 0) const SizedBox(width: 14),
+                  Expanded(
+                    child: Esqueleto(
+                        radio: 14, height: HomeMediaCard.altoImagenAncha),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: 20),

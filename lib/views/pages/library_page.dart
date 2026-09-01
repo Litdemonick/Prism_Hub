@@ -570,9 +570,14 @@ class _LibraryPageState extends State<LibraryPage> {
           ),
         );
       }
+      // `HomeSection` con `boxed:false` no trae margen horizontal propio —
+      // en escritorio ya lo pone la página que la envuelve. En TV nadie lo
+      // ponía: el título quedaba pegado al borde donde flota el sidebar,
+      // así que al expandirse el título corría contra la columna.
+      final margen = HomeTheme.overscanTv(context);
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: EdgeInsets.fromLTRB(margen, 0, margen, 24),
         children: [
           ..._continuarSecciones(context),
           ..._favoritosSecciones(context),
