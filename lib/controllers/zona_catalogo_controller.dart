@@ -373,10 +373,10 @@ class ZonaCatalogoController extends GetxController {
         // Con el selector manual de Formato puesto (solo existe en Anime),
         // se acota al eje puntual elegido en vez del conjunto entero de
         // formatos de vídeo — mismo criterio que la rama de abajo.
-        final candidatos = (zona == ZonaPrincipal.anime &&
-                formato.value.isNotEmpty)
-            ? {formato.value}
-            : _formatosCandidatos;
+        final candidatos =
+            (zona == ZonaPrincipal.anime && formato.value.isNotEmpty)
+                ? {formato.value}
+                : _formatosCandidatos;
         final resuelto = catalogo.filtroDeFormatoZona(package, candidatos);
         // Sin ningún eje que separe vídeo de lectura (o que cumpla el
         // formato elegido a mano): se excluye la extensión ENTERA de esta
@@ -563,7 +563,15 @@ class ZonaCatalogoController extends GetxController {
     return salida;
   }
 
-  Future<void> cargarInicial() async {
+  /// Arma la lista de fuentes y, salvo que se pida lo contrario, les pide a
+  /// todas su primera página.
+  ///
+  /// [pedirTodas] en `false` deja las fuentes armadas pero SIN pedir nada:
+  /// cada fila se encarga de pedir lo suyo cuando de verdad aparece en
+  /// pantalla (ver [pedirFuente]). Es lo que usa el televisor, donde una
+  /// zona son filas por extensión: pedirle a las diez de golpe al entrar
+  /// levanta diez motores de JavaScript para mostrar dos filas.
+  Future<void> cargarInicial({bool pedirTodas = true}) async {
     if (cargando.value) return;
     cargando.value = true;
     final nuevas = _armarFuentes();
@@ -634,9 +642,11 @@ class ZonaCatalogoController extends GetxController {
       _cursores.clear();
       _titulosVistos.clear();
       _actualizarEntrelazados();
-      await _pedir(
-        fuentes.where((f) => f.items.isEmpty || f.desdeCache).toList(),
-      );
+      if (pedirTodas) {
+        await _pedir(
+          fuentes.where((f) => f.items.isEmpty || f.desdeCache).toList(),
+        );
+      }
     } finally {
       cargando.value = false;
       armado.value = true;
@@ -656,6 +666,21 @@ class ZonaCatalogoController extends GetxController {
       }
     }
     return true;
+  }
+
+  /// Le pide su primera página a UNA fuente, si le hace falta.
+  ///
+  /// Para las filas del televisor: cada una llama a esto al construirse, o
+  /// sea cuando de verdad está por verse. Lo que no se mira, no se pide —
+  /// mismo criterio que ya usa el Inicio con sus filas
+  /// (`CatalogoExtensionesController.pedirSiHaceFalta`).
+  ///
+  /// Barato de llamar de más: si ya tiene contenido propio, o si justo está
+  /// pidiendo, no hace nada.
+  Future<void> pedirFuente(ZonaFuente f) async {
+    if (f.isFetching || f.agotada) return;
+    if (f.items.isNotEmpty && !f.desdeCache) return;
+    await _pedir([f]);
   }
 
   /// Si queda alguna fuente con más para traer.
@@ -874,5 +899,4 @@ class ZonaCatalogoController extends GetxController {
     _debounceRefresco?.cancel();
     fuentes.refresh();
   }
-
 }

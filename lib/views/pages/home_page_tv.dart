@@ -1395,8 +1395,14 @@ class _ZonaTvState extends State<_ZonaTv> {
     // este controller viene a garantizar. Y `cargarInicial()` tiene su
     // propio candado (`if (cargando.value) return`), así que aunque justo
     // estuviera cargando, esto no dispara un segundo pedido.
-    if (c.fuentes.isEmpty || c.entrelazados.isEmpty || c.hayExtensionesNuevas) {
-      unawaited(c.cargarInicial());
+    // `pedirTodas: false`: se arma la lista de fuentes pero no se le pide
+    // nada a ninguna. Cada fila pide lo suyo al construirse, o sea cuando de
+    // verdad está por verse (ver `_FilaZonaTv`). Pedirle a las diez de golpe
+    // al entrar levanta diez motores de JavaScript para mostrar dos filas —
+    // que es lo que el registro del televisor mostraba justo antes de que el
+    // sistema matara la app.
+    if (c.fuentes.isEmpty || c.hayExtensionesNuevas) {
+      unawaited(c.cargarInicial(pedirTodas: false));
     }
   }
 
@@ -1444,7 +1450,7 @@ class _ZonaTvState extends State<_ZonaTv> {
     // se vuelve a llamar sin importar si esta categoría es la que se ve
     // ahora. Es la misma pasada que ya obligó a poner `ExcludeFocus` y
     // `TickerMode` en cada hijo: barata, y se aprovecha para esto también.
-    if (c.hayExtensionesNuevas) unawaited(c.cargarInicial());
+    if (c.hayExtensionesNuevas) unawaited(c.cargarInicial(pedirTodas: false));
     return Obx(() {
       // Mismo criterio que en cualquier otra pantalla de la app: hasta que
       // `armado` diga que de verdad terminó de mirar, una lista vacía no
@@ -1497,6 +1503,7 @@ class _ZonaTvState extends State<_ZonaTv> {
             return _FilaZonaTv(
               key: ValueKey(fuentes[i].package),
               fuente: fuentes[i],
+              controlador: c,
             );
           }
           // ── Un pie que diga en qué estado está la lista ──────────────
@@ -1519,15 +1526,32 @@ class _ZonaTvState extends State<_ZonaTv> {
 /// `ZonaFuente` (el modelo de `ZonaCatalogoController`, más simple: sin
 /// `estadoExt` ni `refrescando`, solo `isFetching`/`agotada`).
 class _FilaZonaTv extends StatefulWidget {
-  const _FilaZonaTv({super.key, required this.fuente});
+  const _FilaZonaTv({
+    super.key,
+    required this.fuente,
+    required this.controlador,
+  });
 
   final ZonaFuente fuente;
+
+  /// Para pedirle a ESTA fuente lo suyo cuando la fila aparece.
+  final ZonaCatalogoController controlador;
 
   @override
   State<_FilaZonaTv> createState() => _FilaZonaTvState();
 }
 
 class _FilaZonaTvState extends State<_FilaZonaTv> {
+  @override
+  void initState() {
+    super.initState();
+    // **Acá se dispara la carga perezosa.** Este initState corre recién
+    // cuando la lista construye la fila, o sea cuando está por entrar en
+    // pantalla. Lo que nunca se ve, nunca se pide — mismo criterio que ya
+    // usa el Inicio con sus filas.
+    unawaited(widget.controlador.pedirFuente(widget.fuente));
+  }
+
   @override
   Widget build(BuildContext context) {
     final f = widget.fuente;
