@@ -635,9 +635,21 @@ class _SidebarTVState extends State<_SidebarTV> {
       // junto al ícono sin tapar del todo lo que queda debajo. Reportado en
       // vivo: «está feo, debe ser transparente» — pero esa nota era sobre
       // el expandido, no sobre el contraído.
+      // ── Y contraído tampoco tapa: el halo de la tarjeta pasa por debajo ──
+      //
+      // El fondo sólido del rail cortaba en seco el resplandor rosado de la
+      // primera tarjeta de cada fila: el halo llega hasta ahí y el rail se
+      // pintaba encima, así que se veía media luna cortada por una línea
+      // recta. Reportado en vivo: «el halo rosado no debe verse cortado en
+      // el panel izquierdo, esa zona debe ser transparente».
+      //
+      // Sin fondo, el rail son sus íconos y nada más — el fondo de la
+      // pantalla ya es el mismo color, así que a la vista no cambia nada
+      // salvo que el halo ahora se apaga solo en vez de chocar contra un
+      // borde.
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: _expandido ? null : HomeTheme.bg,
+          color: null,
           gradient: _expandido
               ? LinearGradient(
                   begin: Alignment.centerLeft,

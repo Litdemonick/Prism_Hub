@@ -20,6 +20,7 @@ import 'package:prismhub/controllers/settings_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -1444,6 +1445,63 @@ class ExtensionUtils {
   ///
   /// Nunca uno con una consulta en curso. La extensión que estaba trabajando
   /// sigue trabajando; las demás se levantan solas la próxima vez.
+  /// Deja vivos como mucho los motores que este aparato puede sostener.
+  ///
+  /// ── El agujero que esto tapa ────────────────────────────────────────────
+  ///
+  /// Los motores se levantan solos al usar una extensión y se sueltan por
+  /// TIEMPO (el barrido de cada 30 s, ver `_arrancarBarridoDeMotores`) o
+  /// cuando el sistema ya está pidiendo memoria. Lo que faltaba era un tope
+  /// por CANTIDAD: si en el mismo minuto se le pide algo a doce extensiones
+  /// —que es exactamente lo que pasa al abrir el Inicio y pasear por las
+  /// zonas— quedan doce motores vivos a la vez y ninguno cumple todavía el
+  /// plazo para que el barrido lo suelte.
+  ///
+  /// Medido en el registro del televisor de 893 MB, justo antes de que el
+  /// sistema matara la app:
+  ///
+  ///   El sistema pidió memoria (2.ª vez): se soltaron 0 imágenes en uso
+  ///   y 12 motores de extensión · perfil bajo
+  ///
+  /// Doce motores de QuickJS, cada uno con su pila de 1 MB y con CryptoJS,
+  /// jsencrypt y md5 analizados adentro. Para cuando el sistema avisa ya es
+  /// tarde: el aviso llega, se sueltan los doce de golpe, y aun así el
+  /// siguiente pico se lleva el proceso puesto — sin dejar rastro en el
+  /// registro, porque al proceso lo matan, no falla nada dentro de la app.
+  ///
+  /// ── Cómo elige cuál soltar ──────────────────────────────────────────────
+  ///
+  /// El que hace más rato que no se usa, y nunca uno con una consulta en
+  /// curso (`motorOcupado`) — soltar ese no sería una consulta que falla,
+  /// sería la librería nativa trabajando sobre algo recién liberado.
+  ///
+  /// El tope es más alto que la cantidad de peticiones que corren a la vez en
+  /// ese mismo aparato, así que nunca se pelea con lo que se está usando:
+  /// siempre queda sitio para las que están en vuelo.
+  static int limitarMotoresVivos() {
+    final tope = PrismHubMas.motoresVivosALaVez;
+    if (tope <= 0) return 0;
+    final vivos = runtimes.values.where((s) => s.motorVivo).toList();
+    if (vivos.length <= tope) return 0;
+    // Del más viejo al más nuevo: los primeros de la lista son los que
+    // primero se sueltan.
+    vivos.sort((a, b) => a.ultimoUso.compareTo(b.ultimoUso));
+    var sobran = vivos.length - tope;
+    final soltados = <String>[];
+    for (final servicio in vivos) {
+      if (sobran <= 0) break;
+      if (servicio.motorOcupado) continue;
+      servicio.soltarMotor();
+      soltados.add(servicio.extension.package);
+      sobran--;
+    }
+    if (soltados.isNotEmpty) {
+      logger.info('[extensiones] tope de motores ($tope): se soltaron '
+          '${soltados.length} · ${soltados.join(', ')}');
+    }
+    return soltados.length;
+  }
+
   static int soltarMotoresQuePueda() {
     var soltados = 0;
     for (final servicio in runtimes.values) {

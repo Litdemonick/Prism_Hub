@@ -814,6 +814,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     // tan rápido termine todo lo demás.
     final minDuration = Future.delayed(const Duration(milliseconds: 1400));
     PrismLog.ensureInitialized();
+    // Recién ahora hay quien escuche: el veredicto de cómo terminó la sesión
+    // anterior se calculó mucho antes (CentinelaDeArranque.comenzar, que tiene
+    // que leer el archivo antes de pisarlo) y hasta acá se registraba en el
+    // vacío. Ver CentinelaDeArranque.contarLoQuePaso.
+    CentinelaDeArranque.contarLoQuePaso();
     try {
       await ApplicationUtils.ensureInitialized();
     } catch (e) {

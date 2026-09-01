@@ -12,6 +12,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:path/path.dart' as p;
 
 /// En qué anda la fila de una extensión.
@@ -152,7 +153,18 @@ class CatalogoExtensionesController extends GetxController {
   /// la hay por el ancho de banda y por el hilo de JavaScript que las corre.
   /// Cinco baja las tandas de cuatro a tres y deja margen para que una colgada
   /// no bloquee al resto.
-  static const _aLaVez = 5;
+  ///
+  /// ── Pero cinco NO es para cualquier aparato ────────────────────────────
+  ///
+  /// Todo lo de arriba se midió con la app abriendo bien. En el televisor de
+  /// 893 MB y cuatro núcleos, esas cinco son cinco motores de JavaScript
+  /// corriendo a la vez apenas se abre la app — y era el ÚNICO tope de
+  /// concurrencia que quedaba sin mirar el perfil del aparato (el de las
+  /// zonas y el de la cola de peticiones ya lo hacen). Medido en su
+  /// registro: once peticiones en dos segundos y cuadros de 389 ms mientras
+  /// tanto. Dos tandas más en un aparato así es un intercambio que conviene:
+  /// tarda un poco más en llenarse, pero se puede usar mientras.
+  static int get _aLaVez => PrismHubMas.nivel == NivelDeAparato.bajo ? 2 : 5;
 
   final filas = <FilaDeExtension>[].obs;
 
@@ -184,9 +196,8 @@ class CatalogoExtensionesController extends GetxController {
     // alcanzaba: reportado en vivo, "en el carrusel quitar en androidtv las
     // que tienen contenido de lectura".
     if (PlatformTv.esTelevisionSync) {
-      lista = lista
-          .where((par) => !ExtensionUtils.esSoloLectura(par.$1))
-          .toList();
+      lista =
+          lista.where((par) => !ExtensionUtils.esSoloLectura(par.$1)).toList();
     }
     return _rotadas(lista);
   }
@@ -501,6 +512,7 @@ class CatalogoExtensionesController extends GetxController {
 
   final _ejesPorExtension =
       <String, Map<String, ({String clave, String valor})>>{};
+
   /// Qué extensiones ya dieron sus filtros, y en qué condiciones.
   ///
   /// ── Por qué no un simple «ya se leyeron» ───────────────────────────────

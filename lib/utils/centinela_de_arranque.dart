@@ -85,26 +85,6 @@ class CentinelaDeArranque {
   static Future<void> comenzar({String? version}) async {
     try {
       _anterior = await _leerAnterior();
-      if (_anterior != null) {
-        logger.severe(
-          'La sesion anterior no se cerro normalmente: '
-          'empezo ${_anterior!.comenzoEn.toIso8601String()}, '
-          'duro ${_anterior!.duracion.inSeconds}s, '
-          'version ${_anterior!.version}, '
-          'aparato ${_anterior!.aparato}. '
-          'Un cierre asi no pasa por los enganches de Dart, asi que no hay '
-          'excepcion que mostrar: o revento el codigo nativo (reproductor, '
-          'decodificador) o el sistema cerro la app por falta de memoria. '
-          'El rastro de abajo dice cual de las dos: si termina en varios '
-          '"el sistema pidio memoria", fue lo segundo.',
-        );
-        if (_anterior!.rastro.isEmpty) {
-          logger.severe('Sin rastro de lo que estaba haciendo.');
-        } else {
-          logger.severe('LO ULTIMO QUE HIZO LA APP ANTES DE CERRARSE:'
-              ' ${_anterior!.rastro.join(" | ")}');
-        }
-      }
       _comenzoEn = DateTime.now();
       _version = version ?? 'desconocida';
       _rastro.clear();
@@ -112,6 +92,51 @@ class CentinelaDeArranque {
     } catch (e) {
       // A propósito no se relanza: ver el comentario de arriba.
       logger.warning('CentinelaDeArranque.comenzar no pudo escribir: $e');
+    }
+  }
+
+  /// Si el veredicto de la sesión anterior ya se escribió en el registro.
+  static bool _yaContado = false;
+
+  /// Deja escrito en el registro cómo terminó la sesión anterior.
+  ///
+  /// ── Por qué esto va SEPARADO de `comenzar` ──────────────────────────────
+  ///
+  /// `comenzar` corre lo más temprano posible del arranque, que es lo
+  /// correcto: hay que leer el archivo de la sesión anterior antes de
+  /// pisarlo. Pero el REGISTRO todavía no existe en ese momento —
+  /// `PrismLog.ensureInitialized` engancha el oyente de `Logger.root` bastante
+  /// después, y todo lo que se registre antes no lo escucha nadie—. O sea que
+  /// el veredicto se escribía en el vacío.
+  ///
+  /// Reportado en vivo, y es lo que dejaba ciego el diagnóstico: «cuando se
+  /// cierra sola no indica nada en registros». Justo el caso en el que más
+  /// falta hace, porque un cierre por falta de memoria no deja excepción
+  /// ninguna: al proceso lo matan, no falla nada dentro de la app.
+  ///
+  /// Se llama una vez, apenas el registro está listo.
+  static void contarLoQuePaso() {
+    if (_yaContado) return;
+    _yaContado = true;
+    final anterior = _anterior;
+    if (anterior == null) return;
+    logger.severe(
+      'La sesion anterior no se cerro normalmente: '
+      'empezo ${anterior.comenzoEn.toIso8601String()}, '
+      'duro ${anterior.duracion.inSeconds}s, '
+      'version ${anterior.version}, '
+      'aparato ${anterior.aparato}. '
+      'Un cierre asi no pasa por los enganches de Dart, asi que no hay '
+      'excepcion que mostrar: o revento el codigo nativo (reproductor, '
+      'decodificador) o el sistema cerro la app por falta de memoria. '
+      'El rastro de abajo dice cual de las dos: si termina en varios '
+      '"el sistema pidio memoria", fue lo segundo.',
+    );
+    if (anterior.rastro.isEmpty) {
+      logger.severe('Sin rastro de lo que estaba haciendo.');
+    } else {
+      logger.severe('LO ULTIMO QUE HIZO LA APP ANTES DE CERRARSE:'
+          ' ${anterior.rastro.join(" | ")}');
     }
   }
 

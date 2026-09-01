@@ -125,6 +125,18 @@ class ExtensionService {
     return true;
   }
 
+  /// Si su motor está levantado ahora mismo.
+  bool get motorVivo => _motorListo;
+
+  /// Si tiene alguna consulta en curso. Soltar el motor de una extensión
+  /// ocupada no es una consulta que falla: es la librería nativa trabajando
+  /// sobre algo recién liberado.
+  bool get motorOcupado => _enVuelo > 0;
+
+  /// Cuándo se le pidió algo por última vez. Para elegir cuál soltar primero
+  /// cuando hay que soltar alguno (ver `ExtensionUtils.limitarMotoresVivos`).
+  DateTime get ultimoUso => _ultimoUso;
+
   /// Si conviene soltar su motor por llevar rato sin usarse.
   bool get motorDeSobra {
     if (!_motorListo || _enVuelo > 0) return false;
@@ -137,6 +149,9 @@ class ExtensionService {
     if (_motorListo) return Future<void>.value();
     return _levantando ??= _levantarMotor().whenComplete(() {
       _levantando = null;
+      // Recién levantado uno, se revisa que no haya quedado de más. Ver el
+      // comentario largo de `ExtensionUtils.limitarMotoresVivos`.
+      ExtensionUtils.limitarMotoresVivos();
     });
   }
 
@@ -1047,8 +1062,7 @@ async function stringify(callback) {
       if (result.isNotEmpty) return result;
     }
 
-    final hayFiltros =
-        filter != null && filter.values.any((v) => v.isNotEmpty);
+    final hayFiltros = filter != null && filter.values.any((v) => v.isNotEmpty);
     if (!hayFiltros) return const [];
 
     for (final query in queries) {

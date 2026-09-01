@@ -294,7 +294,33 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
     return _imagen(context, widget.cacheWidth);
   }
 
-  Widget _imagen(BuildContext context, int? cacheWidth) {
+  /// Achica lo que se decodifica en los aparatos que no dan abasto.
+  ///
+  /// ── Por qué acá y no en cada pantalla ───────────────────────────────────
+  ///
+  /// Cada sitio de uso ya pide su portada al ancho exacto en el que se ve, que
+  /// es lo correcto. El problema es el TOTAL: en un televisor de 893 MB el
+  /// techo de imágenes son 22 MB —unas 88 portadas— y cada una que entra echa
+  /// a otra, así que la misma tarjeta se decodifica una y otra vez al
+  /// desplazarse. Y cada decodificación termina subiendo una textura nueva a
+  /// la GPU: eso es el `raster=379ms` que aparece en el registro de ese
+  /// aparato mientras llegan las portadas.
+  ///
+  /// Decodificar un cuarto más chico deja casi la MITAD de bytes por portada,
+  /// o sea casi el doble de portadas bajo el mismo techo. A tres metros de un
+  /// televisor de 720p la diferencia no se ve; el tirón sí se veía.
+  ///
+  /// Es el mismo criterio que ya usa `RellenoBorroso` para su fondo, aplicado
+  /// una sola vez y para toda la app en vez de pantalla por pantalla.
+  static int? _ajustadoAlAparato(int? cacheWidth) {
+    if (cacheWidth == null) return null;
+    final factor = PrismHubMas.factorDeDecodificacion;
+    if (factor >= 1) return cacheWidth;
+    return (cacheWidth * factor).ceil().clamp(1, cacheWidth);
+  }
+
+  Widget _imagen(BuildContext context, int? anchoPedido) {
+    final cacheWidth = _ajustadoAlAparato(anchoPedido);
     final image = ExtendedImage.network(
       widget.url,
       headers: widget.headers,
@@ -476,8 +502,8 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
                     top: 12,
                     right: 12,
                     child: fluent.IconButton(
-                      icon: const Icon(fluent.FluentIcons.chrome_close,
-                          size: 16),
+                      icon:
+                          const Icon(fluent.FluentIcons.chrome_close, size: 16),
                       onPressed: () => Navigator.of(dialogo).pop(),
                     ),
                   ),

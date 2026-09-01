@@ -1,4 +1,3 @@
-
 import 'package:flutter/rendering.dart';
 
 import 'package:prismhub/utils/log.dart';
@@ -41,8 +40,7 @@ class PrismHubMas {
   static NivelDeAparato get nivel => PerfilDeAparato.nivel;
 
   /// Si este aparato recibe algún recorte ahora mismo.
-  static bool get estaAjustando =>
-      PerfilDeAparato.nivel != NivelDeAparato.alto;
+  static bool get estaAjustando => PerfilDeAparato.nivel != NivelDeAparato.alto;
 
   // ── Lo que se ajusta ──────────────────────────────────────────────────────
 
@@ -66,6 +64,41 @@ class PrismHubMas {
         NivelDeAparato.bajo => 4,
         NivelDeAparato.medio => 8,
         NivelDeAparato.alto => 0,
+      };
+
+  /// Cuántos motores de extensión pueden estar vivos a la vez. 0 es sin tope.
+  ///
+  /// Cada motor es un QuickJS con su pila de 1 MB y con CryptoJS, jsencrypt y
+  /// md5 analizados adentro. Se levantan solos al usar una extensión y hasta
+  /// ahora solo se soltaban por tiempo — así que pasear por el Inicio y las
+  /// zonas dejaba doce vivos a la vez (medido en el registro de un televisor
+  /// de 893 MB, justo antes de que el sistema matara la app).
+  ///
+  /// El tope es más alto que `peticionesALaVez` en el mismo aparato: así
+  /// nunca hay que soltar uno que se está usando. Ver
+  /// `ExtensionUtils.limitarMotoresVivos`.
+  static int get motoresVivosALaVez => switch (nivel) {
+        NivelDeAparato.bajo => 3,
+        NivelDeAparato.medio => 8,
+        NivelDeAparato.alto => 0,
+      };
+
+  /// Por cuánto se multiplica el ancho al que se decodifica una imagen.
+  ///
+  /// 1 es «al tamaño exacto en el que se ve», que es lo correcto y lo que se
+  /// hace en todos lados. Pero en un aparato modesto el problema no es una
+  /// portada sino el total: con un techo de 22 MB —unas 88 portadas— cada una
+  /// que entra echa a otra, y la misma tarjeta se vuelve a decodificar cada
+  /// vez que se pasa por encima. Un cuarto menos de ancho es casi la mitad de
+  /// bytes: entran casi el doble bajo el mismo techo, y se decodifica (y se
+  /// sube a la GPU) mucho menos.
+  ///
+  /// A tres metros de un televisor de 720p esa diferencia de nitidez no se
+  /// distingue. El tirón sí se distinguía.
+  static double get factorDeDecodificacion => switch (nivel) {
+        NivelDeAparato.bajo => 0.75,
+        NivelDeAparato.medio => 0.9,
+        NivelDeAparato.alto => 1,
       };
 
   /// Cuánto dura una animación de la interfaz.
