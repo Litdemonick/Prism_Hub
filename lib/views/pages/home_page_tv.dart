@@ -762,38 +762,25 @@ class _SidebarTVState extends State<_SidebarTV> {
       // pantalla ya es el mismo color, así que a la vista no cambia nada
       // salvo que el halo ahora se apaga solo en vez de chocar contra un
       // borde.
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: null,
-          // ── El degradado del panel abierto ─────────────────────────
-          //
-          // Antes iba de opaco a nada en tres pasos, y el tramo del medio
-          // (78%) dejaba el fondo casi tan oscuro como la pantalla: no se
-          // notaba dónde terminaba el panel ni que hubiera algo detrás.
-          // Reportado: «la sombra de atrás ni se nota, debe tener un buen
-          // degradado que se vea bien en los televisores».
-          //
-          // Ahora arranca en negro casi pleno —para que el nombre de cada
-          // categoría se lea sobre cualquier portada—, se mantiene sólido
-          // hasta pasada la mitad y recién ahí se abre, con una cola larga
-          // que se apaga del todo antes del borde. Así el panel se lee como
-          // una capa por encima del contenido, y no como un rectángulo
-          // pegado.
-          gradient: _expandido
-              ? LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    const Color(0xF2000000),
-                    const Color(0xD9000000),
-                    HomeTheme.bg.withValues(alpha: 0.55),
-                    HomeTheme.bg.withValues(alpha: 0.0),
-                  ],
-                  stops: const [0, 0.45, 0.78, 1],
-                )
-              : null,
-        ),
-        child: AnimatedContainer(
+      // ── Sin fondo, ni contraído ni abierto ───────────────────────────
+      //
+      // El panel abierto llevaba un degradado de negro casi pleno que se
+      // abría hacia la derecha. La idea era que el nombre de cada categoría
+      // se leyera sobre cualquier portada, pero contra el fondo carbón el
+      // resultado fue peor que el problema: el tramo opaco no se funde con
+      // nada, así que se recorta como un rectángulo negro pegado al costado.
+      // Reportado en vivo: «la sombra del panel izquierdo hace como un
+      // cuadrado raro» y, decidido después de verlo: «mejor quitale el halo
+      // de fondo negro al panel izquierdo, dejalo transparente».
+      //
+      // Sin él, el panel son sus botones y nada más. La señal de dónde está
+      // parado el usuario no se pierde —nunca dependió de este degradado—:
+      // la da el fondo de cada botón en `_ItemSidebarTV`, que se pinta con el
+      // acento cuando está elegido y con un gris claro cuando tiene el foco.
+      // Eso se lee mejor que un panel entero oscurecido, y de paso el
+      // resplandor de la primera tarjeta de cada fila ya no choca contra un
+      // borde recto.
+      child: AnimatedContainer(
           width: anchoObjetivo,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOutCubic,
@@ -838,8 +825,7 @@ class _SidebarTVState extends State<_SidebarTV> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -1304,6 +1290,23 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
     super.dispose();
   }
 
+  /// Corre la fila casi una pantalla hacia el lado que se pidió.
+  ///
+  /// Mismo salto y misma curva que las filas de Inicio (`_FilaWindows._correr`):
+  /// el 80 % del ancho visible, para que la última tarjeta que se estaba
+  /// viendo quede asomando del otro lado y no se pierda el hilo de dónde
+  /// estaba uno.
+  void _correr(int signo) {
+    if (!_scroll.hasClients) return;
+    final salto = _scroll.position.viewportDimension * 0.8;
+    _scroll.animateTo(
+      (_scroll.offset + salto * signo)
+          .clamp(0.0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ancho = _anchoPosterTv(context);
@@ -1321,15 +1324,44 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
             // de cada extensión, con su espacio correcto y que se vea».
             Padding(
               padding: const EdgeInsets.only(left: 2, top: 2, bottom: 10),
-              child: Text(
-                widget.rotulo,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: HomeTheme.textPrimary,
-                ),
+              // ── Con sus flechas, igual que las filas de Inicio ─────────
+              //
+              // Las filas de Inicio (`_FilaWindows`) siempre tuvieron a la
+              // derecha del título un par de chevrones que corren la fila.
+              // Las de las zonas nacieron sin ellos, así que en Películas o
+              // Anime nada avisaba de que cada fila sigue hacia el costado —
+              // y con el fundido de los bordes, una fila con quince tarjetas
+              // se veía igual que una con siete. Pedido explícito: «agregá
+              // esas flechitas de izquierda derecha también en animes,
+              // películas, etc., como en inicio».
+              //
+              // Se reusa `_FlechaDeFila` tal cual —vive en la parte de
+              // Windows de esta misma biblioteca, así que se ve desde acá—
+              // en vez de dibujar otro par igual.
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.rotulo,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: HomeTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  _FlechaDeFila(
+                    icono: Icons.chevron_left_rounded,
+                    onTap: () => _correr(-1),
+                  ),
+                  const SizedBox(width: 4),
+                  _FlechaDeFila(
+                    icono: Icons.chevron_right_rounded,
+                    onTap: () => _correr(1),
+                  ),
+                ],
               ),
             ),
             SizedBox(
