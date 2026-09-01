@@ -1,28 +1,35 @@
-## PrismHub v1.0.68 — Que el televisor no se cierre
+## PrismHub v1.0.69 — La causa de los cierres, encontrada en el registro
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### ⚡ Estabilidad — el motivo real de los cierres en televisores modestos
+### ⚡ Por qué se cerraba sola en televisores modestos
 
-- **Cada zona que abrías quedaba viva para siempre.** Con Inicio, Películas,
-  Series y Anime abiertas, eran cuatro pantallas enteras de portadas que el
-  sistema no podía soltar aunque estuviera quedándose sin memoria — por eso
-  se cerraba justo al ir de una zona a otra o al bajar por una lista. Ahora,
-  en los televisores más modestos, al cambiar de zona se suelta la anterior:
-  volver la vuelve a armar al instante, con el contenido que ya estaba
-  cargado y sin volver a pedir nada por internet.
-- **Y en cualquier aparato**, cuando el sistema avisa que le falta memoria,
-  la app suelta las zonas que no estás mirando en vez de aguantarlas.
-- **Un destacado pesaba por nueve.** El carrusel de Inicio dibujaba hasta
-  nueve portadas a la vez, todas al tamaño de la grande. Ahora es una sola.
-- **Una portada se descargaba al tamaño de toda la pantalla** para mostrarse
-  en una tarjeta de la mitad de ancho.
+El registro de un televisor de 893 MB lo dijo con todas las letras: **doce
+motores de extensión vivos a la vez** justo antes de que el sistema matara la
+app. Cada extensión que usás levanta su propio motor de JavaScript, y hasta
+ahora solo se soltaban después de un rato sin usarse — así que abrir el Inicio
+y pasear por las zonas los iba acumulando todos.
 
-### 📺 El destacado de Inicio, como tenía que ser
+- **Ahora hay un tope**: en los aparatos más modestos se mantienen vivos como
+  mucho tres, y se suelta el que hace más rato que no se usa. Ninguno que esté
+  trabajando.
+- **El Inicio ya no levanta cinco de golpe** al abrirse, sino dos.
+- **Las portadas ocupan casi la mitad**: se descargan a un tamaño un poco menor,
+  imperceptible a la distancia a la que se mira un televisor, y así entran casi
+  el doble sin que la app tenga que estar tirando y volviendo a pedir las mismas
+  imágenes todo el rato.
 
-- **Es una sola tarjeta grande y lo que cambia es la imagen de adentro**, con
-  un fundido — no varias tarjetas asomándose. Sigue siendo infinito, sigue
-  avanzando solo, se frena mientras te movés con el mando y vuelve a andar
-  solo a los seis segundos de que lo dejás quieto.
+### 🧾 Y ahora sí queda anotado por qué se cerró
+
+- **Cuando la app se cierra sola, el motivo queda escrito en el registro.**
+  Antes no aparecía nada: el diagnóstico se calculaba al arrancar, pero unos
+  instantes *antes* de que el registro existiera, así que se escribía en el
+  vacío. Justo en el caso donde más falta hace, porque un cierre por falta de
+  memoria no deja ningún error que mostrar.
+
+### 📺 El televisor
+
+- **El resplandor de la tarjeta seleccionada ya no aparece cortado** contra el
+  menú lateral.
