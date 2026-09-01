@@ -1,24 +1,23 @@
-## PrismHub v1.0.72 — La app arranca liviana
+## PrismHub v1.0.73 — Menos trabajo por cada movimiento del mando
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### ⚡ Por qué se ponía lenta y se cerraba
+### ⚡ Rendimiento en televisores modestos
 
-El registro del televisor dejó ver que **el sistema ya pedía memoria a los
-siete segundos de abrir la app**, sin que nadie hubiera tocado nada. El motivo:
-la app armaba **ocho pantallas de una sola vez** al abrirse — el Inicio, los
-cuatro catálogos de zona, la Biblioteca, Extensiones y Ajustes. Y cada catálogo
-de zona le pedía contenido a todas sus extensiones apenas nacía.
+- **Bajar rápido por una zona ya no dispara diez búsquedas de golpe.** Con el
+  mando no se desliza: se aprieta abajo, abajo, abajo, y cada fila por la que
+  pasabas salía a pedir su contenido. Ahora una fila espera a que te quedes en
+  ella antes de pedir nada; por la que solo pasás de largo, no se pide.
+- **Las tarjetas que salen de pantalla se destruyen** y sueltan su portada, en
+  vez de quedarse ocupando memoria por si volvías.
+- **Al salir de una zona se sueltan sus portadas**, sin esperar a que el
+  sistema lo pida.
+- **El resplandor de selección es más liviano** en los televisores más
+  modestos: ese desenfoque se recalculaba en cada movimiento del mando.
 
-- **Ahora cada pantalla se arma la primera vez que entrás.** Volver a una que ya
-  visitaste la encuentra igual que la dejaste.
-- **Y en los televisores más modestos se suelta la anterior** al cambiar, para
-  devolverle esa memoria al sistema. Volver es instantáneo: usa lo que ya está
-  cargado, sin pedir nada por internet otra vez.
-- **Las zonas piden de a una extensión.** Antes, entrar a Películas le pedía
-  contenido a las diez extensiones a la vez. Ahora cada fila pide lo suyo cuando
-  te vas acercando a ella — lo que no se mira, no se pide.
-- **Y cuando el sistema avisa que le falta memoria**, la app suelta lo que no
-  estás mirando en vez de aguantarlo.
+### 📺 El televisor
+
+- **"TV en vivo" se ve como el resto de las zonas**, con su marco ocupando el
+  área de contenido en vez de un texto suelto en el medio.
