@@ -1,18 +1,27 @@
-## PrismHub v1.0.66 — El televisor, ajustado sobre lo probado en vivo
+## PrismHub v1.0.67 — El televisor, más compacto y más limpio
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 📺 El televisor — encontrado probando la 1.0.65
+### 📺 El televisor — encontrado probando la 1.0.66
 
-- **La pantalla de carga ya tiene la forma correcta.** Antes se veía una
-  sola tarjeta gris centrada mientras cargaba, y de golpe aparecían los
-  dos destacados nuevos y la fila de tarjetas anchas — ahora la carga ya
-  muestra esa misma forma desde el principio, sin ningún salto.
-- **Películas, Series y Anime ahora muestran una fila por extensión**, cada
-  una con su nombre arriba — igual que en Inicio — en vez de una sola
-  grilla con todo mezclado.
-- **Biblioteca ya no choca contra el menú lateral.** Su título quedaba
-  pegado justo donde aparece el sidebar; ahora tiene el mismo margen que
-  el resto de las pantallas.
+- **El carrusel de Inicio ya no muestra tarjetas asomando a los costados.**
+  Compartiendo la fila con el segundo destacado quedaba con vecinas
+  amontonadas contra él; ahora se ve una sola tarjeta grande y limpia,
+  igual que su compañera.
+- **Ahora entra todo sin tener que desplazarse** — los destacados y las
+  tarjetas anchas de abajo ocupaban más de la mitad de la pantalla; se
+  achicaron a la proporción justa, en Inicio y en Películas/Series/Anime
+  por igual.
+- **El resaltado del menú lateral es un resplandor suave**, no una caja de
+  color plana — el mismo lenguaje visual que ya usa el resto del app al
+  enfocar algo con el mando.
+
+### ⚡ Estabilidad en televisores modestos
+
+- **Entrar a una zona (Películas, Series, Anime) ya no debería cerrar la
+  app.** Al entrar por primera vez se pedía contenido a cuatro extensiones
+  a la vez; en un televisor con poca memoria eso podía ser demasiado de
+  golpe. Ahora en los aparatos más modestos se piden de a dos — un poco
+  más lento en terminar de traer todo, pero sin la ráfaga.
