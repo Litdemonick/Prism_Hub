@@ -1,27 +1,28 @@
-## PrismHub v1.0.67 — El televisor, más compacto y más limpio
+## PrismHub v1.0.68 — Que el televisor no se cierre
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 📺 El televisor — encontrado probando la 1.0.66
+### ⚡ Estabilidad — el motivo real de los cierres en televisores modestos
 
-- **El carrusel de Inicio ya no muestra tarjetas asomando a los costados.**
-  Compartiendo la fila con el segundo destacado quedaba con vecinas
-  amontonadas contra él; ahora se ve una sola tarjeta grande y limpia,
-  igual que su compañera.
-- **Ahora entra todo sin tener que desplazarse** — los destacados y las
-  tarjetas anchas de abajo ocupaban más de la mitad de la pantalla; se
-  achicaron a la proporción justa, en Inicio y en Películas/Series/Anime
-  por igual.
-- **El resaltado del menú lateral es un resplandor suave**, no una caja de
-  color plana — el mismo lenguaje visual que ya usa el resto del app al
-  enfocar algo con el mando.
+- **Cada zona que abrías quedaba viva para siempre.** Con Inicio, Películas,
+  Series y Anime abiertas, eran cuatro pantallas enteras de portadas que el
+  sistema no podía soltar aunque estuviera quedándose sin memoria — por eso
+  se cerraba justo al ir de una zona a otra o al bajar por una lista. Ahora,
+  en los televisores más modestos, al cambiar de zona se suelta la anterior:
+  volver la vuelve a armar al instante, con el contenido que ya estaba
+  cargado y sin volver a pedir nada por internet.
+- **Y en cualquier aparato**, cuando el sistema avisa que le falta memoria,
+  la app suelta las zonas que no estás mirando en vez de aguantarlas.
+- **Un destacado pesaba por nueve.** El carrusel de Inicio dibujaba hasta
+  nueve portadas a la vez, todas al tamaño de la grande. Ahora es una sola.
+- **Una portada se descargaba al tamaño de toda la pantalla** para mostrarse
+  en una tarjeta de la mitad de ancho.
 
-### ⚡ Estabilidad en televisores modestos
+### 📺 El destacado de Inicio, como tenía que ser
 
-- **Entrar a una zona (Películas, Series, Anime) ya no debería cerrar la
-  app.** Al entrar por primera vez se pedía contenido a cuatro extensiones
-  a la vez; en un televisor con poca memoria eso podía ser demasiado de
-  golpe. Ahora en los aparatos más modestos se piden de a dos — un poco
-  más lento en terminar de traer todo, pero sin la ráfaga.
+- **Es una sola tarjeta grande y lo que cambia es la imagen de adentro**, con
+  un fundido — no varias tarjetas asomándose. Sigue siendo infinito, sigue
+  avanzando solo, se frena mientras te movés con el mando y vuelve a andar
+  solo a los seis segundos de que lo dejás quieto.
