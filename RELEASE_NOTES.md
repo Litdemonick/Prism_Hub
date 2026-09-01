@@ -1,53 +1,37 @@
-## PrismHub v1.0.64 — El televisor, otra vuelta
-
-> ⚡ **La causa real del cierre al desplazarse rápido, encontrada y corregida.**
-> Bajar rápido por una zona sin soltar el mando encadenaba una carga atrás de
-> otra sin que la interfaz llegara a respirar. Ahora hay un piso de tiempo
-> entre una carga y la siguiente.
+## PrismHub v1.0.65 — Inicio y zonas con la cara nueva en el televisor
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### ⚡ Estabilidad — en todas las plataformas
+### 📺 El televisor — diseño nuevo en Inicio y en las zonas
 
-- **Bajar rápido por una zona (Películas, Series, Anime) ya no encadena
-  cargas sin parar.** Cada pedido de más contenido espera un momento antes
-  de dejar salir el siguiente, así la interfaz siempre tiene un respiro —
-  antes, en un aparato modesto, esa cadena sin cortes podía terminar en un
-  cierre.
-- **El tope de páginas por zona baja**, para no seguir pidiéndole contenido
-  a todas las extensiones activas más de lo necesario.
+- **Inicio tiene un segundo destacado grande**, al lado del carrusel de
+  siempre — que sigue siendo el mismo, moviéndose solo como hasta ahora.
+- **Nueva fila de tarjetas anchas**, entre los destacados y las filas por
+  extensión.
+- **El nombre de la extensión ya se ve al enfocar una tarjeta en las filas
+  de Inicio**, igual que ya pasaba en las grillas de Películas/Series/Anime
+  — antes solo aparecía ahí, nunca recorriendo una fila con el mando.
+- **Películas, Series y Anime tienen la misma cabecera arriba de la
+  grilla**: dos destacados grandes y una fila de tarjetas anchas con lo más
+  reciente de todas las extensiones. La grilla de abajo sigue funcionando
+  exactamente igual que antes — mismo contenido, mismo orden al volver a
+  entrar.
 
-### 📺 El televisor
+### 📺 El televisor — encontrado probando la 1.0.64
 
-- **El menú de categorías del Inicio ya no mueve nada al abrirse.** Antes
-  empujaba las tarjetas hacia un costado, así que expandirse para mostrar
-  el nombre de cada categoría achicaba la grilla. Ahora se dibuja encima,
-  sin correr ni una tarjeta de lugar.
-- **El mando ya no puede terminar en una zona que no se está viendo.** Al
-  moverse por los bordes del menú, el foco podía saltar a una tarjeta de
-  otra categoría que seguía viva por dentro aunque no se mostrara —y esa
-  categoría arrancaba a cargar sin que nadie lo hubiera pedido. Ya no puede
-  pasar.
-- **"Volver" ya funciona en Extensiones y en Ajustes.** Antes no hacía nada
-  en algunos casos, según desde dónde se hubiera entrado.
-- **Los botones de las columnas laterales tienen más aire entre sí**, para
-  que el resplandor de selección no se sienta apretado contra el de al
-  lado.
-- **Las acciones que tardan (activar todas, actualizar todas, instalar
-  todas) ahora se ven cargando** mientras corren, en vez de quedar mudas.
-- **El carrusel de las filas se desvanece en los bordes** en vez de cortar
-  las tarjetas en seco.
+- **El mando ya no puede terminar en el menú lateral bajando dentro de una
+  zona.** Al llegar al final de una grilla (o mientras la página siguiente
+  todavía no había llegado), la flecha hacia abajo podía saltar a la
+  columna de categorías sin que nadie lo pidiera.
+- **El menú lateral del Inicio es transparente**, sin reservarle un margen
+  fijo a las tarjetas de atrás — antes era un bloque sólido que les quitaba
+  espacio aunque estuviera contraído.
+- **Activar o desinstalar una extensión ya actualiza la zona sin tener que
+  salir y volver a entrar.**
 
-### 🖥️ El destacado de Inicio
+### 📼 Biblioteca
 
-- **Se mueve solo.** Antes había que arrastrarlo o moverlo con el mando a
-  mano; ahora avanza cada tanto por su cuenta, y tocarlo lo pausa un rato
-  antes de retomar.
-
-### 💻 Windows
-
-- **El visor del registro ya no deja ver Ajustes por detrás.** Un fallo de
-  fondo hacía que, al abrir "Ver registro", se llegaran a ver filas de
-  Ajustes asomando debajo del contenido nuevo.
+- **"Continuar viendo" ya muestra la barra de progreso real** de cada
+  título — antes la tarjeta podía mostrarla pero nunca se la mandaban.
