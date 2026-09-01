@@ -25,6 +25,7 @@ import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:window_manager/window_manager.dart';
@@ -927,10 +928,68 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         SettingsPage(),
       ];
 
+  /// Las pestañas que de verdad se abrieron alguna vez.
+  ///
+  /// ── Por qué no se construyen las ocho de entrada ────────────────────────
+  ///
+  /// `IndexedStack` construye a TODOS sus hijos, muestre al que muestre. Y
+  /// acá los hijos son ocho pantallas enteras: el Inicio, CUATRO catálogos de
+  /// zona —cada uno con su `ZonaCatalogoController`, que al crearse le pide
+  /// su primera página a todas las extensiones de esa zona—, la Biblioteca,
+  /// Extensiones y Ajustes.
+  ///
+  /// O sea que abrir la app disparaba, sin que nadie tocara nada, cuatro
+  /// catálogos a la vez además del Inicio: decenas de peticiones y un motor
+  /// de JavaScript por extensión. Medido en el televisor de 893 MB, en su
+  /// propio registro: **el sistema pedía memoria a los SIETE segundos de
+  /// abrir la app**, y el rastro del cierre terminaba en «+7s el sistema
+  /// pidió memoria (1.ª) | +16s (2.ª) | +22s va a la zona películas».
+  ///
+  /// Con esto, una pestaña se arma la primera vez que se entra. Lo que el
+  /// `IndexedStack` viene a dar se conserva igual: una vez armada se queda
+  /// viva, así que volver la encuentra tal cual se dejó.
+  late final Set<int> _visitadas = {c.selectedTab.value};
+
+  /// En un aparato con memoria justa, además, se suelta la anterior.
+  ///
+  /// Cada pantalla viva sostiene sus portadas decodificadas, y esas cuentan
+  /// como «vivas» para `ImageCache`: no se pueden desalojar por más que el
+  /// sistema esté pidiendo aire. Volver a una pestaña la rearma con lo que ya
+  /// está en memoria (los controllers siguen registrados en GetX), sin pedir
+  /// nada de red otra vez.
+  bool get _memoriaJusta => PrismHubMas.nivel == NivelDeAparato.bajo;
+
+  /// Deja montada solo la pestaña que se está viendo.
+  void _soltarLasQueNoSeVen() {
+    if (!mounted || _visitadas.length <= 1) return;
+    setState(() {
+      _visitadas
+        ..clear()
+        ..add(c.selectedTab.value);
+    });
+  }
+
+  late final _AlivioDePestanas _alivio;
+
+  /// El vigía de `selectedTab`, para soltarlo al morir.
+  Worker? _dejarDeMirarLaPestana;
+
   @override
   void initState() {
     super.initState();
     c = Get.put(MainController());
+    _alivio = _AlivioDePestanas(_soltarLasQueNoSeVen);
+    WidgetsBinding.instance.addObserver(_alivio);
+    // Cada vez que se cambia de pestaña se marca como visitada — y en un
+    // aparato justo se suelta la anterior.
+    _dejarDeMirarLaPestana = ever<int>(c.selectedTab, (indice) {
+      if (!mounted) return;
+      if (_visitadas.contains(indice) && !_memoriaJusta) return;
+      setState(() {
+        if (_memoriaJusta) _visitadas.clear();
+        _visitadas.add(indice);
+      });
+    });
     // Aviso de beta, una sola vez. Va en un post-frame porque acá el árbol
     // todavía se está montando y el diálogo necesita un Navigator listo.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -942,6 +1001,13 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       // la app ya abierta, el aviso llega igual, sin tener que reiniciarla.
       ApplicationUtils.iniciarChequeoPeriodico(context);
     }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(_alivio);
+    _dejarDeMirarLaPestana?.dispose();
+    super.dispose();
   }
 
   @override
@@ -1683,34 +1749,40 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       index: c.selectedTab.value,
       children: [
         for (var i = 0; i < zonas.length; i++)
-          RepaintBoundary(
-            // ── Sin un FocusScope por zona ──────────────────────────────
-            //
-            // Se probó darle a cada zona su propio ámbito (para que
-            // recordara en qué tarjeta estabas al volver) y salió mucho
-            // peor: al volver de Extensiones el foco quedaba en un ámbito
-            // apagado y la app se congelaba del todo — había que cerrarla.
-            //
-            // Que el foco vuelva donde estaba se resuelve en el observador
-            // de navegación (ver _devolverElFoco), que es donde de verdad se
-            // sabe que una pantalla se cerró.
-            child: TickerMode(
-              enabled: i == c.selectedTab.value,
-              // ── Sin SafeArea de abajo tampoco ──────────────────────
+          // Una pestaña que nadie abrió todavía no se construye: un hueco
+          // vacío en su lugar, para que los índices sigan cuadrando con
+          // `MainController.tabHome`/`tabPeliculas`/etc. Ver [_visitadas].
+          if (!_visitadas.contains(i))
+            const SizedBox.shrink()
+          else
+            RepaintBoundary(
+              // ── Sin un FocusScope por zona ──────────────────────────────
               //
-              // Hacía lo mismo que el de arriba pero al revés: reservaba el
-              // alto de la barra flotante POR AFUERA de la página, así que
-              // detrás de la barra quedaba una banda negra en vez del fondo de
-              // la zona. Se veía como una sombra tapando.
+              // Se probó darle a cada zona su propio ámbito (para que
+              // recordara en qué tarjeta estabas al volver) y salió mucho
+              // peor: al volver de Extensiones el foco quedaba en un ámbito
+              // apagado y la app se congelaba del todo — había que cerrarla.
               //
-              // El lugar no se pierde: ahora cada zona se lo suma al relleno
-              // de su propia lista (`MediaQuery.paddingOf(context).bottom`,
-              // que con `extendBody` ya vale exactamente el alto de la barra).
-              // Así el fondo llega hasta el borde y lo que se desplaza igual
-              // termina por encima de la barra.
-              child: zonas[i],
+              // Que el foco vuelva donde estaba se resuelve en el observador
+              // de navegación (ver _devolverElFoco), que es donde de verdad se
+              // sabe que una pantalla se cerró.
+              child: TickerMode(
+                enabled: i == c.selectedTab.value,
+                // ── Sin SafeArea de abajo tampoco ──────────────────────
+                //
+                // Hacía lo mismo que el de arriba pero al revés: reservaba el
+                // alto de la barra flotante POR AFUERA de la página, así que
+                // detrás de la barra quedaba una banda negra en vez del fondo de
+                // la zona. Se veía como una sombra tapando.
+                //
+                // El lugar no se pierde: ahora cada zona se lo suma al relleno
+                // de su propia lista (`MediaQuery.paddingOf(context).bottom`,
+                // que con `extendBody` ya vale exactamente el alto de la barra).
+                // Así el fondo llega hasta el borde y lo que se desplaza igual
+                // termina por encima de la barra.
+                child: zonas[i],
+              ),
             ),
-          ),
       ],
     );
   }
@@ -2033,4 +2105,18 @@ class DistintivoDeVersion extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Escucha el aviso de «me estoy quedando sin memoria» del sistema y suelta
+/// las pestañas que no se están viendo.
+///
+/// Aparte y no en el propio State para no obligarlo a ser un
+/// `WidgetsBindingObserver` entero por un solo aviso.
+class _AlivioDePestanas extends WidgetsBindingObserver {
+  _AlivioDePestanas(this.soltar);
+
+  final VoidCallback soltar;
+
+  @override
+  void didHaveMemoryPressure() => soltar();
 }
