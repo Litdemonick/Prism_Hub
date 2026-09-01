@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
+import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
@@ -1347,6 +1348,23 @@ class CatalogoExtensionesController extends GetxController {
   }
 
   Future<void> _traerDeVerdad(FilaDeExtension fila) async {
+    // ── Sin conexión no se sale a pedir ────────────────────────────────
+    //
+    // Sin esto, cada fila salía igual y se quedaba esperando su tiempo de
+    // espera completo antes de darse por vencida: con diez extensiones,
+    // diez esperas largas, una detrás de otra, y el Inicio lleno de
+    // bloques grises que no llevan a ningún lado. Y encima levantando un
+    // motor de JavaScript por extensión para nada.
+    //
+    // Lo que ya se había traído antes se sigue viendo: esto no borra nada,
+    // solo evita salir a la red cuando no hay red. Al volver la conexión,
+    // el refresco normal vuelve a intentar.
+    //
+    // Mismo criterio que ya usa `ZonaCatalogoController._pedir`.
+    if (!ConnectivityUtils.isOnline.value) {
+      if (fila.items.isEmpty) fila.estado.value = EstadoDeFila.fallo;
+      return;
+    }
     fila.intentadoEl = DateTime.now();
     // Solo se muestra "cargando" si no hay nada viejo que mostrar. Con datos
     // en pantalla, refrescar por detrás no tiene que parpadear.
