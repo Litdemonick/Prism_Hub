@@ -122,6 +122,12 @@ class FocusableCard extends StatefulWidget {
   State<FocusableCard> createState() => _FocusableCardState();
 }
 
+/// Lo que mide el anillo de foco de televisor, y lo que se corre hacia afuera
+/// para no taparle el filo a la portada. Es un solo número porque las dos
+/// cosas TIENEN que ser iguales: el anillo ocupa la franja de `-grosor` a `0`,
+/// o sea justo por fuera de la tarjeta. Ver dónde se usa, más abajo.
+const double _grosorDelMarco = 3;
+
 class _FocusableCardState extends State<FocusableCard> {
   FocusNode? _focusNodePropio;
   bool _hover = false;
@@ -417,23 +423,45 @@ class _FocusableCardState extends State<FocusableCard> {
                 // 2. El borde nítido, encima — SOLO en TV. En PC el hover
                 // sigue sin ningún marco, pedido explícito de que se vea
                 // igual que siempre (solo el resplandor).
+                //
+                // ── Y por fuera de la tarjeta, no encima ─────────────────
+                //
+                // Un `BoxDecoration.border` se pinta HACIA ADENTRO de su
+                // caja. Con la caja a ras de la tarjeta, esos tres píxeles
+                // caían sobre el filo de la portada y se la comían — que es
+                // justo lo reportado: «los bordes de selección se comen la
+                // card». Encima el radio era el mismo que el de la portada,
+                // así que en las esquinas el anillo cortaba la curva en vez
+                // de seguirla.
+                //
+                // Corriendo la caja hacia afuera exactamente el grosor del
+                // borde, el anillo ocupa la franja de −3 a 0: queda pegado al
+                // filo por fuera, sin tapar un solo píxel de la imagen. El
+                // radio sube lo mismo para que la curva de afuera acompañe a
+                // la de adentro en vez de pisarla.
+                //
+                // El `Stack` ya está en `Clip.none`, así que puede dibujar
+                // fuera de sus límites, y los huecos entre tarjetas (10 px)
+                // dan de sobra para tres.
                 if (esTv && widget.conMarco)
                   Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    bottom: widget.altoMarco == null ? 0 : null,
-                    height: widget.altoMarco,
+                    left: -_grosorDelMarco,
+                    right: -_grosorDelMarco,
+                    top: -_grosorDelMarco,
+                    bottom: widget.altoMarco == null ? -_grosorDelMarco : null,
+                    height: widget.altoMarco == null
+                        ? null
+                        : widget.altoMarco! + _grosorDelMarco * 2,
                     // Mismo criterio que el halo: en televisor se pinta o no
                     // se pinta, sin fundido. Ver el comentario de allá.
                     child: IgnorePointer(
                       child: _Halo(
                         visible: activo,
                         conFundido: !esTv,
-                        radio: widget.borderRadius,
+                        radio: widget.borderRadius + _grosorDelMarco,
                         borde: Border.all(
                           color: marco.withValues(alpha: 0.95),
-                          width: 3,
+                          width: _grosorDelMarco,
                         ),
                       ),
                     ),
