@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/tv/fondo_tv.dart';
 
 /// El envoltorio que usa toda pantalla PROPIA de Android TV (no las que
 /// reusan una de teléfono/escritorio con `FocusableCard` puesto por dentro).
@@ -33,7 +34,14 @@ class PantallaTv extends StatelessWidget {
 
   /// Lo que va DETRÁS del contenido, a pantalla completa y sin overscan (un
   /// fondo tiene que llegar hasta el borde de verdad, aunque el contenido no
-  /// pueda). Null = liso, con el color de fondo de siempre.
+  /// pueda).
+  ///
+  /// Null NO es «sin fondo»: es «el de la app». Antes sí quedaba liso, y por
+  /// eso el repositorio, la ficha y la lista de extensiones se veían de un
+  /// gris distinto al del resto — se notaba el salto al entrar. El fondo de
+  /// PrismHub en televisor es uno solo y está en todas las pantallas
+  /// (`FondoTv`); pasar algo acá es para taparlo con otra cosa en una
+  /// pantalla puntual, como la portada difuminada de una ficha.
   final Widget? fondo;
 
   @override
@@ -42,7 +50,7 @@ class PantallaTv extends StatelessWidget {
       backgroundColor: HomeTheme.bg,
       body: Stack(
         children: [
-          if (fondo != null) Positioned.fill(child: fondo!),
+          Positioned.fill(child: fondo ?? const FondoTv()),
           SafeArea(
             child: Padding(
               // Un solo sitio decide el margen. Ver HomeTheme.margenTv:

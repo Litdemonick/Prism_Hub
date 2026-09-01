@@ -2,7 +2,9 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/tv/fondo_tv.dart';
 
 // Fondo ambiental animado. Usa gradientes radiales en vez de blur gaussiano:
 // el look sigue siendo suave, pero evita un ImageFilter.blur por frame.
@@ -117,6 +119,18 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
 
   @override
   Widget build(BuildContext context) {
+    // ── En televisor manda otro fondo, y por eso se atiende acá ──────────
+    //
+    // El fondo de TV es plano y gris carbón, no dos manchones violeta (el
+    // porqué está en `FondoTv`). Pero cambiarlo pantalla por pantalla eran
+    // quince sitios que ya instancian este widget a mano: Inicio, Biblioteca,
+    // las zonas, Historial, el buscador de TV, el repositorio… y el que se
+    // olvidara quedaba con el fondo viejo.
+    //
+    // Desviando acá, en el único widget por el que pasan todos, el fondo de
+    // televisor llega a las quince pantallas sin tocar ninguna. Y teléfono y
+    // PC no se enteran: para ellos este `if` nunca es cierto.
+    if (PlatformTv.esTelevisionSync) return const FondoTv();
     return RepaintBoundary(
       child: IgnorePointer(
         child: ClipRect(

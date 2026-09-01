@@ -17,6 +17,7 @@ import 'package:prismhub/views/pages/settings/info_del_aparato_page.dart';
 import 'package:prismhub/views/pages/settings/registro_en_vivo_page.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/tv/fondo_tv.dart';
 
 /// Los Ajustes de Android TV — pantalla propia, no la de teléfono adaptada.
 ///
@@ -95,27 +96,38 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
-      body: SafeArea(
-        child: Padding(
-          padding: HomeTheme.margenTv(context),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _titulo(context),
-              const SizedBox(height: 10),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(width: 260, child: _menu()),
-                    const SizedBox(width: 26),
-                    Expanded(child: _panel()),
-                  ],
-                ),
+      // El fondo de la app, igual que en todas las demás pantallas de
+      // televisor. Esta es la única que arma su `Scaffold` a mano en vez de
+      // usar `PantallaTv`, así que era la única que quedaba con el color
+      // liso: entrando a Ajustes se veía el cambio de gris. Va detrás de
+      // todo y sin el margen de overscan, porque un fondo tiene que llegar
+      // al filo aunque el contenido no pueda.
+      body: Stack(
+        children: [
+          const Positioned.fill(child: FondoTv()),
+          SafeArea(
+            child: Padding(
+              padding: HomeTheme.margenTv(context),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _titulo(context),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(width: 260, child: _menu()),
+                        const SizedBox(width: 26),
+                        Expanded(child: _panel()),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
