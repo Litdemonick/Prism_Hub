@@ -171,7 +171,8 @@ class HomeAndroid extends StatelessWidget {
                       // pegado a la izquierda igual.
                       child: SizedBox(
                         width: double.infinity,
-                        child: Center(child: RefreshButton(onTap: c.refrescarTodo)),
+                        child: Center(
+                            child: RefreshButton(onTap: c.refrescarTodo)),
                       ),
                     ),
                   ],
@@ -1092,202 +1093,207 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                       }
                     : null,
                 child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onHorizontalDragStart: (_) {
-                  _marcarAccionManual();
-                  _anim.stop();
-                },
-                onHorizontalDragUpdate: (d) {
-                  final paso = (m.ancho + m.anchoChico) / 2 + _aire;
-                  setState(() {
-                    _p = (_p - (d.primaryDelta ?? 0) / paso).clamp(0.0, ultimo);
-                  });
-                  _actualizarPista();
-                },
-                onHorizontalDragEnd: (d) {
-                  final v = d.primaryVelocity ?? 0;
-                  // Con impulso se salta a la siguiente aunque el dedo no haya
-                  // llegado a la mitad: es lo que espera un deslizar rápido.
-                  var destino = _p.roundToDouble();
-                  if (v.abs() > 380) {
-                    destino =
-                        v < 0 ? _p.floorToDouble() + 1 : _p.ceilToDouble() - 1;
-                  }
-                  _irA(destino.clamp(0.0, ultimo), grupos);
-                  // ── Traer más cuando queda poco ──────────────────────
-                  //
-                  // Al soltar y no en cada píxel del arrastre: así se pide una
-                  // vez por gesto y no cincuenta.
-                  //
-                  // El margen se cuenta desde la última REAL, no desde el tope
-                  // con fantasmas: si se contara desde el tope, las tres
-                  // tarjetas en espera se comerían el aviso y el pedido saldría
-                  // tres tarjetas más tarde, justo cuando ya se ve el final.
-                  //
-                  // A quién pedirle y cuándo lo decide _pedirMasSiHaceFalta:
-                  // primero termina la extensión que se está mirando.
-                  _pedirMasSiHaceFalta(planos, destino, ultimoReal);
-                },
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      // ── Recorta a los costados, NO arriba y abajo ────────
-                      //
-                      // Cada tarjeta lleva una sombra desplazada ocho píxeles
-                      // hacia abajo. Con un recorte rectangular común, esa
-                      // sombra se corta al ras del borde inferior: se ve media
-                      // sombra terminando en seco, en línea recta, debajo de
-                      // cada portada. Con trece tarjetas al lado se leía como
-                      // una banda sucia cruzando el carrusel.
-                      //
-                      // Este recorte deja escapar arriba y abajo justo para
-                      // eso. Ya existía para las filas horizontales, que tienen
-                      // el mismo problema con la sombra del ratón encima.
-                      child: _conPuntasDifuminadas(
-                        ClipRect(
-                          clipper: const _SoloCostados(),
-                          child: _acordeon(
-                              planos, m, caja.maxWidth, grupos, fantasmas),
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragStart: (_) {
+                    _marcarAccionManual();
+                    _anim.stop();
+                  },
+                  onHorizontalDragUpdate: (d) {
+                    final paso = (m.ancho + m.anchoChico) / 2 + _aire;
+                    setState(() {
+                      _p = (_p - (d.primaryDelta ?? 0) / paso)
+                          .clamp(0.0, ultimo);
+                    });
+                    _actualizarPista();
+                  },
+                  onHorizontalDragEnd: (d) {
+                    final v = d.primaryVelocity ?? 0;
+                    // Con impulso se salta a la siguiente aunque el dedo no haya
+                    // llegado a la mitad: es lo que espera un deslizar rápido.
+                    var destino = _p.roundToDouble();
+                    if (v.abs() > 380) {
+                      destino = v < 0
+                          ? _p.floorToDouble() + 1
+                          : _p.ceilToDouble() - 1;
+                    }
+                    _irA(destino.clamp(0.0, ultimo), grupos);
+                    // ── Traer más cuando queda poco ──────────────────────
+                    //
+                    // Al soltar y no en cada píxel del arrastre: así se pide una
+                    // vez por gesto y no cincuenta.
+                    //
+                    // El margen se cuenta desde la última REAL, no desde el tope
+                    // con fantasmas: si se contara desde el tope, las tres
+                    // tarjetas en espera se comerían el aviso y el pedido saldría
+                    // tres tarjetas más tarde, justo cuando ya se ve el final.
+                    //
+                    // A quién pedirle y cuándo lo decide _pedirMasSiHaceFalta:
+                    // primero termina la extensión que se está mirando.
+                    _pedirMasSiHaceFalta(planos, destino, ultimoReal);
+                  },
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        // ── Recorta a los costados, NO arriba y abajo ────────
+                        //
+                        // Cada tarjeta lleva una sombra desplazada ocho píxeles
+                        // hacia abajo. Con un recorte rectangular común, esa
+                        // sombra se corta al ras del borde inferior: se ve media
+                        // sombra terminando en seco, en línea recta, debajo de
+                        // cada portada. Con trece tarjetas al lado se leía como
+                        // una banda sucia cruzando el carrusel.
+                        //
+                        // Este recorte deja escapar arriba y abajo justo para
+                        // eso. Ya existía para las filas horizontales, que tienen
+                        // el mismo problema con la sombra del ratón encima.
+                        child: _conPuntasDifuminadas(
+                          ClipRect(
+                            clipper: const _SoloCostados(),
+                            child: _acordeon(
+                                planos, m, caja.maxWidth, grupos, fantasmas),
+                          ),
                         ),
                       ),
-                    ),
-                    // ── Flechas solo con mouse ─────────────────────────────
-                    //
-                    // Arrastrar con el mouse funciona —el gesto es el mismo—
-                    // pero nadie lo intenta: en escritorio uno espera hacer
-                    // clic. Sin flechas, en PC el acordeón parecía una imagen
-                    // fija con tres portadas al lado.
-                    //
-                    // En pantalla táctil no van: el dedo ya arrastra, y dos
-                    // botones encima taparían justo las tarjetas de los
-                    // costados, que son las que invitan a deslizar.
-                    // Con su propio fondo: la flecha suelta es un ícono gris
-                    // claro, y acá cae encima de una portada. Sobre una imagen
-                    // oscura desaparece y sobre una clara tampoco se lee. El
-                    // disco la separa del fondo sea cual sea la portada.
-                    if (!_esTactil) ...[
-                      // Mientras la pista está puesta, esta flecha no va: al
-                      // principio no hay nada a la izquierda de la primera
-                      // tarjeta, así que un botón "volver" ahí no hacía nada.
-                      // La pista ocupa este mismo lugar hasta el primer
-                      // arrastre (ver más abajo); recién ahí vuelve.
-                      if (!_pistaVisible)
+                      // ── Flechas solo con mouse ─────────────────────────────
+                      //
+                      // Arrastrar con el mouse funciona —el gesto es el mismo—
+                      // pero nadie lo intenta: en escritorio uno espera hacer
+                      // clic. Sin flechas, en PC el acordeón parecía una imagen
+                      // fija con tres portadas al lado.
+                      //
+                      // En pantalla táctil no van: el dedo ya arrastra, y dos
+                      // botones encima taparían justo las tarjetas de los
+                      // costados, que son las que invitan a deslizar.
+                      // Con su propio fondo: la flecha suelta es un ícono gris
+                      // claro, y acá cae encima de una portada. Sobre una imagen
+                      // oscura desaparece y sobre una clara tampoco se lee. El
+                      // disco la separa del fondo sea cual sea la portada.
+                      if (!_esTactil) ...[
+                        // Mientras la pista está puesta, esta flecha no va: al
+                        // principio no hay nada a la izquierda de la primera
+                        // tarjeta, así que un botón "volver" ahí no hacía nada.
+                        // La pista ocupa este mismo lugar hasta el primer
+                        // arrastre (ver más abajo); recién ahí vuelve.
+                        if (!_pistaVisible)
+                          Positioned(
+                            left: 8,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: _discoDeFlecha(
+                                _FlechaDeFila(
+                                  icono: Icons.chevron_left_rounded,
+                                  onTap: () => _irA(
+                                      (_p.roundToDouble() - 1)
+                                          .clamp(0.0, ultimo),
+                                      grupos),
+                                ),
+                              ),
+                            ),
+                          ),
                         Positioned(
-                          left: 8,
+                          right: 8,
                           top: 0,
                           bottom: 0,
                           child: Center(
                             child: _discoDeFlecha(
                               _FlechaDeFila(
-                                icono: Icons.chevron_left_rounded,
-                                onTap: () => _irA(
-                                    (_p.roundToDouble() - 1).clamp(0.0, ultimo),
-                                    grupos),
+                                icono: Icons.chevron_right_rounded,
+                                onTap: () {
+                                  _irA(
+                                      (_p.roundToDouble() + 1)
+                                          .clamp(0.0, ultimo),
+                                      grupos);
+                                  // Misma regla que al soltar el dedo: si queda
+                                  // poco por delante, se pide la página siguiente.
+                                  // Sin esto, quien navega a puro clic se choca
+                                  // contra el final y no pasa nada.
+                                  if (_p >= ultimoReal - 10) {
+                                    unawaited(widget.c.traerMas());
+                                  }
+                                },
                               ),
                             ),
                           ),
                         ),
-                      Positioned(
-                        right: 8,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: _discoDeFlecha(
-                            _FlechaDeFila(
-                              icono: Icons.chevron_right_rounded,
-                              onTap: () {
-                                _irA(
-                                    (_p.roundToDouble() + 1).clamp(0.0, ultimo),
-                                    grupos);
-                                // Misma regla que al soltar el dedo: si queda
-                                // poco por delante, se pide la página siguiente.
-                                // Sin esto, quien navega a puro clic se choca
-                                // contra el final y no pasa nada.
-                                if (_p >= ultimoReal - 10) {
-                                  unawaited(widget.c.traerMas());
-                                }
-                              },
+                      ],
+                      // ── La pista de «esto se desliza» ──────────────────────
+                      //
+                      // En el HUECO vacío a la izquierda de la tarjeta en
+                      // foco, centrada en ESE espacio y no en el acordeón
+                      // entero —ahí, sobre la tarjeta, no hay nada vacío que
+                      // señalar—. Se calcula del ancho real del hueco
+                      // (caja.maxWidth - m.ancho, la tarjeta grande), no de
+                      // una fracción fija: así cae en el lugar correcto sea
+                      // cual sea el tamaño de pantalla o la proporción de la
+                      // tarjeta en ese aparato.
+                      //
+                      // En escritorio, mientras está puesta, tampoco se dibuja
+                      // la flecha de clic hacia la izquierda (ver arriba) — las
+                      // dos a la vez serían dos avisos distintos diciendo lo
+                      // mismo.
+                      //
+                      // Se queda montada siempre (no solo mientras
+                      // _pistaVisible) para que el desvanecido de
+                      // AnimatedOpacity tenga algo que animar en vez de
+                      // desaparecer de un salto.
+                      Builder(builder: (context) {
+                        final huecoAncho = ((caja.maxWidth - m.ancho) / 2)
+                            .clamp(0.0, caja.maxWidth);
+                        final centroHueco =
+                            (huecoAncho / 2).clamp(16.0, caja.maxWidth - 16);
+                        // Un poco más grande que antes, y por tramo de ancho:
+                        // lo mismo que ya usa _proporcionChicaDe más arriba,
+                        // así el ícono se nota en un teléfono de pie, en uno
+                        // acostado, en una tablet y en escritorio, sin quedar
+                        // ni diminuto ni fuera de proporción en ninguno.
+                        final tamIcono = Ancho.de(context).elegir(
+                          compacto: 26.0,
+                          medio: 30.0,
+                          amplio: 34.0,
+                          enorme: 36.0,
+                        );
+                        return Positioned(
+                          left: centroHueco - (tamIcono + 12) / 2,
+                          top: 0,
+                          bottom: 0,
+                          child: IgnorePointer(
+                            child: Center(
+                              child: AnimatedOpacity(
+                                opacity: _pistaVisible ? 1 : 0,
+                                duration: const Duration(milliseconds: 450),
+                                curve: Curves.easeOut,
+                                child: AnimatedBuilder(
+                                  animation: _pista,
+                                  builder: (context, child) =>
+                                      Transform.translate(
+                                    // El vaivén: como una manito empujando la
+                                    // tarjeta hacia la izquierda y volviendo,
+                                    // invitando a seguirla.
+                                    offset: Offset(
+                                      -Curves.easeInOut
+                                              .transform(_pista.value) *
+                                          8,
+                                      0,
+                                    ),
+                                    child: child,
+                                  ),
+                                  child: _discoDeFlecha(
+                                    Icon(
+                                      Icons.swipe_left_alt_rounded,
+                                      color: Colors.white,
+                                      size: tamIcono,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      }),
                     ],
-                    // ── La pista de «esto se desliza» ──────────────────────
-                    //
-                    // En el HUECO vacío a la izquierda de la tarjeta en
-                    // foco, centrada en ESE espacio y no en el acordeón
-                    // entero —ahí, sobre la tarjeta, no hay nada vacío que
-                    // señalar—. Se calcula del ancho real del hueco
-                    // (caja.maxWidth - m.ancho, la tarjeta grande), no de
-                    // una fracción fija: así cae en el lugar correcto sea
-                    // cual sea el tamaño de pantalla o la proporción de la
-                    // tarjeta en ese aparato.
-                    //
-                    // En escritorio, mientras está puesta, tampoco se dibuja
-                    // la flecha de clic hacia la izquierda (ver arriba) — las
-                    // dos a la vez serían dos avisos distintos diciendo lo
-                    // mismo.
-                    //
-                    // Se queda montada siempre (no solo mientras
-                    // _pistaVisible) para que el desvanecido de
-                    // AnimatedOpacity tenga algo que animar en vez de
-                    // desaparecer de un salto.
-                    Builder(builder: (context) {
-                      final huecoAncho = ((caja.maxWidth - m.ancho) / 2)
-                          .clamp(0.0, caja.maxWidth);
-                      final centroHueco =
-                          (huecoAncho / 2).clamp(16.0, caja.maxWidth - 16);
-                      // Un poco más grande que antes, y por tramo de ancho:
-                      // lo mismo que ya usa _proporcionChicaDe más arriba,
-                      // así el ícono se nota en un teléfono de pie, en uno
-                      // acostado, en una tablet y en escritorio, sin quedar
-                      // ni diminuto ni fuera de proporción en ninguno.
-                      final tamIcono = Ancho.de(context).elegir(
-                        compacto: 26.0,
-                        medio: 30.0,
-                        amplio: 34.0,
-                        enorme: 36.0,
-                      );
-                      return Positioned(
-                        left: centroHueco - (tamIcono + 12) / 2,
-                        top: 0,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          child: Center(
-                            child: AnimatedOpacity(
-                              opacity: _pistaVisible ? 1 : 0,
-                              duration: const Duration(milliseconds: 450),
-                              curve: Curves.easeOut,
-                              child: AnimatedBuilder(
-                                animation: _pista,
-                                builder: (context, child) =>
-                                    Transform.translate(
-                                  // El vaivén: como una manito empujando la
-                                  // tarjeta hacia la izquierda y volviendo,
-                                  // invitando a seguirla.
-                                  offset: Offset(
-                                    -Curves.easeInOut.transform(_pista.value) *
-                                        8,
-                                    0,
-                                  ),
-                                  child: child,
-                                ),
-                                child: _discoDeFlecha(
-                                  Icon(
-                                    Icons.swipe_left_alt_rounded,
-                                    color: Colors.white,
-                                    size: tamIcono,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
+                  ),
                 ),
-              ),
               ),
             ),
             // En táctil la sombra sigue estando y ya no se corta, así que
@@ -1491,34 +1497,35 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     return _ConMarcoDeFoco(
                       marcado: _enfocado && esLaDelMedio,
                       child: _ConPanelDeHover(
-                      activo: conTexto && !_esTactil &&
-                          !PlatformTv.esTelevisionSync,
-                      titulo: planos[i].$2.title,
-                      encabezado: fuente,
-                      fecha: planos[i].$2.update,
-                      onTap: abrir,
-                      child: _TarjetaGrande(
-                        // ── El ancho para DECODIFICAR es fijo ────────────
-                        //
-                        // Y no el ancho real de la tarjeta, que cambia en
-                        // cada cuadro mientras el dedo arrastra. Con el
-                        // real, la imagen se volvía a decodificar sesenta
-                        // veces por segundo a un tamaño distinto, y eso es
-                        // exactamente el parpadeo: entre una decodificación
-                        // y la siguiente no hay nada que dibujar.
-                        //
-                        // Se pide siempre al tamaño de la grande: es el
-                        // máximo al que se va a ver, así que nunca queda
-                        // borrosa, y como el número no cambia, la imagen se
-                        // decodifica UNA vez y se reusa.
-                        ancho: m.ancho,
-                        item: planos[i].$2,
-                        fuente: fuente,
-                        cabeceras: _cabeceras(planos[i].$1),
-                        conTexto: conTexto,
-                        anchoTexto: m.ancho - 28,
+                        activo: conTexto &&
+                            !_esTactil &&
+                            !PlatformTv.esTelevisionSync,
+                        titulo: planos[i].$2.title,
+                        encabezado: fuente,
+                        fecha: planos[i].$2.update,
                         onTap: abrir,
-                      ),
+                        child: _TarjetaGrande(
+                          // ── El ancho para DECODIFICAR es fijo ────────────
+                          //
+                          // Y no el ancho real de la tarjeta, que cambia en
+                          // cada cuadro mientras el dedo arrastra. Con el
+                          // real, la imagen se volvía a decodificar sesenta
+                          // veces por segundo a un tamaño distinto, y eso es
+                          // exactamente el parpadeo: entre una decodificación
+                          // y la siguiente no hay nada que dibujar.
+                          //
+                          // Se pide siempre al tamaño de la grande: es el
+                          // máximo al que se va a ver, así que nunca queda
+                          // borrosa, y como el número no cambia, la imagen se
+                          // decodifica UNA vez y se reusa.
+                          ancho: m.ancho,
+                          item: planos[i].$2,
+                          fuente: fuente,
+                          cabeceras: _cabeceras(planos[i].$1),
+                          conTexto: conTexto,
+                          anchoTexto: m.ancho - 28,
+                          onTap: abrir,
+                        ),
                       ),
                     );
                   })(),
@@ -1599,75 +1606,90 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
   /// Cuánto mide la tarjeta en foco, cuánto las de los costados, y el alto.
   ///
-  /// El orden importa: primero el ancho que se querría, después el alto que
-  /// sale de ese ancho, y si ese alto no entra en la pantalla se recorta **y
-  /// el ancho vuelve atrás con él**. Sin ese último paso, en horizontal
-  /// quedaban tarjetas chatas nadando en huecos enormes.
-  _MedidasCarrusel _medir(BuildContext context, double anchoUtil) {
-    final altoPantalla = MediaQuery.sizeOf(context).height;
-    final a = Ancho.de(context);
-    final bajo = altoPantalla < 500;
+  /// Delega en `_medirCarrusel` (función libre, sin estado): así el hero
+  /// secundario de TV puede calcular EXACTAMENTE la misma altura para el
+  /// mismo ancho, sin duplicar la fórmula ni adivinar un número aparte.
+  _MedidasCarrusel _medir(BuildContext context, double anchoUtil) =>
+      _medirCarrusel(context, anchoUtil, conFocoTv: widget.conFocoTv);
+}
 
-    // ── La forma cambia con la orientación ─────────────────────────────
-    //
-    // De pie, la tarjeta es un poco más alta que ancha. Acostado no puede
-    // serlo: el alto disponible es la mitad, así que mantener esa proporción
-    // obliga a tarjetas angostas — y entran cuatro o cinco, chiquitas, en vez
-    // de las dos grandes que se quieren ver.
-    //
-    // Acostado se da vuelta: más ancha que alta, y entran dos.
-    final relacion = bajo ? 0.86 : 1.1; // alto respecto del ancho
+/// Cuánto mide la tarjeta en foco, cuánto las de los costados, y el alto.
+///
+/// El orden importa: primero el ancho que se querría, después el alto que
+/// sale de ese ancho, y si ese alto no entra en la pantalla se recorta **y
+/// el ancho vuelve atrás con él**. Sin ese último paso, en horizontal
+/// quedaban tarjetas chatas nadando en huecos enormes.
+_MedidasCarrusel _medirCarrusel(
+  BuildContext context,
+  double anchoUtil, {
+  required bool conFocoTv,
+}) {
+  final altoPantalla = MediaQuery.sizeOf(context).height;
+  final a = Ancho.de(context);
+  final bajo = altoPantalla < 500;
 
-    // Cuanto más ancha la pantalla, menos se lleva la tarjeta en foco: en una
-    // tablet, dos tercios del ancho serían una sola tarjeta enorme.
-    // En TV la tarjeta en foco se lleva bastante más: `enorme` (el peldaño
-    // en el que cae cualquier televisor) está pensado para un monitor de
-    // escritorio, que se mira de cerca. A tres metros, ese 0.34 es una
-    // portada chica en el medio de una pantalla enorme.
-    final parte = widget.conFocoTv
-        ? 0.44
-        : (bajo
-            ? a.elegir(compacto: 0.46, medio: 0.36, amplio: 0.34, enorme: 0.28)
-            : a.elegir(compacto: 0.66, medio: 0.5, amplio: 0.42, enorme: 0.34));
+  // ── La forma cambia con la orientación ─────────────────────────────
+  //
+  // De pie, la tarjeta es un poco más alta que ancha. Acostado no puede
+  // serlo: el alto disponible es la mitad, así que mantener esa proporción
+  // obliga a tarjetas angostas — y entran cuatro o cinco, chiquitas, en vez
+  // de las dos grandes que se quieren ver.
+  //
+  // Acostado se da vuelta: más ancha que alta, y entran dos.
+  final relacion = bajo ? 0.86 : 1.1; // alto respecto del ancho
 
-    var ancho = anchoUtil * parte;
-    var alto = ancho * relacion;
+  // Cuanto más ancha la pantalla, menos se lleva la tarjeta en foco: en una
+  // tablet, dos tercios del ancho serían una sola tarjeta enorme.
+  // En TV la tarjeta en foco se lleva bastante más: `enorme` (el peldaño
+  // en el que cae cualquier televisor) está pensado para un monitor de
+  // escritorio, que se mira de cerca. A tres metros, ese 0.34 es una
+  // portada chica en el medio de una pantalla enorme.
+  final parte = conFocoTv
+      ? 0.44
+      : (bajo
+          ? a.elegir(compacto: 0.46, medio: 0.36, amplio: 0.34, enorme: 0.28)
+          : a.elegir(compacto: 0.66, medio: 0.5, amplio: 0.42, enorme: 0.34));
 
-    // ── Cuánto alto se le deja ─────────────────────────────────────────
-    //
-    // En un teléfono acostado el alto es lo escaso, así que se le da casi
-    // todo. De pie sobra, y el carrusel no puede comerse la pantalla: hay
-    // filas debajo que también tienen que verse sin desplazar.
-    //
-    // La tablet es el caso que faltaba. Con el 0.4 del teléfono, sus 800
-    // píxeles de alto daban tarjetas de 320 — chiquitas y perdidas en 1280 de
-    // ancho. Tiene sitio de sobra para el doble, y debajo igual entra la
-    // primera fila.
-    //
-    // En TV el alto sobra y la distancia de mirada es otra: con el tope de
-    // escritorio el destacado quedaba como una tira fina arriba, sin ser el
-    // destacado de nada. Se le da más de la mitad de la pantalla, que es lo
-    // que hace cualquier app de televisor.
-    final tope = altoPantalla *
-        (widget.conFocoTv
-            ? 0.58
-            : (bajo ? 0.66 : a.elegir(compacto: 0.4, medio: 0.42, amplio: 0.55)));
-    if (alto > tope) {
-      alto = tope;
-      ancho = alto / relacion;
-    }
-    if (alto < 160) {
-      alto = 160;
-      ancho = alto / relacion;
-    }
-    if (ancho > anchoUtil - _aire) ancho = anchoUtil - _aire;
+  var ancho = anchoUtil * parte;
+  var alto = ancho * relacion;
 
-    return _MedidasCarrusel(
-      ancho: ancho,
-      anchoChico: (ancho * _proporcionChicaDe(a)).clamp(38.0, ancho),
-      alto: alto,
-    );
+  // ── Cuánto alto se le deja ─────────────────────────────────────────
+  //
+  // En un teléfono acostado el alto es lo escaso, así que se le da casi
+  // todo. De pie sobra, y el carrusel no puede comerse la pantalla: hay
+  // filas debajo que también tienen que verse sin desplazar.
+  //
+  // La tablet es el caso que faltaba. Con el 0.4 del teléfono, sus 800
+  // píxeles de alto daban tarjetas de 320 — chiquitas y perdidas en 1280 de
+  // ancho. Tiene sitio de sobra para el doble, y debajo igual entra la
+  // primera fila.
+  //
+  // En TV el alto sobra y la distancia de mirada es otra: con el tope de
+  // escritorio el destacado quedaba como una tira fina arriba, sin ser el
+  // destacado de nada. Se le da más de la mitad de la pantalla, que es lo
+  // que hace cualquier app de televisor.
+  final tope = altoPantalla *
+      (conFocoTv
+          ? 0.58
+          : (bajo ? 0.66 : a.elegir(compacto: 0.4, medio: 0.42, amplio: 0.55)));
+  if (alto > tope) {
+    alto = tope;
+    ancho = alto / relacion;
   }
+  if (alto < 160) {
+    alto = 160;
+    ancho = alto / relacion;
+  }
+  if (ancho > anchoUtil - _CarruselAndroidState._aire) {
+    ancho = anchoUtil - _CarruselAndroidState._aire;
+  }
+
+  return _MedidasCarrusel(
+    ancho: ancho,
+    anchoChico: (ancho * _CarruselAndroidState._proporcionChicaDe(a))
+        .clamp(38.0, ancho),
+    alto: alto,
+  );
 }
 
 class _MedidasCarrusel {
@@ -1889,9 +1911,16 @@ class _TarjetaGrande extends StatelessWidget {
           //
           // En una ventana grande la portada ya se ve entera y las esquinas
           // redondas le dan forma de sobra. Limpia se ve mejor.
+          // En TV el filo es de color en vez de blanco tenue — el anillo
+          // de acento que pide el diseño nuevo (no una sombra: eso ya se
+          // sacó a propósito, ver el comentario de `conSombra`).
           border: _esTactil
               ? Border.all(
-                  color: HomeTheme.sobrePortada.withValues(alpha: 0.11))
+                  color: PlatformTv.esTelevisionSync
+                      ? HomeTheme.accentPink.withValues(alpha: 0.55)
+                      : HomeTheme.sobrePortada.withValues(alpha: 0.11),
+                  width: PlatformTv.esTelevisionSync ? 2 : 1,
+                )
               : null,
           // ── Y la sombra, tampoco con el modo claro puesto ────────────────
           //

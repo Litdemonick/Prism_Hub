@@ -51,8 +51,8 @@ class HomeWindows extends StatelessWidget {
         // `itemCount` y el constructor no puedan discrepar entre una
         // llamada y la otra.
         final visibles = c.filas
-            .where((f) =>
-                f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+            .where(
+                (f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
             // Preferencia de Ajustes (Fase 11): qué zonas se mezclan en
             // Inicio. Vacía = todas, como siempre.
             .where((f) => ZonasPreferidasEnInicio.pasaElFiltro(
@@ -146,7 +146,8 @@ class HomeWindows extends StatelessWidget {
                         // izquierda igual.
                         child: SizedBox(
                           width: double.infinity,
-                          child: Center(child: RefreshButton(onTap: c.refrescarTodo)),
+                          child: Center(
+                              child: RefreshButton(onTap: c.refrescarTodo)),
                         ),
                       ),
                     ],
@@ -397,29 +398,36 @@ class _FilaWindowsState extends State<_FilaWindows> {
                           final item = items[i];
                           void abrir() =>
                               _abrir(context, item, widget.fila.package);
-                          final tarjeta = TarjetaDeCatalogo(
-                            titulo: item.title,
-                            portada: item.cover,
-                            cabeceras: _cabeceras(widget.fila.package),
-                            encabezado: widget.fila.nombre,
-                            // `update` es lo único con forma de fecha que
-                            // devuelve `latest()`. Cada extensión lo escribe a
-                            // su manera —«hace 2 días», «Ep 12», una fecha— así
-                            // que se muestra TAL CUAL: normalizarlo acá sería
-                            // inventar una precisión que el dato no tiene.
-                            fecha: item.update,
-                            // Más grande en TV — se mira desde el sillón.
-                            ancho: widget.conFocoTv
-                                ? _anchoTarjetaTv(context)
-                                : null,
-                            // Sin onTap cuando hay foco de TV: FocusableCard ya
-                            // lo maneja por fuera. Con los dos a la vez, un
-                            // solo click dispara `abrir` DOS veces — cada
-                            // GestureDetector reconoce el toque por su cuenta,
-                            // ninguno "gana" sobre el otro porque no compiten
-                            // por el mismo gesto (no hay arrastre de por medio).
-                            onTap: widget.conFocoTv ? null : abrir,
-                          );
+                          Widget tarjeta({bool tvFoco = false}) =>
+                              TarjetaDeCatalogo(
+                                titulo: item.title,
+                                portada: item.cover,
+                                cabeceras: _cabeceras(widget.fila.package),
+                                encabezado: widget.fila.nombre,
+                                // `update` es lo único con forma de fecha que
+                                // devuelve `latest()`. Cada extensión lo
+                                // escribe a su manera —«hace 2 días», «Ep 12»,
+                                // una fecha— así que se muestra TAL CUAL:
+                                // normalizarlo acá sería inventar una
+                                // precisión que el dato no tiene.
+                                fecha: item.update,
+                                // Más grande en TV — se mira desde el sillón.
+                                ancho: widget.conFocoTv
+                                    ? _anchoTarjetaTv(context)
+                                    : null,
+                                // Sin onTap cuando hay foco de TV: FocusableCard ya
+                                // lo maneja por fuera. Con los dos a la vez, un
+                                // solo click dispara `abrir` DOS veces — cada
+                                // GestureDetector reconoce el toque por su cuenta,
+                                // ninguno "gana" sobre el otro porque no compiten
+                                // por el mismo gesto (no hay arrastre de por medio).
+                                onTap: widget.conFocoTv ? null : abrir,
+                                // Mismo criterio que la grilla de zonas
+                                // (`_ZonaTv`): el panel con el nombre de la
+                                // extensión solo aparece en la tarjeta que
+                                // TIENE el foco ahora mismo, nunca en reposo.
+                                tvFoco: tvFoco,
+                              );
                           return Padding(
                             // Arriba, para que la tarjeta tenga hacia dónde
                             // crecer sin pisar el título de la fila.
@@ -441,11 +449,15 @@ class _FilaWindowsState extends State<_FilaWindows> {
                                     // era que la tarjeta ADEMÁS se agrandaba
                                     // sola con el hover y crecía más que el
                                     // marco; eso ya no pasa en TV.
-                                    altoMarco:
-                                        _anchoTarjetaTv(context) * 3 / 2,
-                                    child: tarjeta,
+                                    altoMarco: _anchoTarjetaTv(context) * 3 / 2,
+                                    // `builder` y no `child`: ver el mismo
+                                    // comentario en `_ZonaTv` — la tarjeta
+                                    // necesita saber si TIENE el foco ahora
+                                    // mismo para mostrar el panel de info.
+                                    builder: (tieneFoco) =>
+                                        tarjeta(tvFoco: tieneFoco),
                                   )
-                                : tarjeta,
+                                : tarjeta(),
                           );
                         },
                       ),

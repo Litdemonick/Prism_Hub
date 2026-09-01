@@ -208,15 +208,18 @@ class _HomeTVState extends State<HomeTV> {
   @override
   Widget build(BuildContext context) {
     final overscan = _overscanTv(context);
-    // Solo el aire de overscan, NO el ancho del sidebar.
+    // El ancho contraído, siempre reservado — y solo ese.
     //
-    // Antes se reservaba ancho de sobra para que los íconos contraídos
-    // nunca taparan ninguna tarjeta. Pedido explícito, con foto: al revés —
-    // que las tarjetas usen ESE espacio también. El sidebar es transparente
-    // (ver el degradado de `_SidebarTVState`), así que contraído se ve como
-    // un ícono flotando sobre el borde de la primera columna, no como una
-    // pared que hay que esquivar.
-    final margenParaElSidebar = overscan;
+    // Dos correcciones en el mismo lugar, la segunda deshaciendo la
+    // primera. Primero se sacó el margen entero (probado con foto: las
+    // tarjetas quedaban tapadas por los íconos). Después, con más fotos,
+    // quedó claro que CONTRAÍDO tiene que seguir siendo sólido y quedar AL
+    // LADO del contenido —como cualquier rail de íconos— y que lo
+    // transparente es solo lo que pasa al EXPANDIRSE: ahí sí, la franja más
+    // ancha se dibuja encima sin correr nada. Ver el color condicional en
+    // `_SidebarTVState`.
+    final margenParaElSidebar =
+        _anchoSidebarContraidoTv(Ancho.de(context)) + overscan * 1.5;
     // ── La barra de arriba manda en TODA la pantalla ────────────────────
     //
     // Estaba dentro del panel de contenido, así que entrar a una zona sin
@@ -557,27 +560,35 @@ class _SidebarTVState extends State<_SidebarTV> {
     final anchoObjetivo =
         _expandido ? _anchoSidebarTv(a) : _anchoSidebarContraidoTv(a);
     return RepaintBoundary(
-      // Fondo propio, DEGRADADO y no un bloque sólido: el sidebar ahora se
-      // dibuja ENCIMA de las tarjetas (ver el `Stack` en `HomeTV`).
+      // Fondo propio, y DISTINTO según esté contraído o expandido.
       //
-      // Un color sólido tapaba la tarjeta de atrás por completo — reportado
-      // en vivo: «está feo, debe ser transparente». La idea de la referencia
-      // (estilo Crunchyroll) es un degradado: opaco junto al ícono, para que
-      // el texto se siga leyendo, y que se va abriendo hacia la derecha
-      // hasta dejar pasar la tarjeta de atrás. Así el menú se siente flotando
-      // sobre el contenido, no una pared delante.
+      // Contraído, el sidebar vive dentro de su propio margen reservado
+      // (`margenParaElSidebar` en `HomeTV`) — es un rail de íconos AL LADO
+      // del contenido, como cualquier otro, y va sólido: nada por detrás
+      // que se vea a través. Reportado en vivo con foto: contraído no debe
+      // superponerse, tiene que quedar al lado.
+      //
+      // Expandido, en cambio, la franja se vuelve más ancha que ese margen
+      // y pasa a dibujarse ENCIMA de tarjetas que antes no tapaba nada —
+      // ahí sí hace falta un degradado, para que se siga leyendo el texto
+      // junto al ícono sin tapar del todo lo que queda debajo. Reportado en
+      // vivo: «está feo, debe ser transparente» — pero esa nota era sobre
+      // el expandido, no sobre el contraído.
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              HomeTheme.bg.withValues(alpha: 0.96),
-              HomeTheme.bg.withValues(alpha: 0.78),
-              HomeTheme.bg.withValues(alpha: 0.0),
-            ],
-            stops: const [0, 0.68, 1],
-          ),
+          color: _expandido ? null : HomeTheme.bg,
+          gradient: _expandido
+              ? LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    HomeTheme.bg.withValues(alpha: 0.96),
+                    HomeTheme.bg.withValues(alpha: 0.78),
+                    HomeTheme.bg.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0, 0.68, 1],
+                )
+              : null,
         ),
         child: AnimatedContainer(
           width: anchoObjetivo,
@@ -600,8 +611,7 @@ class _SidebarTVState extends State<_SidebarTV> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: FocusableCard(
                       focusNode: _nodos[i],
-                      autofocus:
-                          pedirFoco && categoria == _CategoriaTV.inicio,
+                      autofocus: pedirFoco && categoria == _CategoriaTV.inicio,
                       borderRadius: 14,
                       onTap: () => widget.onElegir(categoria),
                       child: _ItemSidebarTV(
@@ -687,6 +697,202 @@ class _ItemSidebarTV extends StatelessWidget {
 
 /// Todo lo que va a la derecha del sidebar: la barra de arriba, el
 /// destacado, los filtros y las filas.
+/// Entrevera los destacados de todas las extensiones, una posición a la vez
+/// (primero la más reciente de cada una, después la segunda de cada una...).
+///
+/// Distinto de `_planos` (el que usa el carrusel infinito): ese reordena
+/// pensando en el arrastre cuadro a cuadro y cachea contra su propio
+/// `State`. Acá no hace falta nada de eso — esto se calcula una sola vez por
+/// entrada a Inicio, para el hero secundario y las medianas, así que alcanza
+/// con una función simple y sin estado.
+List<(String package, ExtensionListItem item)> _entrelazarDestacados(
+  List<(String, List<ExtensionListItem>)> grupos,
+) {
+  final resultado = <(String, ExtensionListItem)>[];
+  var i = 0;
+  var quedanMas = grupos.isNotEmpty;
+  while (quedanMas) {
+    quedanMas = false;
+    for (final (package, items) in grupos) {
+      if (i < items.length) {
+        resultado.add((package, items[i]));
+        quedanMas = true;
+      }
+    }
+    i++;
+  }
+  return resultado;
+}
+
+/// El segundo destacado grande, al lado del carrusel infinito.
+///
+/// A diferencia del carrusel, este NO tiene temporizador propio ni se
+/// re-sortea solo — pedido explícito: "solo en inicio la primera es
+/// infinita [...] solo esa cambia el diseño". Mismo vestido visual que
+/// `_TarjetaGrande` (radio, filo de acento, título abajo con sombra en vez
+/// de velo — ver el comentario largo de por qué ahí NO hay velo).
+class _HeroSecundarioTv extends StatelessWidget {
+  const _HeroSecundarioTv({required this.package, required this.item});
+
+  final String package;
+  final ExtensionListItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final radio = BorderRadius.circular(20);
+    return GestureDetector(
+      onTap: () => _abrir(context, item, package),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radio,
+          border: Border.all(
+            color: HomeTheme.accentPink.withValues(alpha: 0.55),
+            width: 2,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: radio,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CacheNetWorkImagePic(
+                item.cover ?? '',
+                fit: BoxFit.cover,
+                cacheWidth: (MediaQuery.sizeOf(context).width *
+                        MediaQuery.devicePixelRatioOf(context))
+                    .ceil()
+                    .clamp(1, 4096),
+                headers: _cabeceras(package),
+                placeholder: const Esqueleto(radio: 20),
+              ),
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      height: 1.2,
+                      fontWeight: FontWeight.w800,
+                      color: HomeTheme.sobrePortada,
+                      shadows: [
+                        Shadow(blurRadius: 3, color: Color(0xE6000000)),
+                        Shadow(blurRadius: 12, color: Color(0x99000000)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// La fila de "medianas": tarjetas anchas con el título superpuesto, sin
+/// panel de extensión (a diferencia de las filas de pósters de abajo). Es
+/// el mismo puente visual que en el boceto — ni tan grande como el hero ni
+/// tan chica como un póster.
+///
+/// Reusa `HomeMediaCard` (ya construida para tarjetas 16:9 con título
+/// encima — la misma que arma Continuar viendo en Biblioteca) en vez de un
+/// widget nuevo: ya trae foco D-pad propio en TV.
+class _FilaMedianasTv extends StatelessWidget {
+  const _FilaMedianasTv({required this.items});
+
+  final List<(String package, ExtensionListItem item)> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: HomeMediaCard.altoTotalAncha,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (context, i) {
+          final (package, item) = items[i];
+          return HomeMediaCard(
+            horizontal: true,
+            title: item.title,
+            cover: item.cover,
+            headers: _cabeceras(package),
+            onTap: () => _abrir(context, item, package),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// La cabecera de una zona de vídeo (Películas/Series/Anime): hero + hero
+/// secundario + medianas, con los primeros `arriba.length` ítems de la
+/// grilla de esa zona — nunca más de 6. Ninguno de los dos destacados es
+/// infinito acá (solo el de Inicio lo es), así que los dos usan
+/// `_HeroSecundarioTv` tal cual.
+class _CabeceraZonaTv extends StatelessWidget {
+  const _CabeceraZonaTv({required this.arriba});
+
+  final List<ZonaItem> arriba;
+
+  @override
+  Widget build(BuildContext context) {
+    final hero = arriba[0];
+    final heroSecundario = arriba.length > 1 ? arriba[1] : null;
+    final medianas = arriba.skip(2).map((zi) => (zi.package, zi.item)).toList();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, caja) {
+              final anchoMitad = heroSecundario == null
+                  ? caja.maxWidth
+                  : (caja.maxWidth - 14) / 2;
+              final alto =
+                  _medirCarrusel(context, anchoMitad, conFocoTv: true).alto;
+              return SizedBox(
+                height: alto,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _HeroSecundarioTv(
+                        package: hero.package,
+                        item: hero.item,
+                      ),
+                    ),
+                    if (heroSecundario != null) ...[
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _HeroSecundarioTv(
+                          package: heroSecundario.package,
+                          item: heroSecundario.item,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+          if (medianas.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _FilaMedianasTv(items: medianas),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _ContenidoTV extends StatelessWidget {
   const _ContenidoTV({required this.c});
 
@@ -722,6 +928,13 @@ class _ContenidoTV extends StatelessWidget {
         Expanded(
           child: Obx(() {
             final visibles = _visibles();
+            final entrelazados = _entrelazarDestacados(c.destacadosVisibles);
+            final heroSecundario =
+                entrelazados.length > 1 ? entrelazados[1] : null;
+            final medianas = entrelazados.skip(2).take(4).toList();
+            // Cuántos ítems ocupa la cabecera antes de llegar a las filas
+            // por extensión: el hero (siempre) + las medianas (si hay).
+            final extraArriba = medianas.isEmpty ? 1 : 2;
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.only(bottom: 24),
@@ -746,23 +959,65 @@ class _ContenidoTV extends StatelessWidget {
               // justo lo que conviene adelantar.
               scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
                   const ScrollCacheExtent.viewport(1),
-              // +1: el destacado.
-              itemCount: (visibles.isEmpty ? 2 : visibles.length) + 1,
+              // El hero (+ medianas si hay) ocupan `extraArriba` ítems.
+              itemCount: (visibles.isEmpty ? 2 : visibles.length) + extraArriba,
               itemBuilder: (context, i) => switch (i) {
                 // Sin FocusableCard alrededor: el carrusel se enfoca solo y
                 // maneja sus propias flechas (ver _CarruselAndroid con
                 // conFocoTv). Envuelto, el foco se quedaba afuera y las
                 // teclas nunca llegaban adentro.
+                //
+                // Si hay hero secundario, va al lado en la misma fila — con
+                // el mismo alto que el carrusel se da a sí mismo para ESE
+                // ancho (`_medirCarrusel`, la misma fórmula, no una
+                // adivinada aparte), para que ninguno de los dos fuerce al
+                // otro a un tamaño que no pidió.
                 0 => RepaintBoundary(
-                    child: _CarruselAndroid(c: c, conFocoTv: true),
+                    child: heroSecundario == null
+                        ? _CarruselAndroid(c: c, conFocoTv: true)
+                        : LayoutBuilder(
+                            builder: (context, caja) {
+                              final anchoMitad = (caja.maxWidth - 14) / 2;
+                              final alto = _medirCarrusel(
+                                context,
+                                anchoMitad,
+                                conFocoTv: true,
+                              ).alto;
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _CarruselAndroid(
+                                      c: c,
+                                      conFocoTv: true,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: alto,
+                                      child: _HeroSecundarioTv(
+                                        package: heroSecundario.$1,
+                                        item: heroSecundario.$2,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                1 when medianas.isNotEmpty => Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: _FilaMedianasTv(items: medianas),
                   ),
                 _ => visibles.isEmpty
                     ? const _FilaEsperando()
-                    : (i - 1 < visibles.length
+                    : (i - extraArriba < visibles.length
                         ? _FilaWindows(
-                            key: ValueKey(visibles[i - 1].package),
+                            key: ValueKey(visibles[i - extraArriba].package),
                             c: c,
-                            fila: visibles[i - 1],
+                            fila: visibles[i - extraArriba],
                             conFocoTv: true,
                           )
                         : const SizedBox.shrink()),
@@ -844,9 +1099,7 @@ class _ZonaTvState extends State<_ZonaTv> {
     // este controller viene a garantizar. Y `cargarInicial()` tiene su
     // propio candado (`if (cargando.value) return`), así que aunque justo
     // estuviera cargando, esto no dispara un segundo pedido.
-    if (c.fuentes.isEmpty ||
-        c.entrelazados.isEmpty ||
-        c.hayExtensionesNuevas) {
+    if (c.fuentes.isEmpty || c.entrelazados.isEmpty || c.hayExtensionesNuevas) {
       unawaited(c.cargarInicial());
     }
   }
@@ -919,8 +1172,8 @@ class _ZonaTvState extends State<_ZonaTv> {
         // que ya usa ZonaCatalogoPage para el mismo caso (Fase 5).
         return const ZonaSinClasificar();
       }
-      final items = c.entrelazados;
-      if (items.isEmpty && !c.fuentes.any((f) => f.isFetching)) {
+      final todos = c.entrelazados;
+      if (todos.isEmpty && !c.fuentes.any((f) => f.isFetching)) {
         // Hay fuentes clasificadas pero su catálogo vino vacío de todas —
         // distinto de "ninguna la declara" (eso es ZonaSinClasificar,
         // arriba).
@@ -931,6 +1184,18 @@ class _ZonaTvState extends State<_ZonaTv> {
           ),
         );
       }
+      // ── Cabecera de la zona: hero + hero secundario + medianas ─────────
+      //
+      // Mismo vestido visual que Inicio, con los primeros ítems de la
+      // MISMA lista entrelazada que ya arma la grilla — nada de un pool
+      // aparte. A diferencia de Inicio, acá NINGUNO de los dos destacados
+      // es el carrusel infinito: son fijos (no hay temporizador), porque
+      // "solo en inicio la primera es infinita" (pedido explícito). El
+      // mecanismo de paginación/caché de la grilla no se toca: esto solo
+      // decide qué se pinta arriba, y la grilla se salta esos mismos
+      // ítems para no repetirlos.
+      final arriba = todos.take(6).toList();
+      final items = todos.skip(arriba.length).toList();
       return LayoutBuilder(
         builder: (context, restricciones) {
           const margen = 24.0;
@@ -959,6 +1224,13 @@ class _ZonaTvState extends State<_ZonaTv> {
             scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
                 ScrollCacheExtent.pixels(alto * 2),
             slivers: [
+              if (arriba.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(margen, 8, margen, 0),
+                    child: _CabeceraZonaTv(arriba: arriba),
+                  ),
+                ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(margen, 8, margen, 0),
                 sliver: SliverGrid(

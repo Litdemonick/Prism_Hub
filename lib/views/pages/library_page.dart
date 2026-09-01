@@ -253,11 +253,22 @@ class _LibraryPageState extends State<LibraryPage> {
           // Ver PortadaHistorial: el mismo campo `cover` puede traer una
           // captura local del frame o el poster de red.
           final portada = PortadaHistorial.de(h);
+          // `progress`/`totalProgress` son segundos guardados como String
+          // (ver video_controller.dart) — nunca un ratio ya calculado. Sin
+          // esto la tarjeta nunca recibía `progress`, así que Continuar
+          // viendo no mostraba ninguna barra.
+          final segundos = double.tryParse(h.progress);
+          final total = double.tryParse(h.totalProgress);
+          final progreso =
+              (isVideo && segundos != null && total != null && total > 0)
+                  ? (segundos / total).clamp(0.0, 1.0)
+                  : null;
           return Obx(() => HomeMediaCard(
                 horizontal: ancha,
                 // El tipo ya lo dice el título de la sección: repetirlo en
                 // cada tarjeta era ruido.
                 type: null,
+                progress: progreso,
                 title: h.title,
                 subtitle: FlutterI18n.translate(
                   context,
@@ -705,8 +716,7 @@ class _BibliotecaVaciaState extends State<_BibliotecaVacia>
               Text(
                 'home.no-record'.i18n,
                 textAlign: TextAlign.center,
-                style:
-                    TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
+                style: TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
               ),
               const SizedBox(height: 18),
               // Botón al Historial: con los estados de seguimiento, terminar
