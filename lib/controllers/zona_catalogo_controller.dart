@@ -54,6 +54,12 @@ class ZonaFuente {
   Future<void>? inFlight;
   Object? error;
 
+  /// Cuándo contestó de verdad por última vez. Null si todavía nunca.
+  ///
+  /// De acá sale si lo que se está mostrando ya está viejo — ver
+  /// `ZonaCatalogoController.pedirFuente`.
+  DateTime? traidoEl;
+
   /// Sus `items` vinieron del caché en disco, no de una respuesta real
   /// todavía — ver `ZonaCatalogoController.cargarInicial`. Sigue contando
   /// como "vacía" para el pool de pedidos: sin esto, mostrar el caché
@@ -678,10 +684,50 @@ class ZonaCatalogoController extends GetxController {
   /// Barato de llamar de más: si ya tiene contenido propio, o si justo está
   /// pidiendo, no hace nada.
   Future<void> pedirFuente(ZonaFuente f) async {
-    if (f.isFetching || f.agotada) return;
-    if (f.items.isNotEmpty && !f.desdeCache) return;
-    await _pedir([f]);
+    if (f.isFetching) return;
+    // Sin nada todavía (o con lo que quedó del disco): se pide y listo.
+    if (f.items.isEmpty || f.desdeCache) {
+      if (f.agotada) return;
+      await _pedir([f]);
+      return;
+    }
+    // ── Y si lo que se ve ya está viejo, se refresca solo ──────────────
+    //
+    // En un televisor no hay «deslizar para actualizar» ni tiene sentido
+    // un botón de refrescar: nadie va a buscar eso con el mando. Pero el
+    // contenido de una zona sí envejece — una extensión publica capítulos
+    // nuevos todo el tiempo.
+    //
+    // Así que se refresca en el momento natural: al ENTRAR a la zona. Cada
+    // fila, al construirse, mira cuándo fue la última vez que su extensión
+    // contestó de verdad; si pasó [_vigenciaDeLaZona], vuelve a pedir la
+    // primera página en segundo plano. Lo que ya está en pantalla se sigue
+    // viendo mientras tanto —no se vacía nada— y lo nuevo entra cuando
+    // llega.
+    //
+    // Moverse entre zonas sigue siendo instantáneo: lo recién visto no
+    // cumple la antigüedad, así que no se pide nada.
+    final traido = f.traidoEl;
+    if (traido == null) return;
+    if (DateTime.now().difference(traido) < _vigenciaDeLaZona) return;
+    // Se pide la PRIMERA página —donde publica lo nuevo— sin perder por
+    // dónde iba el usuario: la posición se devuelve apenas termina. Y lo
+    // que llega se agrega descartando lo repetido (`traerUna` filtra por
+    // url), así que nada de lo que ya se veía se mueve de sitio.
+    final paginaQueIba = f.pagina;
+    f.pagina = 1;
+    try {
+      await _pedir([f]);
+    } finally {
+      f.pagina = paginaQueIba;
+    }
   }
+
+  /// Cuánto vale lo que ya se trajo antes de volver a pedirlo.
+  ///
+  /// Quince minutos: más corto sería pedir de nuevo por pasear entre zonas,
+  /// y más largo dejaría el catálogo viejo toda una tarde.
+  static const _vigenciaDeLaZona = Duration(minutes: 15);
 
   /// Si queda alguna fuente con más para traer.
   bool get puedeTraerMas =>
@@ -901,6 +947,7 @@ class ZonaCatalogoController extends GetxController {
         // el eco de una sesión anterior. Se guarda para la PRÓXIMA vez que
         // se abra esta zona (ver `cargarInicial`/`_leerCacheDisco`).
         f.desdeCache = false;
+        f.traidoEl = DateTime.now();
         _guardarCacheDebounced();
         _refrescarDebounced();
       } catch (e) {

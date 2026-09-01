@@ -55,6 +55,7 @@ class TarjetaDeCatalogo extends StatefulWidget {
     this.duracion,
     this.ancho,
     this.tvFoco = false,
+    this.tituloEnUnaLinea = false,
   });
 
   final String titulo;
@@ -97,6 +98,10 @@ class TarjetaDeCatalogo extends StatefulWidget {
   /// tarjeta puede mostrar el panel SIN prender de nuevo su propia
   /// escala/sombra.
   final bool tvFoco;
+
+  /// Si debajo de la portada va UNA sola línea de título, sin metadatos.
+  /// Ver [altoDeUnaLineaDeAncho].
+  final bool tituloEnUnaLinea;
 
   /// Ancho a la fuerza, para cuando la tarjeta va en una **grilla**.
   ///
@@ -168,6 +173,21 @@ class TarjetaDeCatalogo extends StatefulWidget {
 
   /// Lo mismo, pero partiendo de un ancho ya decidido — el de una celda.
   static double altoTotalDeAncho(double ancho) => ancho * 3 / 2 + 8 + 36 + 16;
+
+  /// La variante de UNA línea, sin la fila de metadatos.
+  ///
+  /// ── Por qué existe ────────────────────────────────────────────────────
+  ///
+  /// La tarjeta normal reserva dos líneas de título más una de metadatos:
+  /// cincuenta y dos puntos de texto debajo de cada portada. En una grilla
+  /// de escritorio eso está bien —hay sitio y el dato ayuda—, pero en las
+  /// filas de un televisor ese espacio de más se multiplica por fila y
+  /// termina empujando la siguiente fuera de la pantalla: se veía el
+  /// principio de la de abajo con el título ya cortado por el borde.
+  ///
+  /// Reportado en vivo: «las de abajo, la que sigue, ese título no se ve
+  /// porque ya es el borde; corregí esas proporciones, esos espacios».
+  static double altoDeUnaLineaDeAncho(double ancho) => ancho * 3 / 2 + 6 + 19;
 
   @override
   State<TarjetaDeCatalogo> createState() => _TarjetaDeCatalogoState();
@@ -390,36 +410,52 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              // Alto fijo para dos líneas: ver la regla de arriba.
-              SizedBox(
-                height: 36,
-                child: Text(
-                  widget.titulo,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.32,
-                    fontWeight: FontWeight.w600,
-                    color: resaltada ? _acento : HomeTheme.textPrimary,
+              SizedBox(height: widget.tituloEnUnaLinea ? 6 : 8),
+              if (widget.tituloEnUnaLinea)
+                SizedBox(
+                  height: 19,
+                  child: Text(
+                    widget.titulo,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: HomeTheme.textPrimary,
+                    ),
+                  ),
+                )
+              else ...[
+                // Alto fijo para dos líneas: ver la regla de arriba.
+                SizedBox(
+                  height: 36,
+                  child: Text(
+                    widget.titulo,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.32,
+                      fontWeight: FontWeight.w600,
+                      color: resaltada ? _acento : HomeTheme.textPrimary,
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(
-                height: 16,
-                child: widget.subtitulo == null
-                    ? null
-                    : Text(
-                        widget.subtitulo!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: HomeTheme.textMuted,
+                SizedBox(
+                  height: 16,
+                  child: widget.subtitulo == null
+                      ? null
+                      : Text(
+                          widget.subtitulo!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: HomeTheme.textMuted,
+                          ),
                         ),
-                      ),
-              ),
+                ),
+              ],
             ],
           ),
         ),

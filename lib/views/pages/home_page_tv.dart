@@ -765,16 +765,31 @@ class _SidebarTVState extends State<_SidebarTV> {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: null,
+          // ── El degradado del panel abierto ─────────────────────────
+          //
+          // Antes iba de opaco a nada en tres pasos, y el tramo del medio
+          // (78%) dejaba el fondo casi tan oscuro como la pantalla: no se
+          // notaba dónde terminaba el panel ni que hubiera algo detrás.
+          // Reportado: «la sombra de atrás ni se nota, debe tener un buen
+          // degradado que se vea bien en los televisores».
+          //
+          // Ahora arranca en negro casi pleno —para que el nombre de cada
+          // categoría se lea sobre cualquier portada—, se mantiene sólido
+          // hasta pasada la mitad y recién ahí se abre, con una cola larga
+          // que se apaga del todo antes del borde. Así el panel se lee como
+          // una capa por encima del contenido, y no como un rectángulo
+          // pegado.
           gradient: _expandido
               ? LinearGradient(
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                   colors: [
-                    HomeTheme.bg.withValues(alpha: 0.96),
-                    HomeTheme.bg.withValues(alpha: 0.78),
+                    const Color(0xF2000000),
+                    const Color(0xD9000000),
+                    HomeTheme.bg.withValues(alpha: 0.55),
                     HomeTheme.bg.withValues(alpha: 0.0),
                   ],
-                  stops: const [0, 0.68, 1],
+                  stops: const [0, 0.45, 0.78, 1],
                 )
               : null,
         ),
@@ -1189,6 +1204,10 @@ class _TarjetaDensaTv extends StatelessWidget {
               cabeceras: _cabeceras(package),
               ancho: ancho,
               tvFoco: tieneFoco,
+              // Una sola línea: en una fila de televisor, las dos líneas de
+              // título más los metadatos son cincuenta puntos por fila que
+              // terminan empujando la fila siguiente fuera de pantalla.
+              tituloEnUnaLinea: true,
             ),
           ),
         ],
@@ -1279,8 +1298,8 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
               ),
             ),
             SizedBox(
-              // Portada + aire + una linea de titulo (lo pone la tarjeta).
-              height: TarjetaDeCatalogo.altoTotalDeAncho(ancho),
+              // Portada + aire + una línea de título (lo pone la tarjeta).
+              height: TarjetaDeCatalogo.altoDeUnaLineaDeAncho(ancho),
               child: ListView.separated(
                 controller: _scroll,
                 scrollDirection: Axis.horizontal,

@@ -135,16 +135,11 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
           curve: Curves.easeOut,
         );
       } else {
-        // Las dos políticas seguidas son el «lo mínimo»: la primera acerca
-        // el principio si quedó cortado por la izquierda, la segunda el
-        // final si quedó cortado por la derecha. Si ya entra entera, ninguna
-        // de las dos mueve nada.
-        posicion.ensureVisible(
-          objetivo,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-          duration: duracion,
-          curve: Curves.easeOut,
-        );
+        // Una sola pasada, y la mínima: acerca la tarjeta lo justo para
+        // que entre entera. Con dos pasadas seguidas (una por cada borde)
+        // una tarjeta a medio asomar se acomodaba dos veces, y eso es el
+        // temblorcito que se reportó: «al seleccionar una card se mueve un
+        // poquito, y al desmarcarla se reacomoda otra vez».
         posicion.ensureVisible(
           objetivo,
           alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,

@@ -215,8 +215,24 @@ class _FilaWindows extends StatefulWidget {
 /// pantalla desaprovechada.
 double _anchoTarjetaTv(BuildContext context) => _anchoPosterTv(context);
 
+/// El margen izquierdo de una fila, título y tarjetas por igual.
+///
+/// ── Por qué no es `_margen` a secas ─────────────────────────────────────
+///
+/// En escritorio el título y la tira llevaban el mismo margen salvo que la
+/// tira sumaba 26 de aire, para que el marco de foco de la primera tarjeta
+/// no quedara mordido contra el recorte de la fila. En televisor eso se
+/// veía como que las tarjetas arrancaban corridas respecto del título —
+/// reportado: «que alinee bien el título, que también vaya a la izquierda,
+/// y que las cards vayan a la izquierda».
+///
+/// En TV ya no hace falta ese aire: la fila no recorta (`Clip.none`) y el
+/// contenido arranca pegado al rail. Así que las dos cosas van al mismo
+/// sitio, y bien a la izquierda.
+double _margenDeFilaTv(BuildContext context) => 2;
+
 double _altoFilaTv(BuildContext context) =>
-    TarjetaDeCatalogo.altoTotalDeAncho(_anchoTarjetaTv(context)) + 28;
+    TarjetaDeCatalogo.altoDeUnaLineaDeAncho(_anchoTarjetaTv(context)) + 20;
 
 class _FilaWindowsState extends State<_FilaWindows> {
   final _scroll = ScrollController();
@@ -339,8 +355,11 @@ class _FilaWindowsState extends State<_FilaWindows> {
                           ? _anchoTarjetaTv(context)
                           : TarjetaDeCatalogo.anchoPara(context),
                       separacion: 14,
-                      padding:
-                          EdgeInsets.symmetric(horizontal: _margen(context)),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: widget.conFocoTv
+                            ? _margenDeFilaTv(context)
+                            : _margen(context),
+                      ),
                       paddingDeCadaUno: const EdgeInsets.only(top: 10),
                     )
                   // ── Recorte solo a los costados ────────────────────
@@ -377,7 +396,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                         // contra el recorte de la fila.
                         padding: EdgeInsets.symmetric(
                           horizontal: widget.conFocoTv
-                              ? _margen(context) + 26
+                              ? _margenDeFilaTv(context)
                               : _margen(context),
                         ),
                         // ── Y dos brillando al final si está trayendo ──
@@ -432,6 +451,9 @@ class _FilaWindowsState extends State<_FilaWindows> {
                                 // ninguno "gana" sobre el otro porque no compiten
                                 // por el mismo gesto (no hay arrastre de por medio).
                                 onTap: widget.conFocoTv ? null : abrir,
+                                // En televisor, una sola línea de título:
+                                // ver TarjetaDeCatalogo.altoDeUnaLineaDeAncho.
+                                tituloEnUnaLinea: widget.conFocoTv,
                                 // Mismo criterio que la grilla de zonas
                                 // (`_ZonaTv`): el panel con el nombre de la
                                 // extensión solo aparece en la tarjeta que
@@ -481,7 +503,10 @@ class _FilaWindowsState extends State<_FilaWindows> {
 
   Widget _encabezado() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: _margen(context)),
+      padding: EdgeInsets.symmetric(
+        horizontal:
+            widget.conFocoTv ? _margenDeFilaTv(context) : _margen(context),
+      ),
       child: Row(
         children: [
           Expanded(
