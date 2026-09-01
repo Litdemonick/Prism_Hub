@@ -2364,6 +2364,34 @@ class ExtensionUtils {
   /// novela) confirmada como tal. Pensado para Android TV: "solo es
   /// vídeo/streaming, nada de lectura" (ver `_ContenidoTV` en
   /// home_page_tv.dart).
+  /// Si esta extensión trae SOLO vídeo, sin nada de lectura mezclado.
+  ///
+  /// ── Para qué hace falta, además de `esSoloLectura` ────────────────────
+  ///
+  /// `esSoloLectura` alcanza para dejar fuera una extensión de manga puro.
+  /// Pero una `mixed` (ShadeManga: anime Y manga en el mismo sitio) no es
+  /// «solo lectura», así que pasaba ese filtro — y su fila del Inicio, que
+  /// se pide con `latest()` sin ningún filtro, puede traer capítulos de
+  /// manga mezclados con episodios de anime.
+  ///
+  /// En un televisor eso no puede pasar nunca. Regla del proyecto, repetida
+  /// por el usuario: «en Android TV solamente se puede ver contenido de
+  /// vídeo; en ninguna zona debe haber ni una card que sea de lectura».
+  ///
+  /// Las ZONAS ya lo resuelven bien: `filtroDeFormatoZona` parte el catálogo
+  /// de una mixta usando el eje que el propio sitio declara, así que la zona
+  /// de Anime pide solo la parte de anime. Lo que no tiene forma de hacer
+  /// eso es el Inicio (y el destacado), que piden `latest()` a secas.
+  ///
+  /// Por eso en televisor el Inicio se queda solo con las que son vídeo y
+  /// nada más. Una mixta sigue estando entera en su zona, que es donde su
+  /// contenido de vídeo se puede pedir sin arrastrar el de lectura.
+  static bool esSoloVideo(String package) {
+    final ext = runtimes[package]?.extension ?? vistaPrevia[package]?.extension;
+    if (ext == null) return false;
+    return videoTypes.contains(ext.type) && !readingTypes.contains(ext.type);
+  }
+
   static bool esSoloLectura(String package) {
     final ext = runtimes[package]?.extension ?? vistaPrevia[package]?.extension;
     if (ext == null) return false;

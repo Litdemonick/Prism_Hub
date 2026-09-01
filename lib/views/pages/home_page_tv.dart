@@ -1342,17 +1342,21 @@ class _ContenidoTV extends StatelessWidget {
       .where((f) => ZonasPreferidasEnInicio.pasaElFiltro(
             ExtensionUtils.zonasDe(f.package),
           ))
-      // En TV, nada de lectura — pedido explícito: "solo es video,
-      // streaming, nada de lectura". `esSoloLectura` y no `zonasDe(...)
-      // .isEmpty`: una extensión SIN @contentKind declarado (hoy, las 19
-      // reales) también da zonasDe vacío, y esa nunca tiene que
-      // desaparecer por "sin clasificar" — acá lo que importa es el
-      // `type`, que siempre se conoce. Una mixta (ShadeManga) sigue
-      // entrando porque SÍ aporta video, aunque su fila mezcle formatos
-      // — ese reparto por formato es cosa de la Zona
-      // (ZonaCatalogoController), que Inicio nunca hizo ni en teléfono
-      // ni en PC.
-      .where((f) => !ExtensionUtils.esSoloLectura(f.package))
+      // ── En TV, nada de lectura. Nada, ni mezclado ──────────────────
+      //
+      // Antes esto era `!esSoloLectura`, y una extensión MIXTA
+      // (ShadeManga: anime y manga en el mismo sitio) pasaba el filtro
+      // porque no es «solo lectura». Su fila se pide con `latest()` sin
+      // filtros, así que traía capítulos de manga mezclados con los
+      // episodios de anime.
+      //
+      // Regla del proyecto, repetida: «en Android TV solamente se puede
+      // ver contenido de vídeo; en ninguna zona debe haber ni una card
+      // que sea de lectura». Así que acá entran las que son vídeo y nada
+      // más. La mixta no se pierde: en su ZONA sí se puede pedir solo su
+      // parte de vídeo (`filtroDeFormatoZona`), que es lo que el Inicio no
+      // tiene forma de hacer. Ver `ExtensionUtils.esSoloVideo`.
+      .where((f) => ExtensionUtils.esSoloVideo(f.package))
       .toList();
 
   @override
@@ -1564,26 +1568,17 @@ class _ZonaTvState extends State<_ZonaTv> {
   void _alAcercarseAlFinal() {
     if (!_scroll.hasClients) return;
     final restante = _scroll.position.maxScrollExtent - _scroll.offset;
-    // El umbral se mide contra el ALTO de una tarjeta, no contra su ancho:
-    // esta grilla se desplaza en vertical. Estaba con `anchoPara`, que daba
-    // un número mucho más chico —una tarjeta es la mitad de ancha que de
-    // alta— así que el pedido de la página siguiente salía recién casi
-    // encima del final, y bajando rápido con el mando se llegaba al fondo
-    // antes de que llegara nada. Dos tarjetas de alto dan margen de sobra
-    // para que la página nueva entre sin que se note el corte.
-    // ── Bajar ya no pide más ────────────────────────────────────────
+    // ── Bajar ya no pide más ─────────────────────────────────────────
     //
-    // Con la grilla intercalada, bajar traía la página siguiente de todas
-    // las fuentes y el contenido nuevo aparecía abajo. Con filas eso no
-    // sirve: la página nueva alarga cada fila a lo ANCHO, así que bajar
-    // pedía trabajo (una petición por extensión, con sus motores) y no
-    // mostraba nada nuevo. Cada fila pide lo suyo al llegar a su derecha —
-    // ver `ZonaCatalogoController.paginarFuente`.
-    final altoTarjeta = TarjetaDeCatalogo.altoTotalPara(context);
-    if (restante < altoTarjeta * 2) {
-      // Nada: queda por si en el futuro la zona vuelve a crecer hacia
-      // abajo. Ver el comentario de arriba.
-    }
+    // Con filas, la cantidad de filas es la cantidad de extensiones: bajar
+    // no puede traer nada nuevo. Lo que crece es cada fila hacia la
+    // DERECHA, y eso lo pide la propia fila al llegar a su final (ver
+    // `ZonaCatalogoController.paginarFuente`). Pedir acá era una petición
+    // por extensión, con su motor, para no mostrar nada.
+    //
+    // El método se conserva enganchado: es donde iría cualquier cosa que
+    // dependa de haber llegado al fondo.
+    if (restante < 0) return;
   }
 
   @override
@@ -1686,8 +1681,11 @@ class _ZonaTvState extends State<_ZonaTv> {
           // y no me da más contenido».
           return _PieDeZonaTv(
             cargando: cargandoMas,
+            // Ni «seguí bajando» (abajo no hay más filas) ni «no hay más
+            // datos» (sí lo hay: cada fila sigue hacia la derecha). El
+            // texto neutro es el único que dice la verdad acá.
             hayMas: false,
-            seAgotoDeVerdad: true,
+            seAgotoDeVerdad: false,
           );
         },
       );
@@ -1799,12 +1797,21 @@ class _EncabezadoFilaZonaTv extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // El MISMO sitio y el mismo estilo que cuando la fila ya cargó (ver
+    // `_FilaDensaTv`): si no, al llegar el contenido el título saltaba de
+    // lugar y de tamaño, que es de lo que más se nota en una pantalla
+    // grande.
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: _margen(context)),
+      padding: const EdgeInsets.only(left: 2, top: 2, bottom: 10),
       child: Text(
         nombre,
-        style: HomeTheme.tituloDeFilaTv(context)
-            .copyWith(fontWeight: FontWeight.w700),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          color: HomeTheme.textPrimary,
+        ),
       ),
     );
   }

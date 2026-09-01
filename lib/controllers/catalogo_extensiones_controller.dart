@@ -197,7 +197,12 @@ class CatalogoExtensionesController extends GetxController {
     // que tienen contenido de lectura".
     if (PlatformTv.esTelevisionSync) {
       lista =
-          lista.where((par) => !ExtensionUtils.esSoloLectura(par.$1)).toList();
+          // Solo vídeo, y no «todo lo que no sea lectura pura»: una
+          // extensión mixta (ShadeManga) no es solo lectura, así que pasaba
+          // el filtro viejo y su contenido de manga terminaba en el
+          // destacado. En televisor eso no puede pasar nunca. Ver
+          // `ExtensionUtils.esSoloVideo`.
+          lista.where((par) => ExtensionUtils.esSoloVideo(par.$1)).toList();
     }
     return _rotadas(lista);
   }
