@@ -119,6 +119,9 @@ class _HomeSectionState extends State<HomeSection> {
       //
       // Null es «lo que decida Flutter», o sea lo de siempre. Ver PrismHubMas.
       scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
+      // Que la tarjeta que sale de pantalla se destruya y suelte su
+      // portada, en vez de quedarse viva ocupando el techo de imágenes.
+      addAutomaticKeepAlives: false,
       // Aire arriba y abajo para lo que la tarjeta crece al enfocarse.
       //
       // Eran 6 px arriba y nada abajo, calculados para la elevación de 4 px del
@@ -321,8 +324,7 @@ class HomeGhostCard extends StatelessWidget {
                     width: 1.5,
                   ),
                 ),
-                child:
-                    Icon(Icons.add, color: HomeTheme.textMuted, size: 20),
+                child: Icon(Icons.add, color: HomeTheme.textMuted, size: 20),
               ),
               const SizedBox(height: 10),
               Text(

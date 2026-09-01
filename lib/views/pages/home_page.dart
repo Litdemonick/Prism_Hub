@@ -10,6 +10,7 @@ import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/controllers/zona_catalogo_controller.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
+import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/utils/extension.dart';

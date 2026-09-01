@@ -240,6 +240,9 @@ class _HomeTVState extends State<HomeTV> {
         ..clear()
         ..add(_categoria);
     });
+    // La pantalla que se acaba de soltar deja sus portadas en la caché: se
+    // sueltan ahora, no cuando algo las eche.
+    AlivioDeMemoria.soltarAlDejarLaPantalla();
   }
 
   @override
@@ -1161,6 +1164,10 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
                 scrollDirection: Axis.horizontal,
                 clipBehavior: Clip.none,
                 scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
+                // Que la tarjeta que sale de pantalla se DESTRUYA y suelte
+                // su portada, en vez de quedarse viva ocupando el techo de
+                // imágenes. Ninguna de estas tarjetas pide seguir viva.
+                addAutomaticKeepAlives: false,
                 itemCount: widget.items.length,
                 separatorBuilder: (_, __) =>
                     const SizedBox(width: _huecoPosterTv),
@@ -1496,6 +1503,9 @@ class _ZonaTvState extends State<_ZonaTv> {
         padding: const EdgeInsets.only(top: 6, bottom: 24),
         scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
             const ScrollCacheExtent.viewport(1),
+        // Ver el mismo comentario en la tira de pósters: la fila que sale
+        // de pantalla se destruye y suelta sus portadas.
+        addAutomaticKeepAlives: false,
         // Una por fuente + el pie.
         itemCount: fuentes.length + 1,
         itemBuilder: (context, i) {
@@ -1542,6 +1552,22 @@ class _FilaZonaTv extends StatefulWidget {
 }
 
 class _FilaZonaTvState extends State<_FilaZonaTv> {
+  Timer? _esperaAntesDePedir;
+
+  /// Cuánto se espera antes de pedirle contenido a esta extensión.
+  ///
+  /// ── Por qué no se pide de una ───────────────────────────────────────
+  ///
+  /// Con el mando uno no desliza: aprieta abajo, abajo, abajo. Cada fila que
+  /// pasa se construye —y si pidiera en el acto, bajar de golpe por una zona
+  /// dispararía diez peticiones y diez motores de JavaScript en medio
+  /// segundo, que es exactamente la ráfaga que el registro del televisor
+  /// mostraba antes de que el sistema matara la app.
+  ///
+  /// Esperando un momento, la fila por la que solo se pasó de largo se
+  /// desmonta antes de llegar a pedir nada: no gasta ni red ni memoria.
+  static const _esperaDelMando = Duration(milliseconds: 350);
+
   @override
   void initState() {
     super.initState();
@@ -1549,7 +1575,16 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
     // cuando la lista construye la fila, o sea cuando está por entrar en
     // pantalla. Lo que nunca se ve, nunca se pide — mismo criterio que ya
     // usa el Inicio con sus filas.
-    unawaited(widget.controlador.pedirFuente(widget.fuente));
+    _esperaAntesDePedir = Timer(_esperaDelMando, () {
+      if (!mounted) return;
+      unawaited(widget.controlador.pedirFuente(widget.fuente));
+    });
+  }
+
+  @override
+  void dispose() {
+    _esperaAntesDePedir?.cancel();
+    super.dispose();
   }
 
   @override

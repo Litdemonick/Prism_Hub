@@ -21,6 +21,7 @@ import 'package:prismhub/views/pages/zonas/zona_catalogo_page.dart';
 import 'package:prismhub/views/pages/zonas/zona_tv_page.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/router/router.dart';
+import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/modo_app.dart';
@@ -967,6 +968,9 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         ..clear()
         ..add(c.selectedTab.value);
     });
+    // La pantalla que se acaba de soltar deja sus portadas en la caché: se
+    // sueltan ahora, no cuando algo las eche.
+    AlivioDeMemoria.soltarAlDejarLaPantalla();
   }
 
   late final _AlivioDePestanas _alivio;

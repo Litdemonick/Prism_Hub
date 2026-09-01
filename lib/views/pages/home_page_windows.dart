@@ -363,6 +363,10 @@ class _FilaWindowsState extends State<_FilaWindows> {
                         scrollDirection: Axis.horizontal,
                         // Ver la nota igual en home_section.dart.
                         scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
+                        // Que la tarjeta que sale de pantalla se destruya y
+                        // suelte su portada, en vez de quedarse viva
+                        // ocupando el techo de imágenes.
+                        addAutomaticKeepAlives: false,
                         // Sin esto el recorte se come la sombra igual, por más
                         // aire que se le dé: un ListView recorta en su borde
                         // por defecto.

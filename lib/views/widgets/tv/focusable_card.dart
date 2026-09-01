@@ -254,7 +254,16 @@ class _FocusableCardState extends State<FocusableCard> {
     // queda suave: ahí el cursor ya dice dónde está uno parado, y subirlo
     // convertiría cada pasada del ratón en un destello.
     final intensidadDelHalo = esTv ? 0.62 : (_tieneFoco ? 0.55 : 0.26);
-    final blurDelHalo = esTv ? 22.0 : (_tieneFoco ? 14.0 : 10.0);
+    // ── Y en un aparato flojo, un desenfoque más corto ─────────────────
+    //
+    // Una sombra desenfocada obliga a la GPU a componer en una capa aparte y
+    // desdibujarla, y acá eso pasa CADA VEZ que el foco se mueve — o sea en
+    // cada apretón del mando. En un televisor viejo son los `raster=`
+    // largos del registro. El borde nítido, que es lo que de verdad señala
+    // dónde estás, no cuesta nada y se queda igual.
+    final blurDelHalo = esTv
+        ? (PrismHubMas.nivel == NivelDeAparato.bajo ? 10.0 : 22.0)
+        : (_tieneFoco ? 14.0 : 10.0);
     // ── En un aparato modesto, el marco y nada más ───────────────────────
     //
     // La escala es un transform animado: obliga a recomponer la tarjeta en

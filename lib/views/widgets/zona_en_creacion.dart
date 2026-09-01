@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 /// Una zona que ya existe en la interfaz pero todavía no tiene contenido.
@@ -23,6 +24,28 @@ class ZonaEnCreacion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ── En televisor, el recuadro punteado que ocupa el área ───────────
+    //
+    // Del boceto aprobado: la zona se ve como un marco punteado que llena
+    // todo el espacio de contenido, con el aviso centrado adentro. Así se
+    // entiende que ESE es el sitio donde va a aparecer el contenido, en vez
+    // de un texto suelto flotando en el medio de una pantalla vacía.
+    final esTv = PlatformTv.esTelevisionSync;
+    final aviso = _aviso(context);
+    if (!esTv) return aviso;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: HomeTheme.border),
+        ),
+        child: SizedBox.expand(child: aviso),
+      ),
+    );
+  }
+
+  Widget _aviso(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),

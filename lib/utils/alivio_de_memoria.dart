@@ -152,6 +152,30 @@ class AlivioDeMemoria with WidgetsBindingObserver {
   /// Solo en aparatos modestos: en un teléfono o una PC con memoria de
   /// sobra, tirar la caché sería pagar decodificaciones de más al volver al
   /// catálogo sin ganar nada a cambio.
+  /// Suelta las portadas al dejar una pantalla que ya no se va a ver.
+  ///
+  /// Desmontar la pantalla saca sus tarjetas del árbol, pero las portadas
+  /// que se habían decodificado siguen en la caché de imágenes: dejan de
+  /// estar "vivas" —eso ya es media victoria, porque ahora SÍ se pueden
+  /// desalojar— pero siguen ocupando el techo hasta que algo las eche.
+  ///
+  /// En un aparato con memoria justa no hay que esperar a que las echen: se
+  /// sueltan ahora, que es cuando de verdad sobra el sitio. Lo que haga
+  /// falta al volver se vuelve a decodificar desde el caché de archivos, que
+  /// es otra cosa y sigue en disco.
+  static void soltarAlDejarLaPantalla() {
+    if (!PrismHubMas.estaAjustando) return;
+    final cache = PaintingBinding.instance.imageCache;
+    final antes = cache.currentSizeBytes;
+    if (antes == 0) return;
+    cache.clear();
+    cache.clearLiveImages();
+    logger.info(
+      'Al dejar la pantalla se soltaron '
+      '${(antes / (1024 * 1024)).toStringAsFixed(1)} MB de portadas',
+    );
+  }
+
   static void soltarAntesDeReproducir() {
     if (!PrismHubMas.estaAjustando) return;
     final antes = PaintingBinding.instance.imageCache.currentSizeBytes;
