@@ -77,7 +77,7 @@ enum _CategoriaTV {
 /// sola resolución — así una TV 1080p, una 4K o el emulador en una ventana
 /// chica se acomodan solas.
 double _anchoSidebarTv(Ancho a) =>
-    a.elegir(compacto: 84, medio: 168, amplio: 190, enorme: 210);
+    a.elegir(compacto: 120, medio: 170, amplio: 190, enorme: 200);
 
 /// El ancho del sidebar CONTRAÍDO — solo los íconos.
 ///
@@ -86,13 +86,64 @@ double _anchoSidebarTv(Ancho a) =>
 /// las tarjetas nunca queden debajo del sidebar. Un solo número para las
 /// dos partes, para que no puedan desincronizarse.
 double _anchoSidebarContraidoTv(Ancho a) =>
-    a.elegir<double>(compacto: 64, medio: 72, amplio: 76, enorme: 80);
+    a.elegir<double>(compacto: 42, medio: 46, amplio: 50, enorme: 50);
+
+/// El aire entre el rail de íconos y donde arranca el contenido.
+///
+/// Del boceto aprobado (`bocetos/compacto.html`): el contenido no deja un
+/// margen grande, arranca casi pegado al rail y llega hasta el borde
+/// derecho — es lo que hace que entren siete pósters por fila y que se
+/// vean dos filas y media.
+const double _aireDelRailTv = 22;
+
+/// Lo que se deja libre contra el borde derecho.
+const double _aireDerechoTv = 10;
+
+/// El hueco entre las tarjetas grandes de Inicio. Casi pegadas.
+const double _huecoGrandeTv = 6;
+
+/// El hueco entre pósters de una fila.
+const double _huecoPosterTv = 10;
+
+/// Cuántos pósters entran enteros en una fila. El siguiente asoma cortado
+/// contra el borde, que es justo lo que dice "hay más para el lado".
+const int _postersPorFilaTv = 7;
+
+/// El alto de la fila de tarjetas grandes de Inicio.
+///
+/// El 55% del alto útil (lo que queda debajo de la barra de arriba), que es
+/// lo medido sobre la foto del televisor con el diseño aprobado. Antes salía
+/// de la fórmula del acordeón, pensada para cuando el destacado era lo único
+/// arriba, y se comía media pantalla.
+double _altoGrandesTv(BuildContext context) {
+  final util = MediaQuery.sizeOf(context).height - _altoBarraTv;
+  return (util * 0.555).clamp(180.0, 460.0);
+}
+
+/// El alto de la fila de medianas: el 24% del alto útil.
+double _altoMedianasTv(BuildContext context) {
+  final util = MediaQuery.sizeOf(context).height - _altoBarraTv;
+  return (util * 0.24).clamp(90.0, 210.0);
+}
+
+/// Lo que se lleva la barra de arriba.
+const double _altoBarraTv = 46;
+
+/// El ancho de un póster de fila, para que entren [_postersPorFilaTv].
+double _anchoPosterTv(BuildContext context) {
+  final util = MediaQuery.sizeOf(context).width -
+      _anchoSidebarContraidoTv(Ancho.de(context)) -
+      _aireDelRailTv -
+      _aireDerechoTv;
+  final ancho =
+      (util - _huecoPosterTv * (_postersPorFilaTv - 1)) / _postersPorFilaTv;
+  return ancho.clamp(96.0, 260.0);
+}
 
 /// El margen "TV-safe" contra el borde de la pantalla (overscan).
 ///
 /// Estaba escrito acá y en `detail_page_tv.dart` con el mismo cuerpo — ahora
 /// las dos apuntan a la única definición, en `HomeTheme.overscanTv`.
-double _overscanTv(BuildContext context) => HomeTheme.overscanTv(context);
 
 /// Escucha el aviso de «me estoy quedando sin memoria» del sistema y suelta
 /// las zonas que no se están viendo.
@@ -268,19 +319,11 @@ class _HomeTVState extends State<HomeTV> {
 
   @override
   Widget build(BuildContext context) {
-    final overscan = _overscanTv(context);
-    // El ancho contraído, siempre reservado — y solo ese.
-    //
-    // Dos correcciones en el mismo lugar, la segunda deshaciendo la
-    // primera. Primero se sacó el margen entero (probado con foto: las
-    // tarjetas quedaban tapadas por los íconos). Después, con más fotos,
-    // quedó claro que CONTRAÍDO tiene que seguir siendo sólido y quedar AL
-    // LADO del contenido —como cualquier rail de íconos— y que lo
-    // transparente es solo lo que pasa al EXPANDIRSE: ahí sí, la franja más
-    // ancha se dibuja encima sin correr nada. Ver el color condicional en
-    // `_SidebarTVState`.
+    // Del boceto aprobado: el contenido arranca casi pegado al rail (22px)
+    // y llega hasta el borde derecho. Nada de overscan de más acá — eso
+    // era lo que dejaba las tarjetas chicas y perdidas en el medio.
     final margenParaElSidebar =
-        _anchoSidebarContraidoTv(Ancho.de(context)) + overscan * 1.5;
+        _anchoSidebarContraidoTv(Ancho.de(context)) + _aireDelRailTv;
     // ── La barra de arriba manda en TODA la pantalla ────────────────────
     //
     // Estaba dentro del panel de contenido, así que entrar a una zona sin
@@ -322,7 +365,10 @@ class _HomeTVState extends State<HomeTV> {
                 return Stack(
                   children: [
                     Padding(
-                      padding: EdgeInsets.only(left: margenParaElSidebar),
+                      padding: EdgeInsets.only(
+                        left: margenParaElSidebar,
+                        right: _aireDerechoTv,
+                      ),
                       // ── IndexedStack y no AnimatedSwitcher ────────────
                       //
                       // El switcher DESTRUYE la zona que se deja: al volver,
@@ -723,55 +769,66 @@ class _ItemSidebarTV extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = elegido ? HomeTheme.accentPink : HomeTheme.textPrimary;
-    // Ancho completo y alineado a la izquierda, como en la referencia: con
-    // `MainAxisSize.min` cada fila medía lo que midiera su texto, así que
-    // "TV" y "Novela" arrancaban en la misma x pero terminaban en distintas
-    // — y el resaltado del elegido quedaba de un ancho distinto en cada
-    // categoría, que es lo que se veía desprolijo.
+    // ── Calcado del boceto aprobado (`bocetos/compacto.html`) ───────────
+    //
+    //   .rail .item          → 32px, radio 9, opacidad .5
+    //   .rail .item.elegido  → opacidad 1 + resplandor rosado
+    //   .rail.abierto .item  → ancho completo, ícono + etiqueta a la
+    //                          izquierda
+    //
+    // Sin relleno de color en el elegido: lo que lo distingue es que está
+    // encendido (el resto va a media luz) y el resplandor alrededor.
+    final apagado = !elegido;
+    final icono = Icon(
+      categoria.icono,
+      size: 22,
+      color: elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
+    );
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      padding: expandido
+          ? const EdgeInsets.symmetric(horizontal: 9, vertical: 7)
+          : const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        // Antes era un relleno plano rosa — pedido explícito: que la
-        // elegida se note con un resplandor suave, como el halo de foco
-        // del resto del app (`FocusableCard`), no con una caja de color.
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(9),
         boxShadow: elegido
             ? [
                 BoxShadow(
-                  color: HomeTheme.accentPink.withValues(alpha: 0.45),
-                  blurRadius: 18,
-                  spreadRadius: 1,
+                  color: HomeTheme.accentPink.withValues(alpha: 0.5),
+                  blurRadius: 15,
+                  spreadRadius: 2,
                 ),
               ]
             : null,
       ),
-      child: Row(
-        mainAxisAlignment:
-            expandido ? MainAxisAlignment.start : MainAxisAlignment.center,
-        children: [
-          Icon(categoria.icono, size: 26, color: color),
-          // El nombre no se anima entrando/saliendo con un fundido propio:
-          // el `AnimatedContainer` de afuera ya recorta el ancho, así que el
-          // texto desaparece con la caja misma sin necesidad de una segunda
-          // animación superpuesta.
-          if (expandido) ...[
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                categoria.etiqueta(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: elegido ? FontWeight.w800 : FontWeight.w600,
-                  color: color,
+      child: Opacity(
+        opacity: apagado ? 0.5 : 1,
+        child: Row(
+          mainAxisAlignment:
+              expandido ? MainAxisAlignment.start : MainAxisAlignment.center,
+          children: [
+            icono,
+            // El nombre no se anima entrando/saliendo con un fundido propio:
+            // el `AnimatedContainer` de afuera ya recorta el ancho, así que
+            // el texto desaparece con la caja misma.
+            if (expandido) ...[
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                  categoria.etiqueta(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color:
+                        elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -897,100 +954,222 @@ class _HeroSecundarioTv extends StatelessWidget {
 /// Reusa `HomeMediaCard` (ya construida para tarjetas 16:9 con título
 /// encima — la misma que arma Continuar viendo en Biblioteca) en vez de un
 /// widget nuevo: ya trae foco D-pad propio en TV.
-class _FilaMedianasTv extends StatelessWidget {
-  const _FilaMedianasTv({required this.items});
+/// Una "mediana": tarjeta ancha con la portada a sangre y el titulo
+/// superpuesto abajo a la izquierda. Del boceto aprobado
+/// (bocetos/compacto.html, `.mediana`).
+class _MedianaTv extends StatelessWidget {
+  const _MedianaTv({required this.package, required this.item});
 
-  final List<(String package, ExtensionListItem item)> items;
+  final String package;
+  final ExtensionListItem item;
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, caja) {
+      final ancho = caja.maxWidth.isFinite
+          ? caja.maxWidth
+          : MediaQuery.sizeOf(context).width / 4;
+      return FocusableCard(
+        borderRadius: 3,
+        onTap: () => _abrir(context, item, package),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CacheNetWorkImagePic(
+                item.cover ?? '',
+                fit: BoxFit.cover,
+                cacheWidth: (ancho * MediaQuery.devicePixelRatioOf(context))
+                    .ceil()
+                    .clamp(1, 4096),
+                headers: _cabeceras(package),
+                placeholder: const Esqueleto(radio: 3),
+              ),
+              // El velo: solo lo justo para que el titulo se lea, apagandose
+              // antes de la mitad. Mismos numeros del boceto.
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xCC000000), Color(0x00000000)],
+                    stops: [0, 0.58],
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                  child: Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: HomeTheme.sobrePortada,
+                      shadows: [
+                        Shadow(blurRadius: 4, color: Color(0xE6000000)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+}
+
+/// La fila de medianas: CUATRO en columnas iguales, casi pegadas — no una
+/// tira que se desplaza. Del boceto, `.medianas` es una grilla de cuatro
+/// que ocupa todo el ancho.
+class _FilaMedianasTv extends StatelessWidget {
+  const _FilaMedianasTv({required this.items, required this.alto});
+
+  final List<(String package, ExtensionListItem item)> items;
+  final double alto;
+
+  @override
+  Widget build(BuildContext context) {
+    final cuantas = items.length < 4 ? items.length : 4;
+    if (cuantas == 0) return const SizedBox.shrink();
     return SizedBox(
-      // `altoImagenAncha`, no `altoTotalAncha`: en la variante horizontal
-      // el título va superpuesto sobre la imagen (como el resto de estas
-      // medianas), no debajo — `altoTotalAncha` reserva espacio de más
-      // pensado para la variante vertical, que sí tiene texto aparte.
-      height: HomeMediaCard.altoImagenAncha,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 14),
-        itemBuilder: (context, i) {
-          final (package, item) = items[i];
-          return HomeMediaCard(
-            horizontal: true,
-            title: item.title,
-            cover: item.cover,
-            headers: _cabeceras(package),
-            onTap: () => _abrir(context, item, package),
-          );
-        },
+      height: alto,
+      child: Row(
+        children: [
+          for (var i = 0; i < cuantas; i++) ...[
+            if (i > 0) const SizedBox(width: _huecoGrandeTv),
+            Expanded(
+              child: _MedianaTv(package: items[i].$1, item: items[i].$2),
+            ),
+          ],
+        ],
       ),
     );
   }
 }
 
-/// La cabecera de una zona de vídeo (Películas/Series/Anime): hero + hero
-/// secundario + medianas, con los primeros `arriba.length` ítems de la
-/// grilla de esa zona — nunca más de 6. Ninguno de los dos destacados es
-/// infinito acá (solo el de Inicio lo es), así que los dos usan
-/// `_HeroSecundarioTv` tal cual.
-class _CabeceraZonaTv extends StatelessWidget {
-  const _CabeceraZonaTv({required this.arriba});
+/// Una tarjeta de fila densa: la portada 2:3 y el titulo CHICO debajo.
+/// Del boceto: `.tarjeta` / `.tarjeta .arte` / `.tarjeta .nombre`.
+class _TarjetaDensaTv extends StatelessWidget {
+  const _TarjetaDensaTv({
+    required this.package,
+    required this.item,
+    required this.ancho,
+    this.encabezado,
+  });
 
-  final List<ZonaItem> arriba;
+  final String package;
+  final ExtensionListItem item;
+  final double ancho;
+
+  /// De que extension viene. Solo se ve dentro del panel al enfocar, como
+  /// en el resto del app.
+  final String? encabezado;
 
   @override
   Widget build(BuildContext context) {
-    final hero = arriba[0];
-    final heroSecundario = arriba.length > 1 ? arriba[1] : null;
-    final medianas = arriba.skip(2).map((zi) => (zi.package, zi.item)).toList();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
+    return SizedBox(
+      width: ancho,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          LayoutBuilder(
-            builder: (context, caja) {
-              final anchoMitad = heroSecundario == null
-                  ? caja.maxWidth
-                  : (caja.maxWidth - 14) / 2;
-              final alto = _medirCarrusel(
-                context,
-                anchoMitad,
-                conFocoTv: true,
-                compartido: true,
-              ).alto;
-              return SizedBox(
-                height: alto,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _HeroSecundarioTv(
-                        package: hero.package,
-                        item: hero.item,
-                      ),
-                    ),
-                    if (heroSecundario != null) ...[
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: _HeroSecundarioTv(
-                          package: heroSecundario.package,
-                          item: heroSecundario.item,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
+          FocusableCard(
+            borderRadius: 3,
+            // Solo la portada lleva el marco: el nombre va afuera, debajo.
+            altoMarco: ancho * 3 / 2,
+            onTap: () => _abrir(context, item, package),
+            builder: (tieneFoco) => TarjetaDeCatalogo(
+              titulo: item.title,
+              encabezado: encabezado,
+              fecha: item.update,
+              portada: item.cover,
+              cabeceras: _cabeceras(package),
+              ancho: ancho,
+              tvFoco: tieneFoco,
+            ),
           ),
-          if (medianas.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            _FilaMedianasTv(items: medianas),
-          ],
         ],
+      ),
+    );
+  }
+}
+
+/// Una fila densa: el nombre de la extension en chico y arriba, y debajo la
+/// tira de posters. Siete enteros y el siguiente asomando.
+class _FilaDensaTv extends StatefulWidget {
+  const _FilaDensaTv({required this.rotulo, required this.items});
+
+  final String rotulo;
+
+  /// Paquete + item de cada tarjeta.
+  final List<(String package, ExtensionListItem item)> items;
+
+  @override
+  State<_FilaDensaTv> createState() => _FilaDensaTvState();
+}
+
+class _FilaDensaTvState extends State<_FilaDensaTv> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ancho = _anchoPosterTv(context);
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 1, bottom: 6),
+              child: Text(
+                widget.rotulo,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: HomeTheme.textMuted,
+                ),
+              ),
+            ),
+            SizedBox(
+              // Portada + aire + una linea de titulo (lo pone la tarjeta).
+              height: TarjetaDeCatalogo.altoTotalDeAncho(ancho),
+              child: ListView.separated(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
+                itemCount: widget.items.length,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(width: _huecoPosterTv),
+                itemBuilder: (context, i) {
+                  final par = widget.items[i];
+                  return _TarjetaDensaTv(
+                    package: par.$1,
+                    item: par.$2,
+                    ancho: ancho,
+                    encabezado: widget.rotulo,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1075,46 +1254,51 @@ class _ContenidoTV extends StatelessWidget {
                 // ancho (`_medirCarrusel`, la misma fórmula, no una
                 // adivinada aparte), para que ninguno de los dos fuerce al
                 // otro a un tamaño que no pidió.
+                // ── Los dos grandes de arriba ────────────────────────
+                //
+                // Proporciones del boceto aprobado, medidas sobre la foto
+                // del televisor: los grandes se llevan el 55% del alto
+                // util y las medianas el 24%, con seis pixeles de hueco.
+                // Casi pegadas: los catorce que habia antes se veian como
+                // huecos negros entre tarjetas.
                 0 => RepaintBoundary(
-                    child: heroSecundario == null
-                        ? _CarruselAndroid(c: c, conFocoTv: true)
-                        : LayoutBuilder(
-                            builder: (context, caja) {
-                              final anchoMitad = (caja.maxWidth - 14) / 2;
-                              final alto = _medirCarrusel(
-                                context,
-                                anchoMitad,
-                                conFocoTv: true,
-                                compartido: true,
-                              ).alto;
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: _CarruselAndroid(
-                                      c: c,
-                                      conFocoTv: true,
-                                      sinVecinos: true,
-                                    ),
+                    child: SizedBox(
+                      height: _altoGrandesTv(context),
+                      child: heroSecundario == null
+                          ? _CarruselAndroid(
+                              c: c,
+                              conFocoTv: true,
+                              sinVecinos: true,
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: _CarruselAndroid(
+                                    c: c,
+                                    conFocoTv: true,
+                                    sinVecinos: true,
                                   ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: SizedBox(
-                                      height: alto,
-                                      child: _HeroSecundarioTv(
-                                        package: heroSecundario.$1,
-                                        item: heroSecundario.$2,
-                                      ),
-                                    ),
+                                ),
+                                const SizedBox(width: _huecoGrandeTv),
+                                Expanded(
+                                  child: _HeroSecundarioTv(
+                                    package: heroSecundario.$1,
+                                    item: heroSecundario.$2,
                                   ),
-                                ],
-                              );
-                            },
-                          ),
+                                ),
+                              ],
+                            ),
+                    ),
                   ),
                 1 when medianas.isNotEmpty => Padding(
-                    padding: const EdgeInsets.only(top: 14),
-                    child: _FilaMedianasTv(items: medianas),
+                    padding: const EdgeInsets.only(
+                      top: _huecoGrandeTv,
+                      bottom: 13,
+                    ),
+                    child: _FilaMedianasTv(
+                      items: medianas,
+                      alto: _altoMedianasTv(context),
+                    ),
                   ),
                 _ => visibles.isEmpty
                     ? const _FilaEsperando()
@@ -1280,57 +1464,43 @@ class _ZonaTvState extends State<_ZonaTv> {
       }
       // ── Cabecera de la zona: hero + hero secundario + medianas ─────────
       //
-      // Mismo vestido visual que Inicio, con los primeros ítems de la
-      // MISMA lista entrelazada. A diferencia de Inicio, acá NINGUNO de
-      // los dos destacados es el carrusel infinito: son fijos (no hay
-      // temporizador), porque "solo en Inicio la primera es infinita"
-      // (pedido explícito). Se superponen con lo que después aparece en
-      // las filas de abajo — mismo criterio que ya acepta Inicio entre su
-      // destacado y sus propias filas, nunca se trató como un problema
-      // ahí.
-      final arriba = todos.take(6).toList();
-      // ── Una fila por extensión, no una grilla mezclada ─────────────────
+      // ── Solo filas densas, una por extensión ──────────────────────
       //
-      // Pedido explícito, calcando el boceto: cada extensión con su
-      // propio título arriba (como ya hace Inicio), no todas revueltas en
-      // una sola grilla. La paginación/caché de cada fuente
-      // (`ZonaCatalogoController.cargarMas`) no se toca — sigue pidiendo
-      // más para TODAS las fuentes por igual; esto solo cambia cómo se
-      // dibuja lo que ya hay.
+      // Del boceto aprobado, calcando la foto del televisor: acá NO hay
+      // destacados ni medianas —eso es de Inicio—. Una zona son puras
+      // filas de pósters, siete por fila y el octavo asomando, con el
+      // nombre de la extensión chico arriba y el título de cada uno
+      // debajo. Se ven dos filas y media, que era el pedido: "mirá el
+      // tamaño, el espacio, la proporción, se ve todo".
+      //
+      // La paginación/caché de cada fuente (`cargarMas`) no se toca: esto
+      // solo decide cómo se dibuja lo que ya hay.
       final fuentes = c.fuentes;
       final cargandoMas = c.cargandoMas.value;
       return ListView.builder(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.only(top: 6, bottom: 24),
         scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
             const ScrollCacheExtent.viewport(1),
-        // Cabecera + una por fuente + el pie.
-        itemCount: fuentes.length + 2,
-        itemBuilder: (context, i) => switch (i) {
-          0 => arriba.isEmpty
-              ? const SizedBox.shrink()
-              : Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-                  child: _CabeceraZonaTv(arriba: arriba),
-                ),
-          _ when i - 1 < fuentes.length => _FilaZonaTv(
-              key: ValueKey(fuentes[i - 1].package),
-              fuente: fuentes[i - 1],
-            ),
-          // ── Un pie que diga en qué estado está la lista ────────────────
+        // Una por fuente + el pie.
+        itemCount: fuentes.length + 1,
+        itemBuilder: (context, i) {
+          if (i < fuentes.length) {
+            return _FilaZonaTv(
+              key: ValueKey(fuentes[i].package),
+              fuente: fuentes[i],
+            );
+          }
+          // ── Un pie que diga en qué estado está la lista ──────────────
           //
           // Reportado en vivo: "al ir bajando no se da cuenta si están
-          // cargando cards o si ya terminó". El pie va SIEMPRE al final y
-          // dice una de las dos cosas.
-          _ => Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-              child: _PieDeZonaTv(
-                cargando: cargandoMas,
-                hayMas: c.puedeTraerMas,
-                seAgotoDeVerdad: c.seAgotoDeVerdad,
-              ),
-            ),
+          // cargando cards o si ya terminó".
+          return _PieDeZonaTv(
+            cargando: cargandoMas,
+            hayMas: c.puedeTraerMas,
+            seAgotoDeVerdad: c.seAgotoDeVerdad,
+          );
         },
       );
     });
@@ -1351,14 +1521,6 @@ class _FilaZonaTv extends StatefulWidget {
 }
 
 class _FilaZonaTvState extends State<_FilaZonaTv> {
-  final _scroll = ScrollController();
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final f = widget.fuente;
@@ -1366,85 +1528,24 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
       // Ya se sabe que esta fuente no tiene nada para esta zona: no vale
       // la pena dejar un título con nada debajo para siempre.
       if (f.agotada && !f.isFetching) return const SizedBox.shrink();
+      final ancho = _anchoPosterTv(context);
       return RepaintBoundary(
         child: Padding(
-          padding: const EdgeInsets.only(top: 34),
+          padding: const EdgeInsets.only(bottom: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _EncabezadoFilaZonaTv(nombre: f.nombre),
-              const SizedBox(height: 18),
-              EsqueletoDeFila(
-                ancho: _anchoTarjetaTv(context),
-                separacion: 14,
-                padding: EdgeInsets.symmetric(horizontal: _margen(context)),
-                paddingDeCadaUno: const EdgeInsets.only(top: 10),
-              ),
+              const SizedBox(height: 6),
+              EsqueletoDeFila(ancho: ancho, separacion: _huecoPosterTv),
             ],
           ),
         ),
       );
     }
-    return RepaintBoundary(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 34),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _EncabezadoFilaZonaTv(nombre: f.nombre),
-            const SizedBox(height: 18),
-            SizedBox(
-              height: _altoFilaTv(context),
-              child: ListView.separated(
-                controller: _scroll,
-                scrollDirection: Axis.horizontal,
-                clipBehavior: Clip.none,
-                // Mismo límite que usa `_FilaWindows` en Inicio — acá
-                // faltaba. En un aparato "bajo" son apenas 250px por
-                // adelantado; sin esto, la fila caía en el default de
-                // Flutter, pensado para aparatos capaces.
-                scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
-                padding: EdgeInsets.symmetric(
-                  horizontal: _margen(context) + 26,
-                ),
-                itemCount: f.items.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 14),
-                itemBuilder: (context, i) {
-                  final item = f.items[i];
-                  // Sin isAdultOption: la Zona +18 de TV vive aparte, en
-                  // Ajustes, con su propio PIN — acá `f` nunca es esa zona.
-                  void abrir() => ExtensionUtils.openExtensionDetail(
-                        context,
-                        package: f.package,
-                        url: item.url,
-                        cover: item.cover,
-                        coverHeaders: item.headers,
-                      );
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: FocusableCard(
-                      onTap: abrir,
-                      altoMarco: _anchoTarjetaTv(context) * 3 / 2,
-                      // `builder` y no `child`: mismo motivo que en Inicio —
-                      // la tarjeta necesita saber si TIENE el foco para
-                      // mostrar el panel con el nombre de la extensión.
-                      builder: (tieneFoco) => TarjetaDeCatalogo(
-                        titulo: item.title,
-                        encabezado: f.nombre,
-                        fecha: item.update,
-                        portada: item.cover,
-                        cabeceras: item.headers,
-                        ancho: _anchoTarjetaTv(context),
-                        tvFoco: tieneFoco,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+    return _FilaDensaTv(
+      rotulo: f.nombre,
+      items: [for (final item in f.items) (f.package, item)],
     );
   }
 }

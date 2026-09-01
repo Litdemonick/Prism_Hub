@@ -206,8 +206,14 @@ class _FilaWindows extends StatefulWidget {
 /// vez sin tocar el resto del diseño (el margen entre filas, pensado para
 /// que la tarjeta enfocada crezca sin pisar el título de la siguiente,
 /// sigue siendo el mismo).
-double _anchoTarjetaTv(BuildContext context) =>
-    TarjetaDeCatalogo.anchoPara(context) * 1.05;
+/// El ancho de tarjeta en TV.
+///
+/// Sale de la misma cuenta que las filas de las zonas (`_anchoPosterTv`,
+/// en home_page_tv.dart): siete pósters enteros por fila y el octavo
+/// asomando. Del boceto aprobado — antes era el ancho de escritorio por
+/// 1.05, que en un televisor dejaba cuatro o cinco enormes y media
+/// pantalla desaprovechada.
+double _anchoTarjetaTv(BuildContext context) => _anchoPosterTv(context);
 
 double _altoFilaTv(BuildContext context) =>
     TarjetaDeCatalogo.altoTotalDeAncho(_anchoTarjetaTv(context)) + 28;
