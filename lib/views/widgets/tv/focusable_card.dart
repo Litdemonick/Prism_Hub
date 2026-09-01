@@ -39,6 +39,7 @@ class FocusableCard extends StatefulWidget {
     this.altoMarco,
     this.conCrecido = true,
     this.conMarco = true,
+    this.conHalo = true,
   }) : assert(
           child != null || builder != null,
           'FocusableCard necesita child o builder',
@@ -67,6 +68,16 @@ class FocusableCard extends StatefulWidget {
   /// rosado encajonando el ícono. Pedido explícito: «sin marco rosado, solo
   /// esa sombra, limpio». Con esto queda el resplandor y nada más.
   final bool conMarco;
+
+  /// Si al enfocarse se le dibuja el resplandor alrededor.
+  ///
+  /// En el rail de categorías se apaga: ahí el resplandor rosado se veía
+  /// exagerado —es un ícono chico rodeado de negro, así que el halo es lo
+  /// único que se ve— y la propia fila dibuja en su lugar un fondo suave,
+  /// que se lee mejor y además no cuesta un desenfoque por cada movimiento
+  /// del mando. Pedido explícito: «el halo rosado es muy exagerado, ponle un
+  /// fondo al pasar por los botones».
+  final bool conHalo;
 
   /// Alto del resplandor de selección, cuando NO tiene que abarcar al hijo
   /// entero.
@@ -377,7 +388,7 @@ class _FocusableCardState extends State<FocusableCard> {
                   // televisor todo queda igual que estaba.
                   child: IgnorePointer(
                     child: _Halo(
-                      visible: activo,
+                      visible: activo && widget.conHalo,
                       conFundido: !esTv,
                       radio: widget.borderRadius,
                       sombras: [

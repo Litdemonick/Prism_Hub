@@ -2,6 +2,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
+
 import 'package:collection/collection.dart';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -10,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/modo_app.dart';
@@ -327,7 +330,8 @@ class ApplicationUtils {
   /// completamente listo para esta plataforma, y deja
   /// `_esperandoReleaseIncompleto` en el estado que le corresponde para que
   /// el chequeo periódico sepa si tiene que insistir pronto o no.
-  static Future<Map<String, dynamic>?> _ultimoReleaseParaEstaPlataforma() async {
+  static Future<Map<String, dynamic>?>
+      _ultimoReleaseParaEstaPlataforma() async {
     final release = await _candidatoRelevante();
     if (release == null) {
       // Nada nuevo de verdad: si venía esperando un release a medio
@@ -444,8 +448,8 @@ class ApplicationUtils {
   /// está declarado explícitamente.
   static bool _demasiadoViejoParaActualizar(dynamic body) {
     if (body is! String) return false;
-    final marca = RegExp(r'min-update-from:\s*v?(\d+(?:\.\d+){0,2})')
-        .firstMatch(body);
+    final marca =
+        RegExp(r'min-update-from:\s*v?(\d+(?:\.\d+){0,2})').firstMatch(body);
     if (marca == null) return false;
     final piso = _versionParts(marca.group(1)!);
     final local = _versionParts(packageInfo.version);
@@ -664,31 +668,31 @@ class ApplicationUtils {
           if (context.mounted) {
             _avisoDeVersionEnPantalla = true;
             try {
-            await showPlatformDialog(
-              context: context,
-              title: FlutterI18n.translate(
-                context,
-                'upgrade.new-version',
-                translationParams: {'version': remoteVersion},
-              ),
-              content: Text('upgrade.too-old-to-update'.i18n),
-              actions: [
-                PlatformTextButton(
-                  onPressed: () => RouterUtils.pop(),
-                  child: Text('upgrade.not-now'.i18n),
+              await showPlatformDialog(
+                context: context,
+                title: FlutterI18n.translate(
+                  context,
+                  'upgrade.new-version',
+                  translationParams: {'version': remoteVersion},
                 ),
-                PlatformFilledButton(
-                  onPressed: () {
-                    RouterUtils.pop();
-                    launchUrl(
-                      Uri.parse(release['html_url'] as String),
-                      mode: LaunchMode.externalApplication,
-                    );
-                  },
-                  child: Text('upgrade.download'.i18n),
-                ),
-              ],
-            );
+                content: Text('upgrade.too-old-to-update'.i18n),
+                actions: [
+                  PlatformTextButton(
+                    onPressed: () => RouterUtils.pop(),
+                    child: Text('upgrade.not-now'.i18n),
+                  ),
+                  PlatformFilledButton(
+                    onPressed: () {
+                      RouterUtils.pop();
+                      launchUrl(
+                        Uri.parse(release['html_url'] as String),
+                        mode: LaunchMode.externalApplication,
+                      );
+                    },
+                    child: Text('upgrade.download'.i18n),
+                  ),
+                ],
+              );
             } finally {
               _avisoDeVersionEnPantalla = false;
             }
@@ -734,41 +738,41 @@ class ApplicationUtils {
         _avisoDeVersionEnPantalla = true;
         if (Platform.isAndroid) {
           try {
-          await showPlatformDialog(
-            context: context,
-            title: FlutterI18n.translate(
-              context,
-              'upgrade.new-version',
-              translationParams: {
-                'version': remoteVersion,
-              },
-            ),
-            content: _notasDeVersion(release['body']),
-            // El contenido ya desplaza solo: ver el comentario de `scrollable`
-            // en showPlatformDialog.
-            scrollable: false,
-            actions: [
-              PlatformTextButton(
-                onPressed: () {
-                  RouterUtils.pop();
+            await showPlatformDialog(
+              context: context,
+              title: FlutterI18n.translate(
+                context,
+                'upgrade.new-version',
+                translationParams: {
+                  'version': remoteVersion,
                 },
-                child: Text('upgrade.not-now'.i18n),
               ),
-              // Sin la rama de "abrir GitHub": para llegar hasta acá el archivo
-              // de esta plataforma ya tiene que estar publicado — si falta, se
-              // sale bastante más arriba con el aviso de que todavía se está
-              // publicando. Antes se comprobaba igual, y el resultado era una
-              // rama muerta que hacía parecer que el botón podía terminar
-              // llevando al navegador.
-              PlatformFilledButton(
-                onPressed: () {
-                  RouterUtils.pop();
-                  _downloadAndInstall(context, asset, remoteVersion);
-                },
-                child: Text('upgrade.download-install'.i18n),
-              )
-            ],
-          );
+              content: _notasDeVersion(release['body']),
+              // El contenido ya desplaza solo: ver el comentario de `scrollable`
+              // en showPlatformDialog.
+              scrollable: false,
+              actions: [
+                PlatformTextButton(
+                  onPressed: () {
+                    RouterUtils.pop();
+                  },
+                  child: Text('upgrade.not-now'.i18n),
+                ),
+                // Sin la rama de "abrir GitHub": para llegar hasta acá el archivo
+                // de esta plataforma ya tiene que estar publicado — si falta, se
+                // sale bastante más arriba con el aviso de que todavía se está
+                // publicando. Antes se comprobaba igual, y el resultado era una
+                // rama muerta que hacía parecer que el botón podía terminar
+                // llevando al navegador.
+                PlatformFilledButton(
+                  onPressed: () {
+                    RouterUtils.pop();
+                    _downloadAndInstall(context, asset, remoteVersion);
+                  },
+                  child: Text('upgrade.download-install'.i18n),
+                )
+              ],
+            );
           } finally {
             _avisoDeVersionEnPantalla = false;
           }
@@ -923,14 +927,15 @@ class ApplicationUtils {
       // Ver _maxRafagasRapidas: la espera acelerada tiene techo.
       final rapido =
           _esperandoReleaseIncompleto && _rafagasRapidas < _maxRafagasRapidas;
-      final cadaCuantosPulsos = rapido
-          ? 1
-          : _cadaCuanto.inMinutes ~/ _cadaCuantoEsperando.inMinutes;
+      final cadaCuantosPulsos =
+          rapido ? 1 : _cadaCuanto.inMinutes ~/ _cadaCuantoEsperando.inMinutes;
       if (pulsos % cadaCuantosPulsos != 0) return;
       if (rapido) _rafagasRapidas++;
       // Se relee el ajuste en cada vuelta: si el usuario lo apaga mientras
       // tanto, esto deja de molestar sin necesidad de reiniciar nada.
-      if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) != true) return;
+      if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) != true) {
+        return;
+      }
       if (!context.mounted) return;
       // checkForcedUpdate y no checkUpdate: cuando aparece una version nueva
       // con la app abierta, el aviso BLOQUEA hasta actualizar, igual que el
@@ -997,6 +1002,25 @@ class ApplicationUtils {
     // Ya hay una descarga andando: no se arranca otra ni se avisa de nuevo.
     // Ver _instalacionEnCurso.
     if (_instalacionEnCurso) return;
+    // ── Sin conexión no se arranca a ciegas ────────────────────────────
+    //
+    // Reportado en vivo: se cortaba el wifi o se cambiaba de red y la
+    // pantalla de actualizar quedaba trabada — se tocaba «Actualizar» y no
+    // pasaba nada visible durante el timeout entero de la descarga, y
+    // después un error crudo de Dio que no dice nada.
+    //
+    // Diciéndolo de entrada, el botón queda libre para volver a intentar en
+    // cuanto vuelva la red, sin haber esperado nada.
+    if (!ConnectivityUtils.isOnline.value) {
+      if (context.mounted) {
+        showPlatformSnackbar(
+          context: context,
+          title: 'upgrade.install-failed'.i18n,
+          content: 'upgrade.sin-conexion'.i18n,
+        );
+      }
+      return;
+    }
     _instalacionEnCurso = true;
     var progressDialogOpen = false;
     // Cuánto va descargado, para poder mostrarlo.
@@ -1141,11 +1165,20 @@ class ApplicationUtils {
       await _replaceAndRestart(sourceDir, downloadDir);
     } catch (e) {
       if (progressDialogOpen) RouterUtils.pop();
+      // ── Lo que quedó a medias se borra ───────────────────────────────
+      //
+      // Si el wifi se cortó en mitad de la descarga queda un archivo
+      // incompleto en disco. El chequeo de tamaño de más arriba ya lo
+      // descarta —no coincide con el que dice GitHub— pero dejarlo ahí es
+      // ocupar espacio en un aparato que suele andar justo, y encima
+      // arriesgarse a que un día el tamaño coincida por casualidad y se
+      // intente instalar un APK partido.
+      unawaited(_borrarDescargaAMedias(asset));
       if (context.mounted) {
         showPlatformSnackbar(
           context: context,
           title: 'upgrade.install-failed'.i18n,
-          content: e.toString(),
+          content: _porQueFallo(e),
         );
       }
       debugPrint('Download/install error: $e');
@@ -1161,8 +1194,50 @@ class ApplicationUtils {
     }
   }
 
-  static String _enMegas(int bytes) =>
-      (bytes / 1024 / 1024).toStringAsFixed(1);
+  /// Traduce el fallo a algo que se entienda.
+  ///
+  /// Antes se mostraba `e.toString()` tal cual: una línea de Dio con la
+  /// ruta, el tipo de excepción y el stack, que no le dice nada a nadie y
+  /// encima tapa lo único que importa —si fue la red o fue otra cosa—.
+  static String _porQueFallo(Object e) {
+    if (!ConnectivityUtils.isOnline.value) return 'upgrade.sin-conexion'.i18n;
+    if (e is DioException) {
+      return switch (e.type) {
+        DioExceptionType.connectionTimeout ||
+        DioExceptionType.receiveTimeout ||
+        DioExceptionType.sendTimeout ||
+        DioExceptionType.connectionError =>
+          'upgrade.se-corto'.i18n,
+        _ => 'upgrade.fallo-descarga'.i18n,
+      };
+    }
+    return 'upgrade.fallo-descarga'.i18n;
+  }
+
+  /// Borra el archivo a medio bajar, si quedó alguno.
+  static Future<void> _borrarDescargaAMedias(Map<String, dynamic> asset) async {
+    try {
+      final nombre = asset['name'] as String?;
+      if (nombre == null) return;
+      final carpeta = Platform.isAndroid
+          ? Directory(
+              '${(await getTemporaryDirectory()).path}${Platform.pathSeparator}update',
+            )
+          : null;
+      if (carpeta == null || !carpeta.existsSync()) return;
+      final archivo = File('${carpeta.path}${Platform.pathSeparator}$nombre');
+      if (!archivo.existsSync()) return;
+      final esperado = asset['size'] as int?;
+      // Solo si está incompleto: uno entero sirve para reintentar sin
+      // volver a bajar los mismos megas.
+      if (esperado != null && await archivo.length() == esperado) return;
+      await archivo.delete();
+    } catch (_) {
+      // Limpiar es cortesía: que no se pueda no puede tumbar nada.
+    }
+  }
+
+  static String _enMegas(int bytes) => (bytes / 1024 / 1024).toStringAsFixed(1);
 
   static void _throwIfProcessFailed(String command, ProcessResult result) {
     if (result.exitCode == 0) return;
@@ -1217,9 +1292,9 @@ class ApplicationUtils {
       // de volver, así que se consulta un par de veces antes de rendirse de
       // esta pasada — pero rendirse acá ya no apaga el observador (ver abajo).
       for (var intento = 0; intento < 5; intento++) {
-        final permitido = await _canalActualizacion
-                .invokeMethod<bool>('canInstallApks') ??
-            false;
+        final permitido =
+            await _canalActualizacion.invokeMethod<bool>('canInstallApks') ??
+                false;
         if (permitido) {
           try {
             await _canalActualizacion
@@ -1433,7 +1508,6 @@ class ApplicationUtils {
     // app se cerraba y listo.
     exit(0);
   }
-
 
   static Future<void> _replaceAndRestart(
     Directory sourceDir,
@@ -1749,146 +1823,149 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
         child: ColoredBox(
           color: HomeTheme.bg,
           child: Column(
-          children: [
-            // Barra de ventana propia. La barra nativa de Windows esta oculta
-            // (TitleBarStyle.hidden en main.dart), asi que antes aca solo habia
-            // una franja transparente de 32px: se podia arrastrar, pero se veia
-            // como una banda negra sin nada y —mas importante— no habia NINGUNA
-            // forma de minimizar ni cerrar. Con esta pantalla abierta al
-            // arrancar, la unica salida era el administrador de tareas.
-            if (Platform.isWindows || Platform.isLinux)
-              const _BarraVentanaActualizacion(),
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Card(
-                    elevation: 8,
-                    // Colores de la app y no los de Material: en escritorio la
-                    // raiz es FluentApp, asi que no hay Theme y Card caia al
-                    // tema CLARO por defecto — tarjeta casi blanca sobre el
-                    // fondo oscuro.
-                    color: HomeTheme.cardSurface,
-                    surfaceTintColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: HomeTheme.border)),
-                    child: Container(
-                      constraints: const BoxConstraints(
-                        maxWidth: 600,
-                        maxHeight: 500,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                            decoration: BoxDecoration(
-                              color:
-                                  HomeTheme.accentPink.withValues(alpha: 0.1),
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(12),
-                                topRight: Radius.circular(12),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.system_update,
-                                    size: 24, color: HomeTheme.accentPink),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    FlutterI18n.translate(
-                                      context,
-                                      'upgrade.new-version',
-                                      translationParams: {
-                                        'version': widget.remoteVersion
-                                      },
-                                    ),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: HomeTheme.accentPink,
-                                    ),
-                                  ),
+            children: [
+              // Barra de ventana propia. La barra nativa de Windows esta oculta
+              // (TitleBarStyle.hidden en main.dart), asi que antes aca solo habia
+              // una franja transparente de 32px: se podia arrastrar, pero se veia
+              // como una banda negra sin nada y —mas importante— no habia NINGUNA
+              // forma de minimizar ni cerrar. Con esta pantalla abierta al
+              // arrancar, la unica salida era el administrador de tareas.
+              if (Platform.isWindows || Platform.isLinux)
+                const _BarraVentanaActualizacion(),
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Card(
+                      elevation: 8,
+                      // Colores de la app y no los de Material: en escritorio la
+                      // raiz es FluentApp, asi que no hay Theme y Card caia al
+                      // tema CLARO por defecto — tarjeta casi blanca sobre el
+                      // fondo oscuro.
+                      color: HomeTheme.cardSurface,
+                      surfaceTintColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: HomeTheme.border)),
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          maxWidth: 600,
+                          maxHeight: 500,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color:
+                                    HomeTheme.accentPink.withValues(alpha: 0.1),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(12),
+                                  topRight: Radius.circular(12),
                                 ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: Scrollbar(
-                              controller: _scrollEscritorio,
-                              // Siempre visible: es la unica pista de que las
-                              // notas siguen mas abajo. Por defecto aparece
-                              // solo mientras se arrastra, o sea justo cuando
-                              // ya te enteraste de que habia scroll.
-                              thumbVisibility: true,
-                              child: SingleChildScrollView(
-                              controller: _scrollEscritorio,
-                              child: Padding(
-                                // Aire a la derecha para que la barra no quede
-                                // pintada encima del texto.
-                                padding: const EdgeInsets.fromLTRB(24, 24, 32, 24),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.system_update,
+                                      size: 24, color: HomeTheme.accentPink),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
                                       FlutterI18n.translate(
                                         context,
-                                        'upgrade.forced-required',
+                                        'upgrade.new-version',
                                         translationParams: {
-                                          'actual': packageInfo.version
+                                          'version': widget.remoteVersion
                                         },
                                       ),
                                       style: TextStyle(
-                                          color: HomeTheme.textPrimary),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: HomeTheme.accentPink,
+                                      ),
                                     ),
-                                    const SizedBox(height: 16),
-                                    MarkdownBody(
-                                      data: widget.changelog,
-                                      styleSheet: estiloNotasVersion(),
-                                      onTapLink: abrirEnlaceDeNotas,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Scrollbar(
+                                controller: _scrollEscritorio,
+                                // Siempre visible: es la unica pista de que las
+                                // notas siguen mas abajo. Por defecto aparece
+                                // solo mientras se arrastra, o sea justo cuando
+                                // ya te enteraste de que habia scroll.
+                                thumbVisibility: true,
+                                child: SingleChildScrollView(
+                                  controller: _scrollEscritorio,
+                                  child: Padding(
+                                    // Aire a la derecha para que la barra no quede
+                                    // pintada encima del texto.
+                                    padding: const EdgeInsets.fromLTRB(
+                                        24, 24, 32, 24),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          FlutterI18n.translate(
+                                            context,
+                                            'upgrade.forced-required',
+                                            translationParams: {
+                                              'actual': packageInfo.version
+                                            },
+                                          ),
+                                          style: TextStyle(
+                                              color: HomeTheme.textPrimary),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        MarkdownBody(
+                                          data: widget.changelog,
+                                          styleSheet: estiloNotasVersion(),
+                                          onTapLink: abrirEnlaceDeNotas,
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                if (_needsManualRetry) ...[
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  if (_needsManualRetry) ...[
+                                    Expanded(
+                                      child: PlatformTextButton(
+                                        onPressed:
+                                            _ocupado ? null : _retryCheck,
+                                        child: Text(
+                                            'upgrade.already-updated'.i18n),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                  ],
                                   Expanded(
-                                    child: PlatformTextButton(
-                                      onPressed: _ocupado ? null : _retryCheck,
-                                      child:
-                                          Text('upgrade.already-updated'.i18n),
+                                    child: PlatformFilledButton(
+                                      onPressed: _ocupado ? null : _updateNow,
+                                      child: _etiquetaActualizar,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
                                 ],
-                                Expanded(
-                                  child: PlatformFilledButton(
-                                    onPressed: _ocupado ? null : _updateNow,
-                                    child: _etiquetaActualizar,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       );
     }
@@ -1932,55 +2009,56 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                       child: DesplazableConMando(
                         controlador: _scrollMovil,
                         child: Scrollbar(
-                        controller: _scrollMovil,
-                        thumbVisibility: true,
-                        child: SingleChildScrollView(
-                        controller: _scrollMovil,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 24, 30, 20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.system_update,
-                                  size: 48, color: HomeTheme.accentPink),
-                              const SizedBox(height: 16),
-                              Text(
-                                FlutterI18n.translate(
-                                  context,
-                                  'upgrade.new-version',
-                                  translationParams: {
-                                    'version': widget.remoteVersion
-                                  },
-                                ),
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: HomeTheme.textPrimary,
-                                ),
+                          controller: _scrollMovil,
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            controller: _scrollMovil,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(24, 24, 30, 20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.system_update,
+                                      size: 48, color: HomeTheme.accentPink),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    FlutterI18n.translate(
+                                      context,
+                                      'upgrade.new-version',
+                                      translationParams: {
+                                        'version': widget.remoteVersion
+                                      },
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: HomeTheme.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    FlutterI18n.translate(
+                                      context,
+                                      'upgrade.forced-required',
+                                      translationParams: {
+                                        'actual': packageInfo.version
+                                      },
+                                    ),
+                                    style:
+                                        TextStyle(color: HomeTheme.textPrimary),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  MarkdownBody(
+                                    data: widget.changelog,
+                                    styleSheet: estiloNotasVersion(),
+                                    onTapLink: abrirEnlaceDeNotas,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                FlutterI18n.translate(
-                                        context,
-                                        'upgrade.forced-required',
-                                        translationParams: {
-                                          'actual': packageInfo.version
-                                        },
-                                      ),
-                                style: TextStyle(
-                                    color: HomeTheme.textPrimary),
-                              ),
-                              const SizedBox(height: 16),
-                              MarkdownBody(
-                                data: widget.changelog,
-                                styleSheet: estiloNotasVersion(),
-                                onTapLink: abrirEnlaceDeNotas,
-                              ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                      ),
                       ),
                     ),
                     // Botones en COLUMNA y no en fila. Con los dos al lado,
@@ -2058,7 +2136,6 @@ class _EsperaPermisoDeInstalacion with WidgetsBindingObserver {
   }
 }
 
-
 /// Las notas de la version dentro del dialogo de "hay version nueva".
 ///
 /// Tiene su propio ScrollController por dos motivos: hace falta para que la
@@ -2095,9 +2172,8 @@ class _NotasDeVersionState extends State<_NotasDeVersion> {
     // Alto acotado: sin esto el dialogo crece con el largo de las notas y se
     // pasa de la pantalla. En el telefono se mide contra el alto real (funciona
     // igual en vertical que en horizontal, donde el alto util es la mitad).
-    final alto = Platform.isAndroid
-        ? MediaQuery.sizeOf(context).height * 0.42
-        : 400.0;
+    final alto =
+        Platform.isAndroid ? MediaQuery.sizeOf(context).height * 0.42 : 400.0;
     return SizedBox(
       width: double.maxFinite,
       height: alto,
@@ -2191,7 +2267,6 @@ MarkdownStyleSheet estiloNotasVersion() {
   );
 }
 
-
 /// Barra de ventana de la pantalla de actualizacion obligatoria.
 ///
 /// La app oculta la barra de titulo nativa, asi que cada pantalla que pueda
@@ -2271,6 +2346,7 @@ class _BotonVentana extends StatefulWidget {
 
   final IconData icono;
   final VoidCallback onTap;
+
   /// Cerrar se pinta en rojo al pasar por encima, como en Windows.
   final bool peligro;
 
@@ -2311,7 +2387,6 @@ class _BotonVentanaState extends State<_BotonVentana> {
   }
 }
 
-
 /// Abre un enlace de las notas de version en el navegador del sistema.
 ///
 /// Va aparte porque las notas se muestran en TRES lugares: el dialogo de "hay
@@ -2336,7 +2411,6 @@ void abrirEnlaceDeNotas(String _, String? href, String __) {
     debugPrint('No se pudo abrir el enlace de las notas: $e');
   }
 }
-
 
 /// Boton de la pantalla de actualizacion en celular.
 ///
@@ -2442,8 +2516,7 @@ class _BarraDeDescarga extends StatelessWidget {
                 value: valor.parte,
                 minHeight: 6,
                 backgroundColor: HomeTheme.accentPink.withValues(alpha: 0.18),
-                valueColor:
-                    AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                valueColor: AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
               ),
             ),
             const SizedBox(height: 8),

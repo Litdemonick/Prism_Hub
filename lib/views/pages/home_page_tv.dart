@@ -94,10 +94,10 @@ double _anchoSidebarContraidoTv(Ancho a) =>
 /// margen grande, arranca casi pegado al rail y llega hasta el borde
 /// derecho — es lo que hace que entren siete pósters por fila y que se
 /// vean dos filas y media.
-const double _aireDelRailTv = 22;
+const double _aireDelRailTv = 12;
 
 /// Lo que se deja libre contra el borde derecho.
-const double _aireDerechoTv = 10;
+const double _aireDerechoTv = 0;
 
 /// El hueco entre las tarjetas grandes de Inicio. Casi pegadas.
 const double _huecoGrandeTv = 6;
@@ -336,8 +336,19 @@ class _HomeTVState extends State<HomeTV> {
     // están el nombre y los botones.
     return SafeArea(
       child: Padding(
-        // Un solo sitio decide este margen. Ver HomeTheme.margenTv.
-        padding: HomeTheme.margenTv(context),
+        // ── Sin margen a la DERECHA ────────────────────────────────────
+        //
+        // `HomeTheme.margenTv` deja overscan a los dos lados (hasta 64px en
+        // un televisor de 1280). A la izquierda hace falta —ahí vive el
+        // rail— pero a la derecha era justo lo que cortaba las filas antes
+        // del borde: la última tarjeta terminaba y quedaba una franja negra,
+        // así que no se leía que hubiera más para el lado. Reportado con
+        // foto: «deben abarcar toda la derecha y ver que hay otras cards, no
+        // cortándola desde ahí».
+        //
+        // Arriba y abajo se conserva: ahí el overscan sí protege de los
+        // televisores que recortan los bordes.
+        padding: HomeTheme.margenTv(context).copyWith(right: 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -630,14 +641,50 @@ class _SidebarTVState extends State<_SidebarTV> {
   /// — estando en Inicio, que es la primera categoría, no había ninguna tecla
   /// que llevara arriba. Reportado en vivo: «puedo bajar, pero cuando quiero
   /// subir el foco no me deja».
+  /// Arriba y abajo se mueven POR LA LISTA, no por geometría.
+  ///
+  /// ── Por qué no se deja que Flutter lo resuelva solo ──────────────────
+  ///
+  /// El recorrido de fábrica busca «lo más cercano en esa dirección» por
+  /// posición en pantalla. En este rail eso falla: los íconos son chicos y
+  /// están pegados al borde, mientras que a la derecha hay tarjetas enormes
+  /// que ocupan casi toda la pantalla — y una tarjeta que está más arriba,
+  /// aunque sea a la derecha del todo, puede quedar «más cerca» que el ícono
+  /// de justo encima. Reportado en vivo: «en el panel lateral no me dejaba
+  /// subir y me manda a la zona».
+  ///
+  /// Con la lista de nodos a mano el movimiento es exacto: arriba es la
+  /// categoría anterior y abajo la siguiente, siempre, sin importar qué haya
+  /// dibujado al lado.
+  ///
+  /// En los extremos se deja pasar la tecla para que el foco pueda salir:
+  /// arriba en la primera va a la barra de arriba (buscar, extensiones,
+  /// ajustes), y abajo en la última se frena, que si no el foco se escapaba
+  /// al contenido por abajo. La derecha nunca se toca: es la que entra a la
+  /// zona, y así tiene que seguir siendo.
   KeyEventResult _frenarEnLosBordes(FocusNode node, KeyEvent evento) {
     if (evento is! KeyDownEvent) return KeyEventResult.ignored;
-    if (evento.logicalKey != LogicalKeyboardKey.arrowDown) {
+    final tecla = evento.logicalKey;
+    final arriba = tecla == LogicalKeyboardKey.arrowUp;
+    final abajo = tecla == LogicalKeyboardKey.arrowDown;
+    if (!arriba && !abajo) return KeyEventResult.ignored;
+
+    final actual = _nodos.indexWhere((n) => n.hasFocus);
+    // Ninguno de los nuestros tiene el foco: no es asunto de este rail.
+    if (actual < 0) return KeyEventResult.ignored;
+
+    final destino = arriba ? actual - 1 : actual + 1;
+    if (destino < 0) {
+      // Arriba del todo: se deja salir hacia la barra de arriba.
       return KeyEventResult.ignored;
     }
-    return _nodos.last.hasFocus
-        ? KeyEventResult.handled
-        : KeyEventResult.ignored;
+    if (destino >= _nodos.length) {
+      // Abajo del todo: no hay a dónde ir, y dejarla pasar mandaba el foco
+      // al contenido.
+      return KeyEventResult.handled;
+    }
+    _nodos[destino].requestFocus();
+    return KeyEventResult.handled;
   }
 
   @override
@@ -737,15 +784,18 @@ class _SidebarTVState extends State<_SidebarTV> {
                       focusNode: _nodos[i],
                       autofocus: pedirFoco && categoria == _CategoriaTV.inicio,
                       borderRadius: 12,
-                      // Sin el borde de acento: acá lo que se elige es un
-                      // ícono suelto con aire alrededor, no una tarjeta
-                      // entre muchas iguales. El recuadro rosado lo
-                      // encajonaba. Queda solo el resplandor.
+                      // Ni borde ni resplandor: acá lo que se elige es un
+                      // ícono suelto rodeado de negro, así que el halo era
+                      // lo único que se veía y quedaba exagerado. La fila
+                      // dibuja su propio fondo suave — se lee mejor y no
+                      // cuesta un desenfoque por cada movimiento del mando.
                       conMarco: false,
+                      conHalo: false,
                       onTap: () => widget.onElegir(categoria),
-                      child: _ItemSidebarTV(
+                      builder: (tieneFoco) => _ItemSidebarTV(
                         categoria: categoria,
                         elegido: widget.elegida == categoria,
+                        enfocado: tieneFoco,
                         expandido: _expandido,
                       ),
                     ),
@@ -766,11 +816,17 @@ class _ItemSidebarTV extends StatelessWidget {
   const _ItemSidebarTV({
     required this.categoria,
     required this.elegido,
+    required this.enfocado,
     required this.expandido,
   });
 
   final _CategoriaTV categoria;
+
+  /// La categoría que se está viendo ahora.
   final bool elegido;
+
+  /// El mando está parado en esta fila ahora mismo.
+  final bool enfocado;
 
   /// Si el sidebar está desplegado. Contraído, solo se ve el ícono —
   /// centrado, en vez de pegado a la izquierda con un hueco donde iría el
@@ -788,28 +844,39 @@ class _ItemSidebarTV extends StatelessWidget {
     //
     // Sin relleno de color en el elegido: lo que lo distingue es que está
     // encendido (el resto va a media luz) y el resplandor alrededor.
-    final apagado = !elegido;
+    final apagado = !elegido && !enfocado;
     final icono = Icon(
       categoria.icono,
       size: 27,
       color: elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
     );
-    return Container(
+    // ── El fondo, en vez del resplandor ────────────────────────────────
+    //
+    //   por encima (enfocado)  → un gris claro apenas, como cualquier menú
+    //   la que se está viendo  → el acento en bajito
+    //   las dos cosas          → el acento un poco más presente
+    //
+    // Nada de sombras: son lo más caro que dibuja la GPU y acá se
+    // recalcularían en cada apretón del mando.
+    final Color fondo;
+    if (elegido && enfocado) {
+      fondo = HomeTheme.accentPink.withValues(alpha: 0.30);
+    } else if (elegido) {
+      fondo = HomeTheme.accentPink.withValues(alpha: 0.18);
+    } else if (enfocado) {
+      fondo = HomeTheme.contraste.withValues(alpha: 0.12);
+    } else {
+      fondo = Colors.transparent;
+    }
+    return AnimatedContainer(
+      duration: PrismHubMas.animacion(const Duration(milliseconds: 140)),
       width: double.infinity,
       padding: expandido
           ? const EdgeInsets.symmetric(horizontal: 10, vertical: 9)
           : const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(9),
-        boxShadow: elegido
-            ? [
-                BoxShadow(
-                  color: HomeTheme.accentPink.withValues(alpha: 0.5),
-                  blurRadius: 15,
-                  spreadRadius: 2,
-                ),
-              ]
-            : null,
+        color: fondo,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Opacity(
         opacity: apagado ? 0.5 : 1,
@@ -888,7 +955,7 @@ class _HeroSecundarioTv extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radio = BorderRadius.circular(20);
+    final radio = BorderRadius.circular(_radioGrandeTv);
     // ── El ancho para decodificar sale de la CAJA, no de la pantalla ────
     //
     // Estaba con el ancho de la pantalla entera: en un televisor de 1280
@@ -980,10 +1047,10 @@ class _MedianaTv extends StatelessWidget {
           ? caja.maxWidth
           : MediaQuery.sizeOf(context).width / 4;
       return FocusableCard(
-        borderRadius: 3,
+        borderRadius: _radioGrandeTv,
         onTap: () => _abrir(context, item, package),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: BorderRadius.circular(_radioGrandeTv),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -1091,7 +1158,7 @@ class _TarjetaDensaTv extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           FocusableCard(
-            borderRadius: 3,
+            borderRadius: _radioGrandeTv,
             // Solo la portada lleva el marco: el nombre va afuera, debajo.
             altoMarco: ancho * 3 / 2,
             onTap: () => _abrir(context, item, package),
@@ -1114,12 +1181,23 @@ class _TarjetaDensaTv extends StatelessWidget {
 /// Una fila densa: el nombre de la extension en chico y arriba, y debajo la
 /// tira de posters. Siete enteros y el siguiente asomando.
 class _FilaDensaTv extends StatefulWidget {
-  const _FilaDensaTv({required this.rotulo, required this.items});
+  const _FilaDensaTv({
+    required this.rotulo,
+    required this.items,
+    this.alLlegarAlFinal,
+  });
 
   final String rotulo;
 
   /// Paquete + item de cada tarjeta.
   final List<(String package, ExtensionListItem item)> items;
+
+  /// Qué hacer cuando el usuario se acerca al final de la fila.
+  ///
+  /// En una zona de televisor las filas crecen a lo ANCHO, no a lo largo:
+  /// la cantidad de filas es la cantidad de extensiones. Así que la página
+  /// siguiente se pide acá, al llegar al final de esta fila.
+  final VoidCallback? alLlegarAlFinal;
 
   @override
   State<_FilaDensaTv> createState() => _FilaDensaTvState();
@@ -1129,7 +1207,26 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
   final _scroll = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.alLlegarAlFinal != null) {
+      _scroll.addListener(_alAcercarseAlFinal);
+    }
+  }
+
+  void _alAcercarseAlFinal() {
+    if (!_scroll.hasClients) return;
+    final restante = _scroll.position.maxScrollExtent - _scroll.offset;
+    // Dos tarjetas de margen: alcanza para que la página nueva llegue antes
+    // de que el usuario toque el final, sin pedirla apenas empieza a mover.
+    if (restante < _anchoPosterTv(context) * 2) {
+      widget.alLlegarAlFinal!();
+    }
+  }
+
+  @override
   void dispose() {
+    _scroll.removeListener(_alAcercarseAlFinal);
     _scroll.dispose();
     super.dispose();
   }
@@ -1430,9 +1527,18 @@ class _ZonaTvState extends State<_ZonaTv> {
     // encima del final, y bajando rápido con el mando se llegaba al fondo
     // antes de que llegara nada. Dos tarjetas de alto dan margen de sobra
     // para que la página nueva entre sin que se note el corte.
+    // ── Bajar ya no pide más ────────────────────────────────────────
+    //
+    // Con la grilla intercalada, bajar traía la página siguiente de todas
+    // las fuentes y el contenido nuevo aparecía abajo. Con filas eso no
+    // sirve: la página nueva alarga cada fila a lo ANCHO, así que bajar
+    // pedía trabajo (una petición por extensión, con sus motores) y no
+    // mostraba nada nuevo. Cada fila pide lo suyo al llegar a su derecha —
+    // ver `ZonaCatalogoController.paginarFuente`.
     final altoTarjeta = TarjetaDeCatalogo.altoTotalPara(context);
     if (restante < altoTarjeta * 2) {
-      unawaited(c.cargarMas());
+      // Nada: queda por si en el futuro la zona vuelve a crecer hacia
+      // abajo. Ver el comentario de arriba.
     }
   }
 
@@ -1520,10 +1626,20 @@ class _ZonaTvState extends State<_ZonaTv> {
           //
           // Reportado en vivo: "al ir bajando no se da cuenta si están
           // cargando cards o si ya terminó".
+          // ── El pie, con filas, dice otra cosa ───────────────────────
+          //
+          // Con la grilla intercalada bajar traía más, y el pie invitaba a
+          // seguir bajando. Con filas no: la cantidad de filas es la
+          // cantidad de extensiones y no cambia por bajar. Lo que crece es
+          // cada fila hacia la derecha (ver `_FilaDensaTv.alLlegarAlFinal`).
+          //
+          // Así que acá abajo ya no hay nada que prometer: se dice que eso
+          // es todo. Reportado en vivo: «me dice seguí bajando para ver más
+          // y no me da más contenido».
           return _PieDeZonaTv(
             cargando: cargandoMas,
-            hayMas: c.puedeTraerMas,
-            seAgotoDeVerdad: c.seAgotoDeVerdad,
+            hayMas: false,
+            seAgotoDeVerdad: true,
           );
         },
       );
@@ -1612,6 +1728,7 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
     return _FilaDensaTv(
       rotulo: f.nombre,
       items: [for (final item in f.items) (f.package, item)],
+      alLlegarAlFinal: () => unawaited(widget.controlador.paginarFuente(f)),
     );
   }
 }

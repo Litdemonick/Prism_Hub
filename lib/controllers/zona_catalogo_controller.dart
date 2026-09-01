@@ -802,6 +802,43 @@ class ZonaCatalogoController extends GetxController {
     }
   }
 
+  /// Trae la página siguiente de UNA sola fuente.
+  ///
+  /// ── Por qué hace falta aparte de `cargarMas` ──────────────────────────
+  ///
+  /// `cargarMas` le pide la página siguiente a TODAS las fuentes de la zona
+  /// a la vez. Eso tiene sentido cuando la zona es una grilla intercalada:
+  /// bajar pide más de todo y el contenido nuevo se reparte hacia abajo.
+  ///
+  /// Pero en televisor la zona son FILAS, una por extensión. Ahí bajar no
+  /// puede traer nada: la cantidad de filas es la cantidad de extensiones y
+  /// no cambia. Lo que crece es cada fila hacia la DERECHA, así que la
+  /// página siguiente se pide cuando el usuario llega al final de esa fila
+  /// —y solo de esa—.
+  ///
+  /// Reportado en vivo: «estoy en la zona película y bajo, me dice seguí
+  /// bajando para ver más, y no me da más contenido».
+  Future<void> paginarFuente(ZonaFuente f) async {
+    if (f.isFetching || f.agotada || f.pagina >= _maxPaginas) return;
+    // El mismo respiro que `cargarMas`: con el mando uno mantiene apretada
+    // la flecha, y sin esto cada tarjeta que pasa dispara otra página.
+    final ultima = _ultimoPaginado[f.package];
+    if (ultima != null &&
+        DateTime.now().difference(ultima) < _respiroEntreCargas) {
+      return;
+    }
+    _ultimoPaginado[f.package] = DateTime.now();
+    f.pagina++;
+    await _pedir([f]);
+    _ultimoPaginado[f.package] = DateTime.now();
+  }
+
+  /// Cuándo se pidió por última vez la página siguiente de cada fuente.
+  final _ultimoPaginado = <String, DateTime>{};
+
+  /// Si a esta fuente todavía le queda algo por traer.
+  bool leQuedaMas(ZonaFuente f) => !f.agotada && f.pagina < _maxPaginas;
+
   /// Pool de tareas concurrentes — mismo patrón que ya prueba
   /// `SearchController.getResult()`: con `maxConcurrent` fijo, una
   /// extensión lenta o colgada solo se demora a sí misma, nunca frena a

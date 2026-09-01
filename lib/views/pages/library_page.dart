@@ -13,6 +13,9 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/views/pages/history_page.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/home/esqueleto.dart';
+import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_hero_banner.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
@@ -485,6 +488,19 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
+  /// Qué parte del episodio se llevaba vista, de 0 a 1.
+  ///
+  /// `progress` y `totalProgress` son segundos guardados como texto (ver
+  /// video_controller.dart), nunca una fracción ya hecha. Null cuando no se
+  /// sabe: ahí la tarjeta va sin barra en vez de con una en cero, que se
+  /// leería como «no viste nada» cuando en realidad es «no se sabe».
+  static double? _fraccionVista(History h) {
+    final segundos = double.tryParse(h.progress);
+    final total = double.tryParse(h.totalProgress);
+    if (segundos == null || total == null || total <= 0) return null;
+    return (segundos / total).clamp(0.0, 1.0);
+  }
+
   Widget _buildAndroidHome(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
@@ -575,12 +591,75 @@ class _LibraryPageState extends State<LibraryPage> {
       // ponía: el título quedaba pegado al borde donde flota el sidebar,
       // así que al expandirse el título corría contra la columna.
       final margen = HomeTheme.overscanTv(context);
+      // ── Biblioteca de televisor, propia ──────────────────────────────
+      //
+      // Antes reusaba `HomeSection` + `HomeMediaCard`, que son las de
+      // escritorio y teléfono: traen menú de tres puntos, pastilla de
+      // extensión, subtítulo debajo y flechas de desplazamiento. Nada de
+      // eso sirve desde el sillón —el menú no se puede abrir con el mando
+      // sin estorbar, y las flechas son para el ratón— y encima achican la
+      // portada, que es lo único que importa mirar.
+      //
+      // Del boceto aprobado: dos filas de tarjetas ANCHAS, el título
+      // encima de la portada y, en «Continuar viendo», la barra de cuánto
+      // se llevaba visto pegada al borde de abajo.
+      final videos = c.resents
+          .where((h) => h.type == ExtensionType.bangumi)
+          .toList(growable: false);
+      final favoritos = c.favorites
+          .where((f) => f.type == ExtensionType.bangumi)
+          .toList(growable: false);
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(margen, 0, margen, 24),
+        padding: EdgeInsets.fromLTRB(margen, 4, 0, 24),
+        addAutomaticKeepAlives: false,
         children: [
-          ..._continuarSecciones(context),
-          ..._favoritosSecciones(context),
+          if (videos.isNotEmpty)
+            _FilaAnchaTv(
+              titulo: 'home.continue-video'.i18n,
+              items: [
+                for (final h in videos)
+                  (
+                    titulo: h.title,
+                    subtitulo: FlutterI18n.translate(
+                      context,
+                      'home.watched-episode',
+                      translationParams: {
+                        'ep': ExtensionUtils.episodeNumberLabel(
+                          h.episodeTitle,
+                          h.episodeId,
+                        ),
+                      },
+                    ),
+                    portada: PortadaHistorial.de(h),
+                    cabeceras: c.headersForPackage(h.package),
+                    progreso: _fraccionVista(h),
+                    abrir: () => resumeHistoryItem(context, h),
+                  ),
+              ],
+            ),
+          if (videos.isNotEmpty && favoritos.isNotEmpty)
+            const SizedBox(height: 34),
+          if (favoritos.isNotEmpty)
+            _FilaAnchaTv(
+              titulo: 'home.favorite'.i18n,
+              items: [
+                for (final f in favoritos)
+                  (
+                    titulo: f.title,
+                    subtitulo: null,
+                    portada: PortadaHistorial(
+                      url: f.cover,
+                      necesitaHeaders: true,
+                    ),
+                    cabeceras: c.headersForPackage(f.package),
+                    progreso: null,
+                    abrir: () => _openDetail(f.url, f.package,
+                        cover: f.cover,
+                        headers: c.headersForPackage(f.package)),
+                  ),
+              ],
+            ),
         ],
       );
     });
@@ -730,6 +809,183 @@ class _BibliotecaVaciaState extends State<_BibliotecaVacia>
               _VerHistorialBoton(
                   accent: HomeTheme.accentPink,
                   onTap: () => _abrirHistorial(context)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Lo que necesita una tarjeta ancha de la Biblioteca en televisor.
+typedef _ItemAnchoTv = ({
+  String titulo,
+  String? subtitulo,
+  PortadaHistorial portada,
+  Map<String, String>? cabeceras,
+  double? progreso,
+  VoidCallback abrir,
+});
+
+/// Una fila de la Biblioteca en televisor: el título y las tarjetas anchas.
+class _FilaAnchaTv extends StatelessWidget {
+  const _FilaAnchaTv({required this.titulo, required this.items});
+
+  final String titulo;
+  final List<_ItemAnchoTv> items;
+
+  /// El ancho de cada tarjeta.
+  ///
+  /// Del boceto: entran unas cuatro y la quinta asoma cortada contra el
+  /// borde derecho, que es lo que dice que hay más para el lado.
+  static double anchoDe(BuildContext context) {
+    final util = MediaQuery.sizeOf(context).width;
+    return (util / 4.15).clamp(180.0, 420.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ancho = anchoDe(context);
+    // Casi 4:3 apaisado, como en el boceto (270 de ancho por 205 de alto).
+    final alto = ancho * 0.76;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 10),
+          child: Text(
+            titulo,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: HomeTheme.textPrimary,
+            ),
+          ),
+        ),
+        SizedBox(
+          // Aire de más para que el marco de foco no quede mordido.
+          height: alto + 16,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            addAutomaticKeepAlives: false,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) => _TarjetaAnchaTv(
+              item: items[i],
+              ancho: ancho,
+              alto: alto,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// La tarjeta ancha: portada a sangre, título encima y —si corresponde— la
+/// barra de cuánto se llevaba visto pegada al borde de abajo.
+class _TarjetaAnchaTv extends StatelessWidget {
+  const _TarjetaAnchaTv({
+    required this.item,
+    required this.ancho,
+    required this.alto,
+  });
+
+  final _ItemAnchoTv item;
+  final double ancho;
+  final double alto;
+
+  @override
+  Widget build(BuildContext context) {
+    final radio = BorderRadius.circular(14);
+    final anchoDecodificado =
+        (ancho * MediaQuery.devicePixelRatioOf(context)).ceil().clamp(1, 4096);
+    return SizedBox(
+      width: ancho,
+      height: alto,
+      child: FocusableCard(
+        borderRadius: 14,
+        onTap: item.abrir,
+        child: ClipRRect(
+          borderRadius: radio,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (item.portada.archivo != null)
+                Image.file(
+                  item.portada.archivo!,
+                  fit: BoxFit.cover,
+                  cacheWidth: anchoDecodificado,
+                  errorBuilder: (_, __, ___) =>
+                      const ColoredBox(color: Color(0xFF15151C)),
+                )
+              else
+                CacheNetWorkImagePic(
+                  item.portada.url ?? '',
+                  fit: BoxFit.cover,
+                  cacheWidth: anchoDecodificado,
+                  headers: item.portada.necesitaHeaders ? item.cabeceras : null,
+                  placeholder: const Esqueleto(radio: 14),
+                ),
+              // El velo, corto: solo lo que hace falta para que el título
+              // se lea, apagándose antes de la mitad.
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xD9000000), Color(0x00000000)],
+                    stops: [0, 0.55],
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  // Deja libre el borde de abajo cuando hay barra, para que
+                  // el texto no se le monte encima.
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    0,
+                    12,
+                    item.progreso == null ? 10 : 16,
+                  ),
+                  child: Text(
+                    item.titulo,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: HomeTheme.sobrePortada,
+                      shadows: [
+                        Shadow(blurRadius: 4, color: Color(0xE6000000)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (item.progreso != null)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: SizedBox(
+                    height: 5,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: (item.progreso! * 1000).round(),
+                          child: ColoredBox(color: HomeTheme.accentPink),
+                        ),
+                        Expanded(
+                          flex: 1000 - (item.progreso! * 1000).round(),
+                          child: const ColoredBox(color: Color(0x3AFFFFFF)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

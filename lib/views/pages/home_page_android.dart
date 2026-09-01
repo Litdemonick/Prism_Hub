@@ -1385,26 +1385,37 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     }
     final (paquete, item) = planos[i];
     final fuente = ExtensionUtils.runtimes[paquete]?.extension.name ?? '';
-    return _ConMarcoDeFoco(
-      marcado: _enfocado,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 380),
-        // Solo la imagen cambia: la tarjeta que sale y la que entra ocupan
-        // exactamente el mismo lugar, así que se funden una sobre la otra
-        // sin que nada se mueva.
-        layoutBuilder: (actual, anteriores) => Stack(
-          fit: StackFit.expand,
-          children: [...anteriores, if (actual != null) actual],
-        ),
-        child: KeyedSubtree(
-          key: ValueKey('$paquete|${item.url}'),
-          child: _TarjetaGrande(
-            ancho: anchoUtil,
-            item: item,
-            fuente: fuente,
-            cabeceras: _cabeceras(paquete),
-            anchoTexto: anchoUtil,
-            onTap: () => _abrir(context, item, paquete),
+    // ── Recortado a su caja ────────────────────────────────────────────
+    //
+    // `_TarjetaGrande` compone su título con un `OverflowBox`, y la imagen
+    // llena a sangre: las dos cosas pueden pintar FUERA del rectángulo que
+    // le toca. En el acordeón eso lo tapaba el `ClipRect` de la fila; acá,
+    // con una sola tarjeta, no había nada que lo cortara — y se veía la
+    // tarjeta anterior y su texto asomando por detrás de la de adelante.
+    // Reportado con foto: «se ven cosas atrás de las cards».
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_radioGrandeTv),
+      child: _ConMarcoDeFoco(
+        marcado: _enfocado,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 380),
+          // Solo la imagen cambia: la tarjeta que sale y la que entra ocupan
+          // exactamente el mismo lugar, así que se funden una sobre la otra
+          // sin que nada se mueva.
+          layoutBuilder: (actual, anteriores) => Stack(
+            fit: StackFit.expand,
+            children: [...anteriores, if (actual != null) actual],
+          ),
+          child: KeyedSubtree(
+            key: ValueKey('$paquete|${item.url}'),
+            child: _TarjetaGrande(
+              ancho: anchoUtil,
+              item: item,
+              fuente: fuente,
+              cabeceras: _cabeceras(paquete),
+              anchoTexto: anchoUtil,
+              onTap: () => _abrir(context, item, paquete),
+            ),
           ),
         ),
       ),
@@ -1959,6 +1970,13 @@ class _ConPanelDeHoverState extends State<_ConPanelDeHover> {
 /// llenar la tarjeta y no queda ninguna franja de fondo. El texto va ENCIMA,
 /// abajo a la izquierda, sobre un degradado translúcido — acá sí, porque la
 /// tarjeta es grande y el título tiene que viajar con la imagen al deslizar.
+/// El radio de esquina de las tarjetas grandes de TV.
+///
+/// Pedido explícito mirando la foto: «al seleccionar, las esquinas de las
+/// cards redondas». Con 3 o 4 se leían como rectas a la distancia de un
+/// televisor.
+const double _radioGrandeTv = 14;
+
 class _TarjetaGrande extends StatelessWidget {
   const _TarjetaGrande({
     required this.ancho,

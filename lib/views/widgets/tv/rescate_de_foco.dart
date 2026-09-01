@@ -96,14 +96,65 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
       // ¿Y por qué no centrado? Porque centrar mueve la lista en CADA paso,
       // incluso sobre algo que ya se veía bien, y eso se siente como que la
       // pantalla se sacude sola.
-      Scrollable.ensureVisible(
-        ctx,
-        alignment: 0.35,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
-        duration: duracion,
-        curve: Curves.easeOut,
-      );
+      _traerALaVista(ctx, duracion);
     });
+  }
+
+  /// Trae lo enfocado a la vista, tratando cada eje como corresponde.
+  ///
+  /// ── El bug que esto arregla ─────────────────────────────────────────
+  ///
+  /// `Scrollable.ensureVisible` recorre TODOS los scrolls ancestros y
+  /// acomoda cada uno con la misma regla. Una tarjeta vive dentro de una
+  /// fila horizontal que a su vez vive dentro de la lista vertical, así que
+  /// pedir «ponela al 35%» acomodaba las dos cosas: la lista bajaba —que es
+  /// lo que se quería— y la FILA se corría de costado para dejar la tarjeta
+  /// a un tercio desde la izquierda, aunque ya se estuviera viendo perfecta.
+  ///
+  /// Reportado en vivo: «cuando bajo, las cards se mueven hacia la
+  /// izquierda y solamente estoy bajando; si es abajo, es abajo».
+  ///
+  /// Ahora cada eje va con su criterio:
+  ///
+  ///   vertical    al 35% desde arriba, para que se vea entera y se note
+  ///               que la lista sigue abajo (ver el comentario de arriba).
+  ///   horizontal  lo mínimo indispensable: si ya se ve, no se mueve nada.
+  static void _traerALaVista(BuildContext ctx, Duration duracion) {
+    final objetivo = ctx.findRenderObject();
+    if (objetivo == null) return;
+    var contexto = ctx;
+    var scroll = Scrollable.maybeOf(contexto);
+    while (scroll != null) {
+      final posicion = scroll.position;
+      if (posicion.axis == Axis.vertical) {
+        posicion.ensureVisible(
+          objetivo,
+          alignment: 0.35,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+          duration: duracion,
+          curve: Curves.easeOut,
+        );
+      } else {
+        // Las dos políticas seguidas son el «lo mínimo»: la primera acerca
+        // el principio si quedó cortado por la izquierda, la segunda el
+        // final si quedó cortado por la derecha. Si ya entra entera, ninguna
+        // de las dos mueve nada.
+        posicion.ensureVisible(
+          objetivo,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+          duration: duracion,
+          curve: Curves.easeOut,
+        );
+        posicion.ensureVisible(
+          objetivo,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+          duration: duracion,
+          curve: Curves.easeOut,
+        );
+      }
+      contexto = scroll.context;
+      scroll = Scrollable.maybeOf(contexto);
+    }
   }
 
   /// ¿El foco está en un widget de verdad, con el que se pueda navegar?
