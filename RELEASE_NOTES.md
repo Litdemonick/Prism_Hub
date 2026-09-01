@@ -1,23 +1,45 @@
-## PrismHub v1.0.73 — Menos trabajo por cada movimiento del mando
+## PrismHub v1.0.74 — El televisor, ordenado
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### ⚡ Rendimiento en televisores modestos
+### 📺 Navegación con el mando
 
-- **Bajar rápido por una zona ya no dispara diez búsquedas de golpe.** Con el
-  mando no se desliza: se aprieta abajo, abajo, abajo, y cada fila por la que
-  pasabas salía a pedir su contenido. Ahora una fila espera a que te quedes en
-  ella antes de pedir nada; por la que solo pasás de largo, no se pide.
-- **Las tarjetas que salen de pantalla se destruyen** y sueltan su portada, en
-  vez de quedarse ocupando memoria por si volvías.
-- **Al salir de una zona se sueltan sus portadas**, sin esperar a que el
-  sistema lo pida.
-- **El resplandor de selección es más liviano** en los televisores más
-  modestos: ese desenfoque se recalculaba en cada movimiento del mando.
+- **En el menú lateral, arriba y abajo ya se mueven entre categorías.** Antes
+  podían mandarte al contenido, porque el recorrido buscaba "lo más cercano en
+  pantalla" y una tarjeta grande podía quedar más cerca que el ícono de al lado.
+- **Al bajar ya no se mueven las filas de costado.** Enfocar una tarjeta
+  acomodaba también la fila horizontal, aunque ya se estuviera viendo entera.
+- **Y el temblorcito al seleccionar y soltar una tarjeta** también se fue.
 
-### 📺 El televisor
+### 🎬 Las zonas
 
-- **"TV en vivo" se ve como el resto de las zonas**, con su marco ocupando el
-  área de contenido en vez de un texto suelto en el medio.
+- **Cada extensión muestra su nombre arriba de su fila**, bien visible.
+- **Bajar ya no promete contenido que no venía.** Ahora cada fila trae más
+  cuando llegás a su final, hacia la derecha, que es donde de verdad crece.
+- **Las tarjetas llegan hasta el borde derecho** y se asoman cortadas, para que
+  se vea que hay más para ese lado.
+- **Entra más contenido en pantalla**: cada tarjeta reservaba espacio para dos
+  líneas de título más otra de datos, y eso empujaba la fila siguiente fuera de
+  la pantalla.
+- **Cada zona se pone al día sola al entrar**, si lo que tenía ya era viejo. Sin
+  botones: en un televisor no tiene sentido buscar uno con el mando.
+
+### 📼 Biblioteca
+
+- **Rediseñada para el televisor.** Tenía la forma de la de escritorio: menú de
+  tres puntos, flechas de ratón y datos apretando la portada. Ahora son tarjetas
+  anchas con la imagen a sangre, el título encima y la barra de cuánto llevabas
+  visto abajo.
+
+### 🎞️ Solo vídeo
+
+- **En el televisor no aparece contenido de lectura en ningún lado.** Una
+  extensión que trae anime *y* manga en el mismo sitio podía colar capítulos de
+  manga en el Inicio y en el destacado; ahora no.
+
+### ◀️ El menú lateral
+
+- Botones más grandes y con más aire, **un fondo suave al pasar por encima** en
+  vez del resplandor, y un degradado que se lee de verdad sobre el contenido.
