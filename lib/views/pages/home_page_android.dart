@@ -1408,13 +1408,28 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
           ),
           child: KeyedSubtree(
             key: ValueKey('$paquete|${item.url}'),
-            child: _TarjetaGrande(
-              ancho: anchoUtil,
-              item: item,
-              fuente: fuente,
-              cabeceras: _cabeceras(paquete),
-              anchoTexto: anchoUtil,
+            // ── El panel con el nombre de la extensión, también acá ──────
+            //
+            // El resto de las tarjetas de televisor lo muestran al
+            // enfocarse (ver `TarjetaDeCatalogo.tvFoco`), pero el destacado
+            // se quedaba solo con el marco rosado: no decía de qué
+            // extensión venía lo que se estaba mirando. Reportado: «en las
+            // cards grandes del inicio, al seleccionar no sale el nombre de
+            // la extensión como en las otras».
+            child: _ConPanelDeHover(
+              activo: _enfocado,
+              titulo: item.title,
+              encabezado: fuente,
+              fecha: item.update,
               onTap: () => _abrir(context, item, paquete),
+              child: _TarjetaGrande(
+                ancho: anchoUtil,
+                item: item,
+                fuente: fuente,
+                cabeceras: _cabeceras(paquete),
+                anchoTexto: anchoUtil,
+                onTap: () => _abrir(context, item, paquete),
+              ),
             ),
           ),
         ),

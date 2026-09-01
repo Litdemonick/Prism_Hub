@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 /// Una zona (Películas/Series/Anime/Mangas) donde ninguna extensión ACTIVA
@@ -25,6 +26,28 @@ class ZonaSinClasificar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ── En televisor, dentro de su marco ───────────────────────────────
+    //
+    // Mismo criterio que `ZonaEnCreacion`: el aviso ocupa el área donde
+    // iría el contenido, con su marco punteado, en vez de quedar como un
+    // texto suelto flotando en una pantalla vacía. Pedido explícito:
+    // «adaptalo como en la zona de televisión que está en creación, que
+    // tiene el marco y el mensaje en el centro».
+    final aviso = _aviso(context);
+    if (!PlatformTv.esTelevisionSync) return aviso;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: HomeTheme.border),
+        ),
+        child: SizedBox.expand(child: aviso),
+      ),
+    );
+  }
+
+  Widget _aviso(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),

@@ -1002,9 +1002,15 @@ class _HeroSecundarioTv extends StatelessWidget {
       final anchoUtil = caja.maxWidth.isFinite
           ? caja.maxWidth
           : MediaQuery.sizeOf(context).width;
-      return GestureDetector(
+      // ── Enfocable de verdad ────────────────────────────────────────
+      //
+      // Era un `GestureDetector` suelto: se podía tocar con un mouse pero
+      // el mando NUNCA lo alcanzaba, así que el segundo destacado del
+      // Inicio no se podía elegir con el control.
+      return FocusableCard(
+        borderRadius: _radioGrandeTv,
         onTap: () => _abrir(context, item, package),
-        child: DecoratedBox(
+        builder: (tieneFoco) => DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: radio,
             border: Border.all(
@@ -1031,20 +1037,49 @@ class _HeroSecundarioTv extends StatelessWidget {
                   alignment: Alignment.bottomLeft,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                    child: Text(
-                      item.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        height: 1.2,
-                        fontWeight: FontWeight.w800,
-                        color: HomeTheme.sobrePortada,
-                        shadows: [
-                          Shadow(blurRadius: 3, color: Color(0xE6000000)),
-                          Shadow(blurRadius: 12, color: Color(0x99000000)),
-                        ],
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // De qué extensión viene: solo al enfocar, igual
+                        // que en el resto de las tarjetas del televisor.
+                        if (tieneFoco)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 5),
+                            child: Text(
+                              ExtensionUtils
+                                      .runtimes[package]?.extension.name ??
+                                  '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.6,
+                                color: HomeTheme.accentPink,
+                                shadows: const [
+                                  Shadow(
+                                      blurRadius: 4, color: Color(0xE6000000)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        Text(
+                          item.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            height: 1.2,
+                            fontWeight: FontWeight.w800,
+                            color: HomeTheme.sobrePortada,
+                            shadows: [
+                              Shadow(blurRadius: 3, color: Color(0xE6000000)),
+                              Shadow(blurRadius: 12, color: Color(0x99000000)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1641,7 +1676,10 @@ class _ZonaTvState extends State<_ZonaTv> {
       // La paginación/caché de cada fuente (`cargarMas`) no se toca: esto
       // solo decide cómo se dibuja lo que ya hay.
       // Hasta `_maxFilasPorZonaTv` filas: ver el porqué allá.
-      final todasLasFuentes = c.fuentes;
+      // Rotadas: con muchas extensiones instaladas no entran todas, así
+      // que cada visita arranca por otra y a lo largo de unas cuantas se
+      // terminan viendo todas. Ver `ZonaCatalogoController.fuentesRotadas`.
+      final todasLasFuentes = c.fuentesRotadas;
       final fuentes = todasLasFuentes.length > _maxFilasPorZonaTv
           ? todasLasFuentes.take(_maxFilasPorZonaTv).toList()
           : todasLasFuentes;

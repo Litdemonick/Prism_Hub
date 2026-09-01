@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:io';
 
 import 'package:flutter/scheduler.dart';
@@ -637,6 +638,13 @@ class ZonaCatalogoController extends GetxController {
         f.desdeCache = true;
       }
       fuentes.assignAll(nuevas);
+      // Un punto de arranque distinto en cada armado: ver `_desdeQueFuente`.
+      // `nextInt` sobre la cantidad de fuentes, así que con pocas casi
+      // siempre cae en la misma —no hay nada que repartir— y con muchas es
+      // lo que hace que se vean todas a lo largo de varias visitas.
+      if (nuevas.length > 1) {
+        _desdeQueFuente = Random().nextInt(nuevas.length);
+      }
       // Con qué extensiones activas se armó esta lista — ver
       // [hayExtensionesNuevas].
       _firmaAlArmar = _firmaDeExtensiones();
@@ -881,6 +889,39 @@ class ZonaCatalogoController extends GetxController {
 
   /// Cuándo se pidió por última vez la página siguiente de cada fuente.
   final _ultimoPaginado = <String, DateTime>{};
+
+  /// Por cuál de las fuentes arranca la lista esta vez.
+  ///
+  /// ── Para qué, y por qué no es un `shuffle` ────────────────────────────
+  ///
+  /// Con muchas extensiones instaladas —hoy diecinueve, mañana ciento
+  /// cincuenta— una zona no puede dibujar una fila por cada una: son
+  /// decenas de filas que nadie recorre con un mando, y cada fila de más es
+  /// una extensión más a la que pedirle contenido. Por eso el televisor
+  /// muestra hasta veintiséis (ver `_maxFilasPorZonaTv`).
+  ///
+  /// Pero si siempre fueran las MISMAS veintiséis, las que quedan atrás no
+  /// se verían nunca. Con un punto de arranque distinto en cada visita, a
+  /// lo largo de unas cuantas entradas se termina viendo todo lo que hay.
+  ///
+  /// Rotar y no barajar: el orden relativo se conserva, así que al volver
+  /// no se ve una lista revuelta sino la misma empezando por otra parte —
+  /// que es lo que se siente como «hay cosas nuevas» y no como «se
+  /// desordenó».
+  ///
+  /// Se fija UNA vez por armado (`cargarInicial`) y no en cada lectura: si
+  /// cambiara mientras se navega, las filas se moverían de sitio debajo del
+  /// foco.
+  int _desdeQueFuente = 0;
+
+  /// Las fuentes, empezando por otra cada vez que se arma la zona.
+  List<ZonaFuente> get fuentesRotadas {
+    final todas = fuentes;
+    if (todas.length < 2) return todas;
+    final desde = _desdeQueFuente % todas.length;
+    if (desde == 0) return todas;
+    return [...todas.skip(desde), ...todas.take(desde)];
+  }
 
   /// Si a esta fuente todavía le queda algo por traer.
   bool leQuedaMas(ZonaFuente f) => !f.agotada && f.pagina < _maxPaginas;
