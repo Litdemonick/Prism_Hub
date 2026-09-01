@@ -1313,6 +1313,11 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
                 controller: _scroll,
                 scrollDirection: Axis.horizontal,
                 clipBehavior: Clip.none,
+                // Mismo límite que usa `_FilaWindows` en Inicio — acá
+                // faltaba. En un aparato "bajo" son apenas 250px por
+                // adelantado; sin esto, la fila caía en el default de
+                // Flutter, pensado para aparatos capaces.
+                scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
                 padding: EdgeInsets.symmetric(
                   horizontal: _margen(context) + 26,
                 ),

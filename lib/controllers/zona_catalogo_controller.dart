@@ -10,7 +10,9 @@ import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/search_text.dart';
 
 /// Una extensión de la zona, con lo que ya trajo y en qué página va.
@@ -188,7 +190,20 @@ class ZonaCatalogoController extends GetxController {
   /// bueno.
   int _reintentosDeArmado = 0;
 
-  static const _maxConcurrent = 4;
+  /// Cuántas extensiones se piden a la vez al entrar a una zona.
+  ///
+  /// Era un `4` fijo. Cada pedido corre el motor JS de su extensión entero
+  /// (`CryptoJS`, `jsencrypt`, `md5` incluidos) — cuatro a la vez es lo que
+  /// ya usa el Home (`CatalogoExtensionesController._aLaVez`) para SUS
+  /// filas, pero una zona entra de GOLPE (`cargarInicial` pide todas las
+  /// fuentes juntas) mientras el Home reparte la carga: cada fila pide la
+  /// suya recién cuando entra en pantalla (`pedirSiHaceFalta`). Reportado
+  /// en vivo, en el televisor de 893 MB: "al entrar a las zonas se cierra
+  /// la app". Menos motores vivos a la vez en un aparato modesto — más
+  /// lento para terminar de traer todo, pero sin la ráfaga que lo tira
+  /// abajo.
+  static int get _maxConcurrent =>
+      PrismHubMas.nivel == NivelDeAparato.bajo ? 2 : 4;
 
   /// Junta varios `fuentes.refresh()` seguidos en uno solo.
   ///
