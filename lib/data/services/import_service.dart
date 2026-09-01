@@ -117,7 +117,7 @@ class ImportService {
     safeText = safeText.replaceAll(RegExp(r'\.\./'), '');
 
     // 2. Extraer URLs (http:// o https://)
-    final urlRegex = RegExp(r'https?://[^\s<>"]+|www\.[^\s<>"]+');
+    final urlRegex = RegExp(r'https?://[^\s<>"\[\]()]+|www\.[^\s<>"\[\]()]+');
     final matches = urlRegex.allMatches(safeText);
     
     final result = <String>{}; // Set para deduplicar
@@ -128,13 +128,47 @@ class ImportService {
       url = url.trim();
       if (url.endsWith('/')) url = url.substring(0, url.length - 1);
       
-      // Descartar basura
-      if (url.contains('google.com/search') ||
-          url.contains('facebook.com') ||
-          url.contains('twitter.com') ||
+      // Descartar basura (redes sociales y páginas comunes que no son mangas)
+      final lowerUrl = url.toLowerCase();
+      if (lowerUrl.contains('google.com/search') ||
+          lowerUrl.contains('facebook.com') ||
+          lowerUrl.contains('twitter.com') ||
+          lowerUrl.contains('discord.gg') ||
+          lowerUrl.contains('t.me') ||
+          lowerUrl.contains('youtube.com') ||
           url.length > 2048) {
         continue;
       }
+
+      // Descartar rutas que sabemos que son páginas de sistema, no de contenido.
+      final uri = Uri.tryParse(url);
+      if (uri != null) {
+        final path = uri.path.toLowerCase();
+        // Si no tiene ruta o es solo '/', es la página principal
+        if (path.isEmpty || path == '/') continue;
+
+        // Páginas típicas de usuario o sistema en sitios de manga/anime
+        final junkSegments = {
+          'profile', 'foro', 'rank', 'mis-manhwas', 'library', 'latest',
+          'login', 'register', 'uploads', 'bookmarks', 'history', 'favorites',
+          'siguiendo', 'pendiente', 'finalizado', 'popular', 'usuario',
+          'cuenta', 'panel', 'seguidos', 'user', 'dashboard', 'mi-cuenta',
+          'animes-vistos', 'mangas-vistos', 'lista', 'tendencias', 'top',
+          'donaciones', 'contacto', 'dmca', 'terms', 'privacy'
+        };
+        
+        // Revisamos los segmentos exactos de la ruta (ej: /manga/el-rank-1 no se bloquea por tener 'rank')
+        bool isJunk = false;
+        final segments = uri.pathSegments.map((s) => s.toLowerCase());
+        for (final segment in segments) {
+          if (junkSegments.contains(segment)) {
+            isJunk = true;
+            break;
+          }
+        }
+        if (isJunk) continue;
+      }
+
       result.add(url);
     }
 
@@ -270,7 +304,7 @@ class ImportService {
     final existingHistory = await DatabaseService.getHistoryByPackageAndUrl(
         extension.package, workingUrl);
     final isFav = await DatabaseService.isFavorite(package: extension.package, url: workingUrl);
-    if (existingHistory != null || isFav) {
+    if (isFav) {
       return _ProcessRes(duplicate: true, extensionName: extension.name);
     }
 
@@ -284,56 +318,59 @@ class ImportService {
       ..isNsfw = isNsfw;
     await DatabaseService.putFavoriteRaw(favorite);
 
-    // 8. Guardar historial (progreso)
-    int episodeGroupId = 0;
-    int episodeId = 0;
-    String? episodeTitle;
-    bool foundSpecificEpisode = false;
+    // 8. Guardar historial (progreso) SOLO si no tiene un historial previo
+    // De esta forma protegemos los capítulos que el usuario ya haya visto.
+    if (existingHistory == null) {
+      int episodeGroupId = 0;
+      int episodeId = 0;
+      String? episodeTitle;
+      bool foundSpecificEpisode = false;
 
-    // Buscar si el link original que pegó el usuario coincide con un episodio específico
-    if (detail.episodes != null) {
-      for (int g = 0; g < detail.episodes!.length; g++) {
-        final group = detail.episodes![g];
-        for (int i = 0; i < group.urls.length; i++) {
-          final ep = group.urls[i];
-          // Comparamos contra la url absoluta y relativa originales
-          if (ep.url == url || ep.url == relativeUrl || url.endsWith(ep.url) || relativeUrl.endsWith(ep.url)) {
-            episodeGroupId = g;
-            episodeId = i;
-            episodeTitle = ep.name;
-            foundSpecificEpisode = true;
-            break;
+      // Buscar si el link original que pegó el usuario coincide con un episodio específico
+      if (detail.episodes != null) {
+        for (int g = 0; g < detail.episodes!.length; g++) {
+          final group = detail.episodes![g];
+          for (int i = 0; i < group.urls.length; i++) {
+            final ep = group.urls[i];
+            // Comparamos contra la url absoluta y relativa originales
+            if (ep.url == url || ep.url == relativeUrl || url.endsWith(ep.url) || relativeUrl.endsWith(ep.url)) {
+              episodeGroupId = g;
+              episodeId = i;
+              episodeTitle = ep.name;
+              foundSpecificEpisode = true;
+              break;
+            }
+          }
+          if (foundSpecificEpisode) break;
+        }
+      }
+
+      // Si no pegó un link de capítulo o no se encontró, tomamos el último por defecto
+      if (!foundSpecificEpisode) {
+        if (detail.episodes != null && detail.episodes!.isNotEmpty) {
+          final group = detail.episodes!.last;
+          if (group.urls.isNotEmpty) {
+            episodeTitle = group.urls.last.name;
+            episodeGroupId = detail.episodes!.length - 1;
+            episodeId = group.urls.length - 1;
           }
         }
-        if (foundSpecificEpisode) break;
       }
-    }
 
-    // Si no pegó un link de capítulo o no se encontró, tomamos el último por defecto
-    if (!foundSpecificEpisode) {
-      if (detail.episodes != null && detail.episodes!.isNotEmpty) {
-        final group = detail.episodes!.last;
-        if (group.urls.isNotEmpty) {
-          episodeTitle = group.urls.last.name;
-          episodeGroupId = detail.episodes!.length - 1;
-          episodeId = group.urls.length - 1;
-        }
-      }
+      final history = History()
+        ..package = extension.package
+        ..url = workingUrl
+        ..title = detail.title ?? ''
+        ..type = detailType ?? extension.type
+        ..cover = detail.cover
+        ..episodeTitle = episodeTitle ?? ''
+        ..progress = ''
+        ..totalProgress = ''
+        ..episodeGroupId = episodeGroupId
+        ..episodeId = episodeId
+        ..isNsfw = isNsfw;
+      await DatabaseService.putHistory(history);
     }
-
-    final history = History()
-      ..package = extension.package
-      ..url = workingUrl
-      ..title = detail.title ?? ''
-      ..type = detailType ?? extension.type
-      ..cover = detail.cover
-      ..episodeTitle = episodeTitle ?? ''
-      ..progress = ''
-      ..totalProgress = ''
-      ..episodeGroupId = episodeGroupId
-      ..episodeId = episodeId
-      ..isNsfw = isNsfw;
-    await DatabaseService.putHistory(history);
 
     return _ProcessRes(
         imported: true, nsfw: isNsfw, extensionName: extension.name);

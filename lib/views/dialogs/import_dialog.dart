@@ -8,6 +8,7 @@ import 'package:prismhub/models/import_result.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 Future<void> showImportDialog(BuildContext context) async {
   if (Platform.isAndroid || Platform.isIOS) {
@@ -377,6 +378,7 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                                     ),
                                   ),
                                 const SizedBox(height: 8),
+                                const _LinkGrabberTipWidget(),
                               ],
                             ),
                     ),
@@ -1000,6 +1002,109 @@ class _DesktopStatBadge extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LinkGrabberTipWidget extends StatefulWidget {
+  const _LinkGrabberTipWidget();
+  @override
+  State<_LinkGrabberTipWidget> createState() => _LinkGrabberTipWidgetState();
+}
+
+class _LinkGrabberTipWidgetState extends State<_LinkGrabberTipWidget> with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+  late final AnimationController _pulseController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 2),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulse = Tween<double>(begin: 0.7, end: 1.0).animate(
+    CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+  );
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  void _launchUrl() async {
+    final uri = Uri.parse('https://chromewebstore.google.com/detail/link-grabber/caodelkhipncidmoebgbbeemedohcdma?hl=es');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        color: HomeTheme.accentPink.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: HomeTheme.accentPink.withOpacity(0.2)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            onExpansionChanged: (v) => setState(() => _expanded = v),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            leading: FadeTransition(
+              opacity: _pulse,
+              child: Icon(Icons.lightbulb_circle_rounded, color: HomeTheme.accentPink, size: 28),
+            ),
+            title: Text(
+              '¿Cómo importar listas grandes?',
+              style: TextStyle(color: HomeTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            subtitle: _expanded ? null : Text(
+              'Tutorial rápido (PC/Android)',
+              style: TextStyle(color: HomeTheme.textMuted, fontSize: 12),
+            ),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text.rich(
+                      TextSpan(
+                        style: TextStyle(color: HomeTheme.textMuted, fontSize: 13, height: 1.5),
+                        children: [
+                          const TextSpan(text: 'Si no quieres ir link por link, puedes usar esta extensión en tu PC o Android (si tu navegador soporta extensiones, ej. Kiwi o Lemur Browser). Ve a la página donde tienes tus mangas (como "Siguiendo" o "Favoritos") y dale clic a la extensión para extraer todos los links. ¡Pégalos arriba y deja que la magia ocurra!\n\n'),
+                          TextSpan(text: '⚠️ Importante sobre tu Progreso:\n', style: TextStyle(color: HomeTheme.accentPink, fontWeight: FontWeight.bold)),
+                          const TextSpan(text: '• '),
+                          const TextSpan(text: 'Link Grabber (Listas): ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const TextSpan(text: 'Si pegas links que apuntan a la portada del manga, la app los agregará a tu biblioteca pero no sabrá en qué capítulo ibas.\n'),
+                          const TextSpan(text: '• '),
+                          const TextSpan(text: 'Link Directo: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const TextSpan(text: 'Si pegas el link directo de un capítulo exacto (ej. el que estabas leyendo), la app sí guardará tu progreso en ese capítulo.'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _launchUrl,
+                      icon: const Icon(Icons.extension_rounded, size: 18),
+                      label: const Text('Descargar Link Grabber (PC)', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: HomeTheme.accentPink.withOpacity(0.15),
+                        foregroundColor: HomeTheme.accentPink,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    )
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
       ),
     );
   }
