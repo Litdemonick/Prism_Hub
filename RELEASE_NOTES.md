@@ -1,45 +1,53 @@
-## PrismHub v1.0.74 — El televisor, ordenado
+## PrismHub v1.0.75 — Un fondo propio para el televisor
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
+### 🎨 El fondo
+
+- **Fondo nuevo en el televisor: un gris carbón, parejo y sin color propio.**
+  Los dos manchones violeta de antes quedaban quietos en el mismo sitio toda la
+  sesión y, vistos de lejos, se leían más como suciedad de la pantalla que como
+  diseño. Un fondo de televisor tiene una sola obligación, que es desaparecer:
+  encima hay portadas de colores fuertes compitiendo entre sí, y cualquier fondo
+  con personalidad se les pone en el medio.
+- **Y es el mismo en todas las pantallas.** El repositorio, la ficha de una obra
+  y Ajustes se habían quedado con un gris distinto, así que al entrar se notaba
+  el salto. Ahora no hay ninguna que se salga.
+
 ### 📺 Navegación con el mando
 
-- **En el menú lateral, arriba y abajo ya se mueven entre categorías.** Antes
-  podían mandarte al contenido, porque el recorrido buscaba "lo más cercano en
-  pantalla" y una tarjeta grande podía quedar más cerca que el ícono de al lado.
-- **Al bajar ya no se mueven las filas de costado.** Enfocar una tarjeta
-  acomodaba también la fila horizontal, aunque ya se estuviera viendo entera.
-- **Y el temblorcito al seleccionar y soltar una tarjeta** también se fue.
+- **Cada flecha mueve lo suyo y nada más.** Yendo a la derecha dentro de una
+  fila, la lista de abajo se desplazaba sola aunque el foco no hubiera cambiado
+  de altura.
+- **Al llegar al final de una fila, la tarjeta que sigue asoma.** Antes la
+  última quedaba pegada al filo derecho y parecía que ahí se terminaba, aunque
+  hubiera más.
+- **Las filas de las zonas ya tienen sus flechas**, las mismas que las del
+  Inicio. Sin ellas, una fila de quince tarjetas se veía igual que una de siete.
 
-### 🎬 Las zonas
+### ✨ Detalles que se veían mal
 
-- **Cada extensión muestra su nombre arriba de su fila**, bien visible.
-- **Bajar ya no promete contenido que no venía.** Ahora cada fila trae más
-  cuando llegás a su final, hacia la derecha, que es donde de verdad crece.
-- **Las tarjetas llegan hasta el borde derecho** y se asoman cortadas, para que
-  se vea que hay más para ese lado.
-- **Entra más contenido en pantalla**: cada tarjeta reservaba espacio para dos
-  líneas de título más otra de datos, y eso empujaba la fila siguiente fuera de
-  la pantalla.
-- **Cada zona se pone al día sola al entrar**, si lo que tenía ya era viejo. Sin
-  botones: en un televisor no tiene sentido buscar uno con el mando.
+- **El marco de selección ya no se come el borde de la portada.** Se pintaba
+  hacia adentro, tapando el filo de la imagen y cortando la curva de las
+  esquinas; ahora rodea la tarjeta por fuera.
+- **El menú lateral ya no arrastra un rectángulo negro.** El degradado que lo
+  acompañaba no se fundía con el fondo y se recortaba como un recuadro pegado al
+  costado. La marca de dónde estás parado la sigue dando el fondo de cada botón,
+  que se lee mejor que oscurecer el panel entero.
 
-### 📼 Biblioteca
+### 🧩 Con muchas extensiones instaladas
 
-- **Rediseñada para el televisor.** Tenía la forma de la de escritorio: menú de
-  tres puntos, flechas de ratón y datos apretando la portada. Ahora son tarjetas
-  anchas con la imagen a sangre, el título encima y la barra de cuánto llevabas
-  visto abajo.
+- **Las zonas van rotando cuáles muestran.** Con decenas instaladas no entran
+  todas en pantalla, y las que quedaban afuera no aparecían nunca. Ahora cada
+  visita arranca por otra, así que a lo largo de unas cuantas se terminan viendo
+  todas — y siempre con lo más reciente de cada una.
+- **Si una zona todavía no tiene nada que mostrar, lo dice**, con el mismo marco
+  que usa la zona en construcción, en vez de dejarte mirando un vacío.
 
-### 🎞️ Solo vídeo
+### 📡 Sin conexión
 
-- **En el televisor no aparece contenido de lectura en ningún lado.** Una
-  extensión que trae anime *y* manga en el mismo sitio podía colar capítulos de
-  manga en el Inicio y en el destacado; ahora no.
-
-### ◀️ El menú lateral
-
-- Botones más grandes y con más aire, **un fondo suave al pasar por encima** en
-  vez del resplandor, y un degradado que se lee de verdad sobre el contenido.
+- **El Inicio ya no sale a pedir cuando no hay red.** Se quedaba esperando a que
+  cada extensión venciera su tiempo, una por una, y eso era un arranque largo
+  para terminar igual en un error.
