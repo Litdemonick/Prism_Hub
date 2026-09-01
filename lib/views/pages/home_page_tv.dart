@@ -105,6 +105,25 @@ const double _huecoGrandeTv = 6;
 /// El hueco entre pósters de una fila.
 const double _huecoPosterTv = 10;
 
+/// El tope de filas de una zona: una por extensión, hasta acá.
+///
+/// Acordado con el usuario: «hacia abajo, veintiséis, el límite». No es un
+/// límite técnico sino de lectura — una zona con cuarenta filas no se
+/// recorre con un mando, y cada fila de más es una extensión más a la que
+/// pedirle contenido.
+///
+/// Inicio queda afuera a propósito: ahí las filas son las extensiones que
+/// el usuario tiene, y esconderle algunas sería decidir por él.
+const int _maxFilasPorZonaTv = 26;
+
+/// El tope de tarjetas de una fila.
+///
+/// Acordado con el usuario: «en cada fila, quince hacia la derecha, el
+/// tope». Alcanza de sobra para recorrer con el mando sin que la fila se
+/// vuelva infinita, y le pone un techo claro a cuántas portadas puede
+/// llegar a tener vivas una sola fila.
+const int _maxTarjetasPorFilaTv = 15;
+
 /// Cuántos pósters entran enteros en una fila. El siguiente asoma cortado
 /// contra el borde, que es justo lo que dice "hay más para el lado".
 const int _postersPorFilaTv = 7;
@@ -1240,16 +1259,22 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── El nombre de la extensión, bien visible ───────────────
+            //
+            // Estaba en gris tenue y a 14: desde el sillón no se leía, y
+            // sin él una fila no dice de dónde viene lo que muestra.
+            // Pedido explícito: «faltó el título arriba de cada, de qué es
+            // de cada extensión, con su espacio correcto y que se vea».
             Padding(
-              padding: const EdgeInsets.only(left: 1, bottom: 6),
+              padding: const EdgeInsets.only(left: 2, top: 2, bottom: 10),
               child: Text(
                 widget.rotulo,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: HomeTheme.textMuted,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: HomeTheme.textPrimary,
                 ),
               ),
             ),
@@ -1601,7 +1626,11 @@ class _ZonaTvState extends State<_ZonaTv> {
       //
       // La paginación/caché de cada fuente (`cargarMas`) no se toca: esto
       // solo decide cómo se dibuja lo que ya hay.
-      final fuentes = c.fuentes;
+      // Hasta `_maxFilasPorZonaTv` filas: ver el porqué allá.
+      final todasLasFuentes = c.fuentes;
+      final fuentes = todasLasFuentes.length > _maxFilasPorZonaTv
+          ? todasLasFuentes.take(_maxFilasPorZonaTv).toList()
+          : todasLasFuentes;
       final cargandoMas = c.cargandoMas.value;
       return ListView.builder(
         controller: _scroll,
@@ -1725,10 +1754,17 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
         ),
       );
     }
+    // Hasta `_maxTarjetasPorFilaTv` por fila: ver el porqué allá.
+    final items = f.items.length > _maxTarjetasPorFilaTv
+        ? f.items.take(_maxTarjetasPorFilaTv).toList()
+        : f.items;
     return _FilaDensaTv(
       rotulo: f.nombre,
-      items: [for (final item in f.items) (f.package, item)],
-      alLlegarAlFinal: () => unawaited(widget.controlador.paginarFuente(f)),
+      items: [for (final item in items) (f.package, item)],
+      // Con la fila en su tope no hace falta pedir más: ya está llena.
+      alLlegarAlFinal: f.items.length >= _maxTarjetasPorFilaTv
+          ? null
+          : () => unawaited(widget.controlador.paginarFuente(f)),
     );
   }
 }
