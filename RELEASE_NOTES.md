@@ -1,35 +1,26 @@
-## PrismHub v1.0.69 — La causa de los cierres, encontrada en el registro
+## PrismHub v1.0.70 — El televisor, con el diseño nuevo
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### ⚡ Por qué se cerraba sola en televisores modestos
+### 📺 Inicio
 
-El registro de un televisor de 893 MB lo dijo con todas las letras: **doce
-motores de extensión vivos a la vez** justo antes de que el sistema matara la
-app. Cada extensión que usás levanta su propio motor de JavaScript, y hasta
-ahora solo se soltaban después de un rato sin usarse — así que abrir el Inicio
-y pasear por las zonas los iba acumulando todos.
+- **Dos tarjetas grandes arriba, casi pegadas**, ocupando algo más de la mitad
+  de la pantalla, y debajo cuatro tarjetas anchas. Los huecos entre tarjetas se
+  achicaron: antes se veían como franjas negras separándolas.
+- **La primera sigue siendo el destacado que se mueve solo**, cambiando la
+  imagen dentro de la misma tarjeta.
 
-- **Ahora hay un tope**: en los aparatos más modestos se mantienen vivos como
-  mucho tres, y se suelta el que hace más rato que no se usa. Ninguno que esté
-  trabajando.
-- **El Inicio ya no levanta cinco de golpe** al abrirse, sino dos.
-- **Las portadas ocupan casi la mitad**: se descargan a un tamaño un poco menor,
-  imperceptible a la distancia a la que se mira un televisor, y así entran casi
-  el doble sin que la app tenga que estar tirando y volviendo a pedir las mismas
-  imágenes todo el rato.
+### 🎬 Películas, Series y Anime
 
-### 🧾 Y ahora sí queda anotado por qué se cerró
+- **Ahora son filas**, una por extensión, con el nombre arriba y el título de
+  cada título debajo de su portada. **Entran siete por fila** y la octava asoma
+  contra el borde para que se vea que hay más — se ven dos filas y media de una
+  sola mirada, en vez de unas pocas tarjetas enormes.
 
-- **Cuando la app se cierra sola, el motivo queda escrito en el registro.**
-  Antes no aparecía nada: el diagnóstico se calculaba al arrancar, pero unos
-  instantes *antes* de que el registro existiera, así que se escribía en el
-  vacío. Justo en el caso donde más falta hace, porque un cierre por falta de
-  memoria no deja ningún error que mostrar.
+### ◀️ El menú lateral
 
-### 📺 El televisor
-
-- **El resplandor de la tarjeta seleccionada ya no aparece cortado** contra el
-  menú lateral.
+- **Es una franja de íconos finita y sin fondo.** El ícono de la zona en la que
+  estás va encendido con su resplandor y el resto a media luz. Al llegar con el
+  mando se despliega con los nombres, dejando ver por detrás lo que hay.
