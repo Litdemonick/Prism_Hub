@@ -293,6 +293,14 @@ class ImportService {
 
     // 5. Detectar NSFW
     bool isNsfw = extension.nsfw;
+    
+    // Parche: La extensión de ManhwaWeb no tiene el flag NSFW activado, y la 
+    // página tiene un etiquetado inconsistente (algunos mangas solo dicen "Romance").
+    // Como toda la web es +18, forzamos que todo lo que venga de ahí sea NSFW.
+    if (extension.package == 'io.prismhub.manhwaweb') {
+      isNsfw = true;
+    }
+
     if (detail.genres != null) {
       final nsfwKeywords = [
         'adulto', 'adult', '18+', '+18', 'nsfw', 'hentai', 'ecchi', 
