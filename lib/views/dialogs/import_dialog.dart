@@ -1052,25 +1052,48 @@ class _LinkGrabberTipWidgetState extends State<_LinkGrabberTipWidget> with Singl
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            onExpansionChanged: (v) => setState(() => _expanded = v),
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            leading: FadeTransition(
-              opacity: _pulse,
-              child: Icon(Icons.lightbulb_circle_rounded, color: HomeTheme.accentPink, size: 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    FadeTransition(
+                      opacity: _pulse,
+                      child: Icon(Icons.lightbulb_circle_rounded, color: HomeTheme.accentPink, size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '¿Cómo importar listas grandes?',
+                            style: TextStyle(color: HomeTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          if (!_expanded)
+                            Text(
+                              'Tutorial rápido (PC/Android)',
+                              style: TextStyle(color: HomeTheme.textMuted, fontSize: 12),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      _expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      color: HomeTheme.textMuted,
+                    ),
+                  ],
+                ),
+              ),
             ),
-            title: Text(
-              '¿Cómo importar listas grandes?',
-              style: TextStyle(color: HomeTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            subtitle: _expanded ? null : Text(
-              'Tutorial rápido (PC/Android)',
-              style: TextStyle(color: HomeTheme.textMuted, fontSize: 12),
-            ),
-            children: [
-              Padding(
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.fastOutSlowIn,
+              child: !_expanded ? const SizedBox.shrink() : Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1105,9 +1128,9 @@ class _LinkGrabberTipWidgetState extends State<_LinkGrabberTipWidget> with Singl
                     )
                   ],
                 ),
-              )
-            ],
-          ),
+              ),
+            ),
+          ],
         ),
       ),
     );
