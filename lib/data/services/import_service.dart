@@ -294,7 +294,10 @@ class ImportService {
     // 5. Detectar NSFW
     bool isNsfw = extension.nsfw;
     if (detail.genres != null) {
-      final nsfwKeywords = ['adulto', 'adult', '18+', 'nsfw', 'hentai', 'ecchi'];
+      final nsfwKeywords = [
+        'adulto', 'adult', '18+', '+18', 'nsfw', 'hentai', 'ecchi', 
+        'maduro', 'mature', 'smut', 'doujinshi', 'gore'
+      ];
       final hasNsfwGenre = detail.genres!.any((g) =>
           nsfwKeywords.any((k) => g.toLowerCase().contains(k)));
       if (hasNsfwGenre) isNsfw = true;
