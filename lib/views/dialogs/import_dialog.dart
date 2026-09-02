@@ -708,6 +708,10 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                   ),
                 ],
               ),
+            if (!_isImporting) ...[
+              const SizedBox(height: 8),
+              const _LinkGrabberTipWidget(),
+            ],
           ],
         ],
       ),
@@ -1090,7 +1094,7 @@ class _LinkGrabberTipWidgetState extends State<_LinkGrabberTipWidget> with Singl
                     ElevatedButton.icon(
                       onPressed: _launchUrl,
                       icon: const Icon(Icons.extension_rounded, size: 18),
-                      label: const Text('Descargar Link Grabber (PC)', style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: const Text('Descargar Link Grabber (Web)', style: TextStyle(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: HomeTheme.accentPink.withOpacity(0.15),
                         foregroundColor: HomeTheme.accentPink,
