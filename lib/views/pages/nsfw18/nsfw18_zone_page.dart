@@ -20,6 +20,7 @@ import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_lock_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/widgets/button.dart';
+import 'package:prismhub/views/dialogs/import_dialog.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_hero_banner.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
@@ -543,6 +544,18 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                                     // general, tener las dos lupas a la vez
                                     // en pantalla era mostrar dos caminos
                                     // distintos a lo mismo.
+                                    if (!PlatformTv.esTelevisionSync)
+                                      IconButton(
+                                        tooltip: 'import.title'.i18n,
+                                        onPressed: () async {
+                                          await showImportDialog(context);
+                                          c.onRefresh();
+                                        },
+                                        icon: Icon(
+                                          Icons.playlist_add_rounded,
+                                          color: HomeTheme.textPrimary,
+                                        ),
+                                      ),
                                     IconButton(
                                       tooltip: 'home.favorite'.i18n,
                                       onPressed: _favoritos,
@@ -649,6 +662,15 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
           // main_page.dart). Sin esta, no había ningún camino a buscar algo
           // puntual desde adentro — reportado en vivo: "no veo el search
           // adentro de la zona +18".
+          if (!PlatformTv.esTelevisionSync)
+            IconButton(
+              tooltip: 'import.title'.i18n,
+              onPressed: () async {
+                await showImportDialog(context);
+                c.onRefresh();
+              },
+              icon: Icon(Icons.playlist_add_rounded, color: HomeTheme.textPrimary),
+            ),
           IconButton(
             tooltip: 'nsfw18.search-zone-title'.i18n,
             onPressed: () => openNsfw18Search(context, yaAutorizado: true),

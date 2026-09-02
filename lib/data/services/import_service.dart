@@ -296,7 +296,7 @@ class ImportService {
     if (detail.genres != null) {
       final nsfwKeywords = [
         'adulto', 'adult', '18+', '+18', 'nsfw', 'hentai', 'ecchi', 
-        'maduro', 'mature', 'smut', 'doujinshi', 'gore'
+        'maduro', 'mature', 'smut', 'doujinshi', 'gore', 'seinen', 'josei'
       ];
       final hasNsfwGenre = detail.genres!.any((g) =>
           nsfwKeywords.any((k) => g.toLowerCase().contains(k)));
