@@ -243,65 +243,142 @@ class _ControlPanelHeaderState<T extends ReaderController>
           width: double.infinity,
           height: 40,
           color: HomeTheme.cardSurface,
-          padding: const EdgeInsets.only(left: 16),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          // ── Centro de TODA la barra, no del grupo de botones ────────────
+          //
+          // Puesto adentro del Row de acciones, "al medio" terminaba siendo
+          // el medio del CLUSTER de la derecha, no de la ventana entera —
+          // corregido después de que el pedido original se malentendiera.
+          // Un Stack con el Row de siempre abajo y esto flotando encima,
+          // centrado contra el ANCHO TOTAL del Container, es la única forma
+          // de que quede en el medio de verdad sin importar cuánto midan el
+          // título o el resto de los íconos a los costados.
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              fluent.IconButton(
-                icon: const Icon(fluent.FluentIcons.back),
-                onPressed: () => RouterUtils.closeReader(context),
-              ),
-              const SizedBox(width: 16),
-              // DragToMoveArea only on the title text — buttons stay outside
-              // so clicking them never accidentally drags the window.
-              Expanded(
-                child: DragToMoveArea(
-                  child: TituloExpandible(
-                    // Con separador: era `_c.title + episodio`, pegados sin nada
-                    // en el medio, así que se leía «Una Carta De Amor Del
-                    // FuturoCap. 2: …» como si fuera una sola palabra.
-                    episodio.isEmpty ? _c.title : '${_c.title} · $episodio',
-                    style: TextStyle(color: HomeTheme.textPrimary),
-                  ),
-                ),
-              ),
-              if (widget.buildSettings != null) ...[
-                fluent.FlyoutTarget(
-                  controller: _settingFlayoutcontroller,
-                  child: fluent.IconButton(
-                    icon: const Icon(fluent.FluentIcons.settings),
-                    onPressed: () {
-                      // full: sin esto el flyout se anclaba pegado al botón de
-                      // configuración (arriba a la derecha) — para un menú de
-                      // elegir modo de lectura eso queda perdido/incómodo de
-                      // leer. full le da todo el ancho de pantalla como
-                      // constraints y deja que el propio contenido se
-                      // posicione (ComicReaderSettings ya lo centra con
-                      // Center en su rama de escritorio).
-                      _settingFlayoutcontroller.showFlyout(
-                        placementMode: fluent.FlyoutPlacementMode.full,
-                        barrierColor: Colors.black.withValues(alpha: 0.35),
-                        builder: (context) {
-                          return widget.buildSettings!(context);
+              Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    fluent.IconButton(
+                      icon: const Icon(fluent.FluentIcons.back),
+                      onPressed: () => RouterUtils.closeReader(context),
+                    ),
+                    const SizedBox(width: 16),
+                    // DragToMoveArea only on the title text — buttons stay outside
+                    // so clicking them never accidentally drags the window.
+                    Expanded(
+                      child: DragToMoveArea(
+                        child: TituloExpandible(
+                          // Con separador: era `_c.title + episodio`, pegados sin nada
+                          // en el medio, así que se leía «Una Carta De Amor Del
+                          // FuturoCap. 2: …» como si fuera una sola palabra.
+                          episodio.isEmpty
+                              ? _c.title
+                              : '${_c.title} · $episodio',
+                          style: TextStyle(color: HomeTheme.textPrimary),
+                        ),
+                      ),
+                    ),
+                    // Hueco reservado del ancho de la cápsula del medio, para
+                    // que el título no se estire por debajo de ella en una
+                    // ventana angosta — sin esto, un título largo terminaba
+                    // tapado por los botones flotando encima.
+                    const SizedBox(width: 96),
+                    if (widget.buildSettings != null) ...[
+                      fluent.FlyoutTarget(
+                        controller: _settingFlayoutcontroller,
+                        child: fluent.IconButton(
+                          icon: const Icon(fluent.FluentIcons.settings),
+                          onPressed: () {
+                            // full: sin esto el flyout se anclaba pegado al botón de
+                            // configuración (arriba a la derecha) — para un menú de
+                            // elegir modo de lectura eso queda perdido/incómodo de
+                            // leer. full le da todo el ancho de pantalla como
+                            // constraints y deja que el propio contenido se
+                            // posicione (ComicReaderSettings ya lo centra con
+                            // Center en su rama de escritorio).
+                            _settingFlayoutcontroller.showFlyout(
+                              placementMode: fluent.FlyoutPlacementMode.full,
+                              barrierColor:
+                                  Colors.black.withValues(alpha: 0.35),
+                              builder: (context) {
+                                return widget.buildSettings!(context);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    fluent.Tooltip(
+                      message: 'Ver detalle',
+                      child: fluent.IconButton(
+                        icon: const Icon(fluent.FluentIcons.info),
+                        onPressed: () => _goToDetail(context),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    fluent.FlyoutTarget(
+                      controller: _playListFlayoutcontroller,
+                      child: fluent.IconButton(
+                        icon: const Icon(fluent.FluentIcons.collapse_menu),
+                        onPressed: () {
+                          _playListFlayoutcontroller
+                              .showFlyout(builder: (context) {
+                            // Con fondo propio, del modo. El flyout de Fluent es
+                            // translúcido, así que sin esto la lista de capítulos
+                            // quedaba flotando sobre la página de manga y se leía la
+                            // una encima de la otra.
+                            return Container(
+                              width: 300,
+                              decoration: BoxDecoration(
+                                color: HomeTheme.cardSurface,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: HomeTheme.border),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Obx(
+                                () => PlayList(
+                                  title: _c.title,
+                                  list:
+                                      _c.playList.map((e) => e.name).toList(),
+                                  selectIndex: _c.index.value,
+                                  onChange: (value) {
+                                    _c.index.value = value;
+                                    router.pop();
+                                  },
+                                ),
+                              ),
+                            );
+                          });
                         },
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 138,
+                      // La tercera copia de los mismos tres botones. Ver
+                      // BotonesVentana. Toma el brillo del FluentTheme de
+                      // esta barra, que es el del modo.
+                      child: BotonesVentana(
+                        brightness: fluent.FluentTheme.of(context).brightness,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-              ],
+              ),
               // Antes iban sueltos, pegados al título y confundidos con el
-              // resto de los íconos. Pedido explícito: al medio del grupo de
-              // opciones (entre ajustes y detalle/episodios) y con una
-              // identidad visual propia — una cápsula con borde, no dos
-              // íconos más en la fila.
+              // resto de los íconos. Pedido explícito: al medio de TODA la
+              // barra — no del grupo de botones — y con una identidad
+              // visual propia, una cápsula con borde en vez de dos íconos
+              // más en la fila.
               Obx(
                 () => Container(
                   height: 32,
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
                     border: Border.all(color: HomeTheme.border),
                     borderRadius: BorderRadius.circular(6),
+                    color: HomeTheme.cardSurface,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -326,57 +403,6 @@ class _ControlPanelHeaderState<T extends ReaderController>
                       ),
                     ],
                   ),
-                ),
-              ),
-              fluent.Tooltip(
-                message: 'Ver detalle',
-                child: fluent.IconButton(
-                  icon: const Icon(fluent.FluentIcons.info),
-                  onPressed: () => _goToDetail(context),
-                ),
-              ),
-              const SizedBox(width: 8),
-              fluent.FlyoutTarget(
-                controller: _playListFlayoutcontroller,
-                child: fluent.IconButton(
-                  icon: const Icon(fluent.FluentIcons.collapse_menu),
-                  onPressed: () {
-                    _playListFlayoutcontroller.showFlyout(builder: (context) {
-                      // Con fondo propio, del modo. El flyout de Fluent es
-                      // translúcido, así que sin esto la lista de capítulos
-                      // quedaba flotando sobre la página de manga y se leía la
-                      // una encima de la otra.
-                      return Container(
-                        width: 300,
-                        decoration: BoxDecoration(
-                          color: HomeTheme.cardSurface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: HomeTheme.border),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Obx(
-                          () => PlayList(
-                            title: _c.title,
-                            list: _c.playList.map((e) => e.name).toList(),
-                            selectIndex: _c.index.value,
-                            onChange: (value) {
-                              _c.index.value = value;
-                              router.pop();
-                            },
-                          ),
-                        ),
-                      );
-                    });
-                  },
-                ),
-              ),
-              SizedBox(
-                width: 138,
-                // La tercera copia de los mismos tres botones. Ver
-                // BotonesVentana. Toma el brillo del FluentTheme de esta barra,
-                // que es el del modo.
-                child: BotonesVentana(
-                  brightness: fluent.FluentTheme.of(context).brightness,
                 ),
               ),
             ],
