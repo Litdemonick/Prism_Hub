@@ -96,9 +96,35 @@ class FocoConTopes extends DirectionalFocusAction {
       return;
     }
     if (desde == null || hasta == null) return;
-    final seFue = horizontal
-        ? !_mismaFranja(desde, hasta)
-        : _escapoALaIzquierda(desde, hasta, despues.context);
+    // ── La regla que no depende de umbrales ─────────────────────────────
+    //
+    // `_mismaFranja` y `_escapoALaIzquierda` miden CUÁNTO se solapan dos
+    // rectángulos contra un porcentaje fijo — funcionan, pero un umbral
+    // pensado para una resolución puede fallar en otra. Acá hay una regla
+    // más simple y siempre cierta, sin importar tamaños de pantalla ni de
+    // tarjeta: **si apretaste derecha, lo que se enfoca tiene que estar más
+    // a la derecha que lo de antes** (y lo mismo para las otras tres
+    // flechas). Si no lo está, Flutter no encontró un vecino de verdad —
+    // enganchó cualquier cosa con tal de mover el foco a algún lado— y no
+    // hay forma de que ESO sea lo que el usuario pidió.
+    //
+    // Reportado en vivo, dos síntomas del mismo agujero que los umbrales de
+    // abajo no cubrían: «al llegar al final de una fila y seguir apretando
+    // derecha, empieza a bajar solo» (el destino "de al lado" en realidad
+    // fue uno de la fila de ABAJO, con solape suficiente para pasar
+    // `_mismaFranja` pero sin haberse movido ni un píxel a la derecha) y
+    // «al bajar, la selección rebota para arriba sola» (bajando, el destino
+    // cayó dentro de la franja del rail por muy poco, sin serlo).
+    final seMovioComoDebia = switch (intent.direction) {
+      TraversalDirection.right => hasta.left > desde.left,
+      TraversalDirection.left => hasta.left < desde.left,
+      TraversalDirection.down => hasta.top > desde.top,
+      TraversalDirection.up => hasta.top < desde.top,
+    };
+    final seFue = !seMovioComoDebia ||
+        (horizontal
+            ? !_mismaFranja(desde, hasta)
+            : _escapoALaIzquierda(desde, hasta, despues.context));
     if (!seFue) return;
     // Se fue de fila (u ocurrió el escape a la columna de categorías): se lo
     // devuelve donde estaba.
