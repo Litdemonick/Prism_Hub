@@ -1491,8 +1491,13 @@ class _PieDeCapituloCascada extends StatelessWidget {
                     ? Icons.skip_next_rounded
                     : Icons.skip_previous_rounded,
               ),
+              // Corto a propósito: dos de estos entran lado a lado en la
+              // mitad de la pantalla cada uno, y "Capítulo siguiente"/
+              // "Capítulo anterior" no entraba en un celular angosto —
+              // quedaba cortado en "Capítul...". El ícono ya dice de qué
+              // capítulo se trata; acá alcanza con la dirección.
               label: Text(
-                esSiguiente ? 'Capítulo siguiente' : 'Capítulo anterior',
+                esSiguiente ? 'Siguiente' : 'Anterior',
                 overflow: TextOverflow.ellipsis,
               ),
               style: OutlinedButton.styleFrom(
