@@ -1998,25 +1998,23 @@ class _PieDeZonaTv extends StatelessWidget {
                   ),
                 ],
               )
-            : Text(
-                // Tres estados, no dos: "seguí bajando" mientras haya más
-                // para traer, "no hay más datos" SOLO si todas las fuentes
-                // dijeron de verdad que se quedaron sin nada, y un texto
-                // neutro si lo que se alcanzó fue el tope propio de la app
-                // (ver ZonaCatalogoController.seAgotoDeVerdad) — ahí sigue
-                // habiendo contenido del otro lado, así que decir que no
-                // hay más sería mentir.
-                hayMas
-                    ? 'home.zona-seguir-bajando'.i18n
-                    : seAgotoDeVerdad
-                        ? 'common.no-more-data'.i18n
-                        : 'home.zona-hasta-aca'.i18n,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: HomeTheme.textMuted,
-                ),
-              ),
+            : (!hayMas && !seAgotoDeVerdad)
+                // El tope es de la app (ZonaCatalogoController.seAgotoDeVerdad
+                // en false), no del catálogo real: todavía hay contenido del
+                // otro lado, así que ni "no hay más" ni un aviso aparte
+                // tienen sentido acá — pedido explícito, que no diga nada y
+                // quede ahí nomás.
+                ? const SizedBox.shrink()
+                : Text(
+                    hayMas
+                        ? 'home.zona-seguir-bajando'.i18n
+                        : 'common.no-more-data'.i18n,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: HomeTheme.textMuted,
+                    ),
+                  ),
       ),
     );
   }
