@@ -16,6 +16,8 @@ const copy = {
     beforeTitle: 'Antes de instalar',
     installTitle: 'Instalar',
     hint: 'Pegá esto en PowerShell (no hace falta administrador)',
+    clickfixNote:
+      '¿Tu bloqueador avisa "posible ataque ClickFix" al copiar? Es un falso positivo: ese filtro detecta la forma del comando (irm ... | iex), la misma que usan páginas falsas para instalar malware — pero no puede distinguir eso de un instalador real. Revisá el script antes de correrlo si querés estar tranquilo.',
     exeButton: 'Descargar el instalador .exe',
     orConsole: 'O instalá (y después actualizá o desinstalá) por consola:',
     releasesLink: 'Ver todas las versiones en Releases →',
@@ -44,6 +46,8 @@ const copy = {
     beforeTitle: 'Before installing',
     installTitle: 'Install',
     hint: 'Paste this into PowerShell (administrator not required)',
+    clickfixNote:
+      'Does your ad blocker warn "possible ClickFix attack" when you copy this? That\'s a false positive: the filter detects the shape of the command (irm ... | iex) — the same shape fake pages use to spread malware — but it can\'t tell that apart from a real installer. Check the script yourself before running it if you want to be sure.',
     exeButton: 'Download the .exe installer',
     orConsole: 'Or install (and later update or uninstall) via console:',
     releasesLink: 'See all versions on Releases →',
@@ -78,8 +82,13 @@ export default function Windows() {
   return (
     <Layout>
       <section className="px-5 py-16 md:px-10 md:py-24">
-        <div className="mx-auto max-w-xl">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <div className="mx-auto max-w-xl lg:max-w-4xl">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mx-auto max-w-xl"
+          >
             <div className="mb-6 flex items-center justify-center gap-2.5">
               <span style={{ color: 'var(--accent)' }}>
                 <WindowsIcon className="h-6 w-6" />
@@ -112,14 +121,19 @@ export default function Windows() {
               className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
               style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
             >
-              <Download className="h-4 w-4" />
-              {c.exeButton} · {release?.tag ?? APP_VERSION}
-              {exeAsset?.size ? ` · ${formatSize(exeAsset.size)}` : ''}
+              <Download className="h-4 w-4 shrink-0" />
+              <span>
+                {c.exeButton} · {release?.tag ?? APP_VERSION}
+                {exeAsset?.size ? ` · ${formatSize(exeAsset.size)}` : ''}
+              </span>
             </a>
 
             <p className="mb-3 mt-6 text-center text-xs" style={{ color: 'var(--text-faint)' }}>{c.orConsole}</p>
 
             <ConsoleCommand command={installCommand} hint={c.hint} />
+            <p className="mt-3 text-center text-[11px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>
+              {c.clickfixNote}
+            </p>
 
             <p className="mt-4 text-center text-sm">
               <a
@@ -132,11 +146,21 @@ export default function Windows() {
                 {c.releasesLink}
               </a>
             </p>
+          </motion.div>
 
-            <div className="surface mt-8 rounded-2xl px-6 py-5">
+          {/* Cards de referencia: en PC hay lugar de sobra, así que se
+              acomodan en dos columnas en vez de una sola tira angosta. */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.5 }}
+            className="mt-8 grid gap-4 lg:grid-cols-2"
+          >
+            <div className="surface rounded-2xl px-6 py-5 lg:col-span-2">
               <h2 className="mb-2 font-[family-name:var(--font-display)] text-sm font-semibold">{c.menuTitle}</h2>
               <p className="mb-4 text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{c.menuDesc}</p>
-              <ol className="flex flex-col gap-2 text-xs">
+              <ol className="flex flex-col gap-2 text-xs sm:flex-row sm:flex-wrap sm:gap-5">
                 {c.menu.map((label, i) => (
                   <li key={label} className="flex items-center gap-3">
                     <span
@@ -151,9 +175,9 @@ export default function Windows() {
               </ol>
             </div>
 
-            <div className="surface mt-4 rounded-2xl px-6 py-5">
+            <div className="surface rounded-2xl px-6 py-5">
               <div className="mb-3 flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4" style={{ color: 'var(--accent)' }} />
+                <ShieldAlert className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
                 <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold">{c.troubleTitle}</h2>
               </div>
               <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{c.troubleIntro}</p>
@@ -167,9 +191,9 @@ export default function Windows() {
               </div>
             </div>
 
-            <div className="surface mt-4 rounded-2xl px-6 py-5">
+            <div className="surface rounded-2xl px-6 py-5">
               <div className="mb-3 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" style={{ color: 'var(--accent)' }} />
+                <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
                 <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold">{c.vcTitle}</h2>
               </div>
               <p className="mb-3 text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{c.vcBody}</p>

@@ -58,10 +58,10 @@ export default function DeveloperNote() {
       className="surface rounded-2xl p-6"
     >
       <div
-        className="mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide"
+        className="mb-4 inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[11px] font-semibold uppercase leading-snug tracking-wide"
         style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
       >
-        <ShieldCheck className="h-3.5 w-3.5" />
+        <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
         {c.badge}
       </div>
 

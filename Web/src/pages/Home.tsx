@@ -35,7 +35,7 @@ const fadeUp = {
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="mb-4 inline-flex items-center gap-2 rounded-full border px-3.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]"
+      className="mb-4 inline-flex items-center gap-2 rounded-xl border px-3.5 py-1.5 text-center text-[11px] font-semibold uppercase leading-snug tracking-[0.1em]"
       style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
     >
       {children}

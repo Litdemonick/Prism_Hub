@@ -52,8 +52,13 @@ export default function Linux() {
   return (
     <Layout>
       <section className="px-5 py-16 md:px-10 md:py-24">
-        <div className="mx-auto max-w-xl">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <div className="mx-auto max-w-xl lg:max-w-4xl">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mx-auto max-w-xl"
+          >
             <div className="mb-6 flex items-center justify-center gap-2.5">
               <span style={{ color: 'var(--accent)' }}>
                 <LinuxIcon className="h-6 w-6" />
@@ -83,16 +88,28 @@ export default function Linux() {
               className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
               style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
             >
-              <Download className="h-4 w-4" />
-              {c.tarButton} · {release?.tag ?? APP_VERSION}
-              {tarAsset?.size ? ` · ${formatSize(tarAsset.size)}` : ''}
+              <Download className="h-4 w-4 shrink-0" />
+              <span>
+                {c.tarButton} · {release?.tag ?? APP_VERSION}
+                {tarAsset?.size ? ` · ${formatSize(tarAsset.size)}` : ''}
+              </span>
             </a>
 
             <p className="mb-3 mt-6 text-center text-xs" style={{ color: 'var(--text-faint)' }}>{c.orConsole}</p>
 
             <ConsoleCommand command={installCommand} hint={c.hint} />
+          </motion.div>
 
-            <div className="surface mt-8 rounded-2xl px-6 py-5">
+          {/* En PC hay lugar de sobra: la explicación del menú y el
+              PKGBUILD de Arch se acomodan lado a lado en vez de apilados. */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.5 }}
+            className="mt-8 grid gap-4 lg:grid-cols-2"
+          >
+            <div className="surface rounded-2xl px-6 py-5">
               <h2 className="mb-2 font-[family-name:var(--font-display)] text-sm font-semibold">{c.menuTitle}</h2>
               <p className="mb-4 text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{c.menuDesc}</p>
               <ol className="flex flex-col gap-2 text-xs">
@@ -110,7 +127,7 @@ export default function Linux() {
               </ol>
             </div>
 
-            <div className="surface mt-4 rounded-2xl px-6 py-5">
+            <div className="surface rounded-2xl px-6 py-5">
               <h2 className="mb-2 font-[family-name:var(--font-display)] text-sm font-semibold">{c.archTitle}</h2>
               <p className="mb-3 text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{c.archDesc}</p>
               <ConsoleCommand command={archCommand} />

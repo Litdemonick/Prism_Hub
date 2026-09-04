@@ -114,8 +114,13 @@ export default function Android() {
   return (
     <Layout>
       <section className="px-5 py-16 md:px-10 md:py-24">
-        <div className="mx-auto max-w-lg">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <div className="mx-auto max-w-lg lg:max-w-3xl">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mx-auto max-w-lg"
+          >
             <div className="mb-6 flex items-center justify-center gap-2.5">
               <span style={{ color: 'var(--accent)' }}>
                 <AndroidIcon className="h-6 w-6" />
@@ -147,8 +152,8 @@ export default function Android() {
               className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
               style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
             >
-              <Download className="h-4 w-4" />
-              {mainAsset?.size ? `${mainLabel} · ${formatSize(mainAsset.size)}` : mainLabel}
+              <Download className="h-4 w-4 shrink-0" />
+              <span>{mainAsset?.size ? `${mainLabel} · ${formatSize(mainAsset.size)}` : mainLabel}</span>
             </a>
             <p className="mt-3 text-center text-xs" style={{ color: 'var(--text-faint)' }}>{c.androidVersion}</p>
 
@@ -167,7 +172,7 @@ export default function Android() {
                         rel="noopener noreferrer"
                         className="surface flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs transition-opacity hover:opacity-80"
                       >
-                        <Download className="h-3 w-3" />
+                        <Download className="h-3 w-3 shrink-0" />
                         {asset?.size ? `${v.label} · ${formatSize(asset.size)}` : v.label}
                       </a>
                     );
@@ -175,60 +180,62 @@ export default function Android() {
                 </div>
               </div>
             )}
+          </motion.div>
 
-            <div className="mt-8 flex flex-col gap-3">
-              {c.steps.map((s, i) => (
-                <motion.div
-                  key={s.title}
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.4, delay: 0.1 + i * 0.08 }}
-                  className="surface flex items-start gap-3 rounded-2xl p-4"
-                >
-                  <div
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                    style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}
-                  >
-                    <s.Icon className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="mb-0.5 text-[13px] font-semibold">{s.title}</div>
-                    <div className="text-[12px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>{s.desc}</div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-
-            <div className="surface mt-4 rounded-2xl p-5">
-              <div className="mb-4 flex items-start gap-3">
+          {/* En PC hay lugar de sobra: los pasos van de a dos por fila en
+              vez de una sola tira angosta en el medio de la pantalla. */}
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            {c.steps.map((s, i) => (
+              <motion.div
+                key={s.title}
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4, delay: 0.1 + i * 0.08 }}
+                className="surface flex items-start gap-3 rounded-2xl p-4"
+              >
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
                   style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}
                 >
-                  <Tv className="h-4 w-4" />
+                  <s.Icon className="h-4 w-4" />
                 </div>
                 <div>
-                  <div className="mb-1 text-[13px] font-semibold">{c.tvTitle}</div>
-                  <div className="text-[12px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>{c.tvDesc}</div>
+                  <div className="mb-0.5 text-[13px] font-semibold">{s.title}</div>
+                  <div className="text-[12px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>{s.desc}</div>
                 </div>
-              </div>
-              <div className="flex flex-col gap-3 border-t pt-4" style={{ borderColor: 'var(--border)' }}>
-                {c.tvSteps.map((s) => (
-                  <div key={s.title} className="flex items-start gap-3 pl-11">
-                    <s.Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
-                    <div>
-                      <div className="mb-0.5 text-[12px] font-semibold">{s.title}</div>
-                      <div className="text-[11px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>{s.desc}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+              </motion.div>
+            ))}
+          </div>
 
-            <div className="mt-4">
-              <DeveloperNote />
+          <div className="surface mt-4 rounded-2xl p-5">
+            <div className="mb-4 flex items-start gap-3">
+              <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}
+              >
+                <Tv className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="mb-1 text-[13px] font-semibold">{c.tvTitle}</div>
+                <div className="text-[12px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>{c.tvDesc}</div>
+              </div>
             </div>
-          </motion.div>
+            <div className="grid gap-3 border-t pt-4 sm:grid-cols-3" style={{ borderColor: 'var(--border)' }}>
+              {c.tvSteps.map((s) => (
+                <div key={s.title} className="flex items-start gap-3 sm:flex-col sm:gap-2 sm:pl-0 pl-11">
+                  <s.Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                  <div>
+                    <div className="mb-0.5 text-[12px] font-semibold">{s.title}</div>
+                    <div className="text-[11px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>{s.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mx-auto mt-4 max-w-lg">
+            <DeveloperNote />
+          </div>
         </div>
       </section>
     </Layout>
