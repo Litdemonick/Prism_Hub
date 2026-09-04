@@ -1,5 +1,7 @@
 ﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 class PlatformButton extends StatelessWidget {
@@ -64,7 +66,45 @@ class PlatformTextButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   Widget _builaAndroidButton(BuildContext context) {
-    return TextButton(onPressed: onPressed, child: child);
+    if (!PlatformTv.esTelevisionSync) {
+      return TextButton(onPressed: onPressed, child: child);
+    }
+    // ── En TV, foco con fondo sólido ─────────────────────────────────────
+    //
+    // El resaltado de foco de un TextButton de Material es un velo MUY
+    // sutil, pensado para mouse —ahí el cursor ya dice dónde está parado el
+    // usuario, y el velo es solo un refuerzo—. Con el mando esa marca es la
+    // ÚNICA pista de dónde se está parado, y contra el texto en
+    // HomeTheme.accentPink (rosa) el velo casi del mismo tono se perdía por
+    // completo. Reportado en vivo, en la pantalla de actualizar: «esos
+    // botones al seleccionar con el control remoto no se ve por el color
+    // rosado».
+    //
+    // Mismo criterio que ya se probó y funciona en el resto de la app (ver
+    // FocusableCard / _ItemSidebarTV): en foco, un fondo OPACO y de
+    // contraste alto, no un tinte translúcido del mismo color que ya hay
+    // alrededor.
+    return TextButton(
+      onPressed: onPressed,
+      style: ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.focused)) return Colors.white;
+          return HomeTheme.accentPink;
+        }),
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.focused)) return HomeTheme.accentPink;
+          return Colors.transparent;
+        }),
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        ),
+        shape: WidgetStateProperty.all(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+      child: child,
+    );
   }
 
   Widget _builaDesktopButton(BuildContext context) {
