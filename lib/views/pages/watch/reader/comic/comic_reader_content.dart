@@ -1494,11 +1494,15 @@ class _PieDeCapituloCascada extends StatelessWidget {
               // Corto a propósito: dos de estos entran lado a lado en la
               // mitad de la pantalla cada uno, y "Capítulo siguiente"/
               // "Capítulo anterior" no entraba en un celular angosto —
-              // quedaba cortado en "Capítul...". El ícono ya dice de qué
-              // capítulo se trata; acá alcanza con la dirección.
-              label: Text(
-                esSiguiente ? 'Siguiente' : 'Anterior',
-                overflow: TextOverflow.ellipsis,
+              // quedaba cortado en "Capítul...". Acortado a la dirección
+              // sola no alcanzó: en una pantalla chica de verdad (o con la
+              // fuente del sistema agrandada) "Siguiente" todavía no
+              // entraba y quedaba "Siguien...". FittedBox en vez de
+              // ellipsis: en vez de cortar la palabra, la achica lo que
+              // haga falta para que se lea completa siempre.
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(esSiguiente ? 'Siguiente' : 'Anterior'),
               ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: HomeTheme.textPrimary,
