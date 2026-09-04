@@ -1051,6 +1051,11 @@ class ApplicationUtils {
       await Future<void>.delayed(Duration.zero);
     }
 
+    // Declarado ACÁ afuera —no `final` adentro del try— porque el catch de
+    // más abajo necesita mostrar esta ruta cuando lo único que falló fue
+    // abrir el instalador: la descarga en sí ya terminó bien. Una variable
+    // de un `try` no se ve en su propio `catch`.
+    String? downloadPath;
     try {
       final url = asset['browser_download_url'] as String;
       // En Android usar app cache (cubierto por FileProvider), en desktop
@@ -1061,7 +1066,7 @@ class ApplicationUtils {
             )
           : Directory.systemTemp.createTempSync('PrismHub_update_');
       downloadDir.createSync(recursive: true);
-      final downloadPath =
+      downloadPath =
           '${downloadDir.path}${Platform.pathSeparator}${asset['name']}';
 
       // Si ya está descargado de un intento anterior, no se vuelve a bajar.
@@ -1165,6 +1170,34 @@ class ApplicationUtils {
       await _replaceAndRestart(sourceDir, downloadDir);
     } catch (e) {
       if (progressDialogOpen) RouterUtils.pop();
+      // ── El caso "el APK está perfecto, lo que falló es abrirlo" ────────
+      //
+      // `installApk` (nativo) ahora prueba DOS intents antes de rendirse
+      // (ver MainActivity.kt) — esto es lo que queda cuando ninguno de los
+      // dos encontró una app que lo atienda, típicamente en una caja de
+      // Android TV con el instalador recortado por el fabricante. La
+      // descarga terminó bien: no hay nada que borrar, y decir "falló la
+      // descarga" sería directamente mentir. Se avisa con la MISMA frase
+      // que ya usa el instalador de Windows cuando no pudo lanzarse solo:
+      // el archivo queda ahí y se dice dónde.
+      final esFaltaDeInstalador = Platform.isAndroid &&
+          e is PlatformException &&
+          e.message == 'NO_INSTALLER_AVAILABLE';
+      if (esFaltaDeInstalador) {
+        if (context.mounted) {
+          showPlatformSnackbar(
+            context: context,
+            title: 'upgrade.install-failed'.i18n,
+            content: FlutterI18n.translate(
+              context,
+              'upgrade.installer-failed',
+              translationParams: {'path': downloadPath ?? ''},
+            ),
+          );
+        }
+        debugPrint('Download/install error: $e');
+        return;
+      }
       // ── Lo que quedó a medias se borra ───────────────────────────────
       //
       // Si el wifi se cortó en mitad de la descarga queda un archivo
@@ -1300,7 +1333,23 @@ class ApplicationUtils {
             await _canalActualizacion
                 .invokeMethod('installApk', {'apkPath': apkPath});
           } catch (e) {
+            // Mismo caso que en _downloadAndInstall, pero acá el permiso SÍ
+            // se consiguió y aun así no hay con qué abrir el instalador —
+            // antes esto se perdía en un debugPrint que nadie ve fuera de un
+            // depurador conectado, y el usuario se quedaba sin saber que el
+            // APK ya está listo en disco.
             debugPrint('Reintento de instalación falló: $e');
+            if (context.mounted) {
+              showPlatformSnackbar(
+                context: context,
+                title: 'upgrade.install-failed'.i18n,
+                content: FlutterI18n.translate(
+                  context,
+                  'upgrade.installer-failed',
+                  translationParams: {'path': apkPath},
+                ),
+              );
+            }
           }
           return true; // Listo — dejar de escuchar.
         }

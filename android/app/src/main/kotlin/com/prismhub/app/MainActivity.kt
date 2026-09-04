@@ -322,23 +322,57 @@ class MainActivity: AudioServiceFragmentActivity() {
             throw Exception("APK file not found: $apkPath")
         }
 
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                // Android 7.0+: usar FileProvider para seguridad
-                FileProvider.getUriForFile(
-                    this@MainActivity,
-                    "${packageName}.fileprovider",
-                    file
-                )
-            } else {
-                // Android < 7.0: usar file:// URI
-                Uri.fromFile(file)
-            }
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            // Android 7.0+: usar FileProvider para seguridad
+            FileProvider.getUriForFile(
+                this@MainActivity,
+                "${packageName}.fileprovider",
+                file
+            )
+        } else {
+            // Android < 7.0: usar file:// URI
+            Uri.fromFile(file)
         }
 
-        startActivity(intent)
+        // ── Dos formas de pedirlo, no una ────────────────────────────────
+        //
+        // Reportado en vivo: en un televisor, tocar Actualizar bajaba el
+        // APK y se quedaba en la misma pantalla, sin abrir el instalador.
+        // ACTION_VIEW + FileProvider es la forma moderna y la que anda en
+        // cualquier telefono, pero algunas cajas de Android TV con el
+        // instalador de paquetes recortado o reemplazado por el fabricante
+        // no tienen NINGUNA actividad registrada para ese intent puntual —
+        // ahi startActivity no crashea la app (eso ya se atajaba del lado
+        // de Flutter) pero tampoco abre nada, y antes se quedaba ahi.
+        //
+        // ACTION_INSTALL_PACKAGE es la forma vieja, previa a Android N, pero
+        // sigue viva y en varias de esas cajas es la UNICA que su launcher
+        // conoce. Costo de probarla: nulo si la primera ya funciono, porque
+        // ahi ni se llega a intentar.
+        val intentos = listOf(
+            Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            },
+            Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+            }
+        )
+        for (intent in intentos) {
+            try {
+                startActivity(intent)
+                return
+            } catch (e: ActivityNotFoundException) {
+                continue
+            }
+        }
+        // Las dos formas fallaron: este aparato de verdad no tiene con qué
+        // instalar un APK. Un mensaje que lo diga, no la excepcion cruda —
+        // eso es lo que dejaba ver del lado de Flutter "fallo la descarga"
+        // sobre una descarga que habia terminado bien.
+        throw Exception("NO_INSTALLER_AVAILABLE")
     }
 
     // La actividad es singleTop: con la app ya abierta, un enlace nuevo NO
