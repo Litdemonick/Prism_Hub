@@ -121,9 +121,18 @@ class FocoConTopes extends DirectionalFocusAction {
       TraversalDirection.down => hasta.top > desde.top,
       TraversalDirection.up => hasta.top < desde.top,
     };
+    // ── Por qué "se movió a la derecha" NO alcanza solo ─────────────────
+    //
+    // Una tarjeta de la fila de ABAJO, si esa fila está corrida hacia la
+    // derecha (cada fila se desplaza por su cuenta, no comparten offset),
+    // también queda "más a la derecha que antes" — `seMovioComoDebia` la
+    // deja pasar igual que a la vecina de verdad. Reportado en vivo,
+    // reincidente: «al llegar al final de la fila y seguir con la derecha,
+    // sigue bajando a las cards de abajo». Hace falta ADEMÁS confirmar que
+    // el destino sigue en el mismo renglón — ver `_mismoRenglon`.
     final seFue = !seMovioComoDebia ||
         (horizontal
-            ? !_mismaFranja(desde, hasta)
+            ? (!_mismoRenglon(desde, hasta) || !_mismaFranja(desde, hasta))
             : _escapoALaIzquierda(desde, hasta, despues.context));
     if (!seFue) return;
     // Se fue de fila (u ocurrió el escape a la columna de categorías): se lo
@@ -208,4 +217,30 @@ class FocoConTopes extends DirectionalFocusAction {
     if (menor <= 0) return false;
     return solape / menor >= _solapeMinimo;
   }
+
+  /// Cuánto puede diferir el CENTRO vertical de dos tarjetas y seguir
+  /// contando como «la misma fila». No depende de un porcentaje de nada:
+  /// dentro de una fila, todas las tarjetas están alineadas al mismo
+  /// renglón, así que sus centros prácticamente coinciden (la que tiene el
+  /// foco puede estar un poco más alta por el crecido, de ahí que no sea
+  /// cero). La fila de ABAJO, en cambio, está corrida por lo menos el alto
+  /// de una fila entera — típicamente 150 a 250px en TV — así que 40px de
+  /// tolerancia separa clarísimo un caso del otro, sea cual sea la
+  /// resolución de la pantalla o el ancho de las tarjetas.
+  static const _toleranciaDeRenglon = 40.0;
+
+  /// El destino sigue en la MISMA fila horizontal que el origen.
+  ///
+  /// ── Por qué hace falta, además de `_mismaFranja` ─────────────────────
+  ///
+  /// `_mismaFranja` exige que se solapen al menos un tercio de alto — y una
+  /// fila corrida hacia la derecha (cada fila se desplaza por su cuenta)
+  /// puede tener una tarjeta que, por casualidad de tamaños, solapa lo
+  /// suficiente con la de la fila de arriba como para pasar esa cuenta,
+  /// aunque sea claramente OTRA fila. Reportado en vivo, dos veces: la
+  /// flecha derecha seguía bajando al final de la fila. Comparar el CENTRO
+  /// en vez de superposición no tiene ese punto ciego: dos filas distintas
+  /// casi nunca coinciden de centro a centro, compartan o no algo de alto.
+  static bool _mismoRenglon(Rect a, Rect b) =>
+      (a.center.dy - b.center.dy).abs() < _toleranciaDeRenglon;
 }
