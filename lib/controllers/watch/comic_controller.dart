@@ -245,15 +245,43 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
       addWorker(ever(llenarPantalla, _actualizarPantallaCompletaAndroid));
     }
 
-    // 如果切换章节，重置当前页码
+    // ── Capítulo nuevo: currentPage vuelve a 0, y el SCROLL también ──────
+    //
+    // Acá faltaba la mitad del arreglo. `currentPage.value = 0` deja
+    // actualizado el CONTADOR, pero el ScrollablePositionedList de la
+    // cascada es el MISMO widget entre un capítulo y el siguiente (no se
+    // destruye — ver comic_reader_content.dart, el chequeo `!identical
+    // (_lastWatchData, ...)`), así que su posición de scroll de verdad no se
+    // toca sola: sigue exactamente donde estaba al terminar el capítulo
+    // anterior.
+    //
+    // Antes SOLO se reposicionaba en modo paginado (`_gotoPage(0)`, un
+    // PageView SÍ vuelve a la página 0 en cuanto se le pide `jumpToPage`).
+    // En cascada nunca se llamaba a `_jumpPage(0)` para este caso —el otro
+    // lugar que sí la llama (el worker de recuperar el progreso guardado,
+    // más abajo) tiene la guarda `isRecover.value`, que se prende UNA sola
+    // vez por sesión de lectura: solo cubre el capítulo con el que se abrió
+    // el lector, nunca el segundo, el tercero, etc.—.
+    //
+    // El resultado, medido en el reporte: al cambiar de capítulo en cascada
+    // y scrollear, "el scroll se dispara y lleva al final". Tenía sentido:
+    // si el capítulo 2 es más corto que el offset heredado del final del
+    // capítulo 1, el Scrollable simplemente no tiene tanto para recorrer y
+    // se pega contra su propio máximo — que es justo el final.
+    //
+    // Ahora la cascada se reposiciona igual que el paginado, con el mismo
+    // postFrameCallback (la lista del capítulo nuevo recién termina de
+    // montarse después de este frame).
     addWorker(ever(super.index, (callback) {
       _ignorarPosiciones = true;
       currentPage.value = 0;
-      // Capítulo nuevo: volver a la primera página, después de que el
-      // PageView del capítulo nuevo esté montado.
-      if (isPaged) {
-        SchedulerBinding.instance.addPostFrameCallback((_) => _gotoPage(0));
-      }
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (isPaged) {
+          _gotoPage(0);
+        } else {
+          _jumpPage(0);
+        }
+      });
     }));
 
     // Se vuelve a escuchar recién cuando el capítulo nuevo ya tiene con qué
