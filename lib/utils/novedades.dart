@@ -105,7 +105,22 @@ class Novedades {
 
       // Hay algo nuevo.
       h.knownEpisodeCount = total;
-      h.newEpisodeLabel = _nombreDelUltimo(detalle);
+      final ultimo = _ultimoEpisodio(detalle);
+      h.newEpisodeLabel = ultimo?.$3;
+      // ── Por qué también se mueve el puntero, no solo el nombre ──────────
+      //
+      // Antes esto solo cambiaba `newEpisodeLabel` (el texto que se
+      // muestra) y dejaba `episodeGroupId`/`episodeId` tal cual estaban —
+      // apuntando al capítulo VIEJO, el que ya se había terminado. La
+      // tarjeta mostraba "Episodio 15 nuevo" pero tocarla reabría el
+      // capítulo 14 de siempre: el aviso y el destino no tenían nada que
+      // ver. Reportado en vivo: "al darle me manda al anterior aunque
+      // salga la etiqueta arriba". Ahora el puntero se mueve junto con el
+      // aviso, al mismo episodio que el nombre anuncia.
+      if (ultimo != null) {
+        h.episodeGroupId = ultimo.$1;
+        h.episodeId = ultimo.$2;
+      }
       h.watchState = WatchState.pending;
       // Se quita la marca de obra finalizada: que lleguen capítulos demuestra
       // que no lo estaba, o que volvió. Era una creencia del usuario y la
@@ -122,11 +137,15 @@ class Novedades {
     }
   }
 
-  static String? _nombreDelUltimo(ExtensionDetail detalle) {
+  /// El episodio más nuevo: en qué grupo, en qué posición dentro de ese
+  /// grupo, y su nombre — lo mismo que necesita `History.episodeGroupId`/
+  /// `episodeId` para abrir DE VERDAD el capítulo que se está anunciando,
+  /// no solo mostrar su nombre.
+  static (int, int, String)? _ultimoEpisodio(ExtensionDetail detalle) {
     final grupos = detalle.episodes ?? [];
-    for (final g in grupos.reversed) {
-      final urls = g.urls;
-      if (urls.isNotEmpty) return urls.last.name;
+    for (var g = grupos.length - 1; g >= 0; g--) {
+      final urls = grupos[g].urls;
+      if (urls.isNotEmpty) return (g, urls.length - 1, urls.last.name);
     }
     return null;
   }
