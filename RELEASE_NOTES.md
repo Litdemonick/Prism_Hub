@@ -1,4 +1,4 @@
-## PrismHub v1.0.86 — Burbujas para cambiar de obra en el lector, y arreglos de televisor
+## PrismHub v1.0.87 — Burbujas en el lector, importar lecturas e episodios nuevos que abrían mal
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
@@ -7,40 +7,43 @@
 ### ✨ Nuevo
 
 - **Burbujas para saltar a otra obra sin salir del lector.** Mientras leés un
-  manga, manhwa o novela, podés tocar la burbuja de otra obra que tenés en
-  Continuar leyendo y pasar directo a ella — el lector actual se cierra y el
-  otro se abre donde habías quedado, sin volver a Inicio. No mantiene nada
-  abierto en paralelo (no son pestañas de navegador): apenas se necesita
-  memoria de sobra, mucho menos que tener varios lectores vivos a la vez.
-  Aparece solo si tenés más de una obra en Continuar, y una flechita
-  chiquita permite ocultarla por un rato sin apagar la función entera.
-  **Apagada por defecto** — se activa desde Ajustes → "Burbujas de
-  'Continuar leyendo' en el lector".
+  manga, manhwa o novela, tocá la burbuja de otra obra que tenés en
+  Continuar leyendo y pasá directo a ella — el lector actual se cierra y el
+  otro se abre donde habías quedado. No mantiene nada abierto en paralelo:
+  apenas la memoria de un salto normal, nunca la de varios lectores vivos a
+  la vez. Con flechitas en PC, se desliza con el dedo en Android, y una
+  flechita propia para ocultarla un rato sin apagar la función. **Apagada
+  por defecto** — se activa desde Ajustes o desde los ajustes del propio
+  lector.
+
+### 🐛 Continuar viendo/leyendo
+
+- **El aviso de capítulo nuevo abría el capítulo viejo.** Al detectar un
+  episodio nuevo se actualizaba el nombre para mostrar en la tarjeta, pero
+  nunca a qué capítulo apuntaba de verdad — avisaba "Episodio 15" y tocarla
+  reabría el 14 de siempre. Ahora los dos se actualizan juntos. Afecta a
+  PC, Android y Android TV por igual.
+
+### 📥 Importar lecturas
+
+- **ManhwaWeb y ShadeManga podían importar contenido +18 al Inicio normal
+  en vez de a la Zona +18.** Esas dos extensiones separan su contenido
+  adulto del normal con un filtro de búsqueda que la ficha de la obra no
+  puede ver — ninguna lista de palabras alcanza para adivinarlo. Ahora,
+  ante esa incertidumbre real, va directo a la Zona +18.
+- **MangaDex no importaba nada.** Un link real del sitio
+  (`mangadex.org/title/{id}/{nombre}`) no coincidía con lo que su ficha
+  espera (el identificador solo). Se corrige la extracción.
+- **Un link con "/" al final rompía la extracción del identificador** en
+  varios sitios (confirmado en Ikigai Mangas y Olympus) — es la forma más
+  común de copiar un link, así que se veía seguido.
 
 ### 📺 Televisor
 
-- **La navegación con el mando ya no depende de la resolución de la
-  pantalla.** Reportado con detalle: al llegar al final de una fila y seguir
-  apretando derecha, la selección empezaba a bajar sola; apretando abajo, a
-  veces rebotaba de vuelta para arriba. Los controles que ya existían medían
-  cuánto se solapan dos tarjetas contra un porcentaje fijo, pensado para una
-  resolución en particular — en otra podía fallar. Ahora hay una regla que
-  siempre se cumple, sin importar el tamaño de la pantalla: si apretaste
-  derecha, lo que se enfoca tiene que estar más a la derecha que antes (y lo
-  mismo para las otras tres flechas). Si no lo está, el salto se deshace.
-- **Las tarjetas "medianas" de Inicio (las anchas, debajo del carrusel) ya
-  no quedan apretadas contra el panel izquierdo.** No tenían ningún margen
-  reservado antes de la primera, a diferencia de las filas de pósters; al
-  ser más anchas, el marco de foco casi no tenía aire contra el rail de
-  categorías.
-- Revertido el fondo del panel desplegado que se había agregado en la
-  1.0.85 — nació de un reporte que en realidad era sobre las tarjetas, no
-  sobre el panel. Sigue transparente, como ya se había decidido antes.
-
-### 📖 Lector
-
-- **"Anterior"/"Siguiente" seguía cortándose** en celulares angostos de
-  verdad o con la fuente del sistema agrandada. Ahora, en vez de cortar la
-  palabra, se achica lo necesario para que se lea completa siempre.
-- **En PC, los botones de capítulo pasan al centro de toda la barra**, no
-  solo al centro del grupo de botones de la derecha.
+- **Arreglo más profundo de la navegación con el mando.** El control
+  anterior (v1.0.86) todavía dejaba pasar saltos incorrectos al final de
+  una fila corrida. Ahora se compara el centro vertical de las tarjetas en
+  vez de un porcentaje de superposición, que no depende de resolución ni
+  de tamaño de tarjeta.
+- Sin aviso al llegar al tope propio de una zona (antes decía "hasta acá
+  llega esta zona por ahora"): ahora simplemente no dice nada.
