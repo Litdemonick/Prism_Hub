@@ -67,6 +67,14 @@ class ImportService {
 
     final repoIndex = await ExtensionUtils.fetchRepoIndex();
 
+    // `ExtensionUtils.esMixta` (usado más abajo, en `_processSingleUrl`,
+    // para decidir a qué zona va cada link) depende de que esto ya haya
+    // corrido — si no, ninguna extensión cuenta todavía como mixta y las
+    // de ShadeManga/ManhwaWeb importarían siempre a la zona normal, que es
+    // justo lo que no puede pasar. Barato si ya se llamó antes en esta
+    // sesión: por versión, no se le vuelve a preguntar nada al motor.
+    await ExtensionUtils.detectarMixtas();
+
     // Procesa en lotes para no saturar
     const batchSize = 5;
     for (var i = 0; i < toProcess.length; i += batchSize) {
@@ -224,9 +232,30 @@ class ImportService {
       }
     }
 
+    // 0. MangaDex: su detail() espera SOLO el UUID interno ────────────────
+    //
+    // Un link real copiado del sitio es
+    // "mangadex.org/title/{uuid}/{slug-del-titulo}". Pero `detail()` de
+    // MangaDex arma su pedido como `/manga/${id}` esperando que `id` sea el
+    // UUID solo, así que ni la ruta relativa completa ("/title/{uuid}/
+    // {slug}") ni ninguna de las heurísticas de "recortar el capítulo" de
+    // más abajo — que no contemplan este formato — resuelven nunca nada.
+    // Se prueba el UUID solo, ANTES que cualquier otra cosa — confirmado
+    // contra el código real de la extensión (io.prismhub.mangadex), que usa
+    // el UUID puro como `url` de cada ítem.
+    if (extension.package == 'io.prismhub.mangadex') {
+      final uuid = RegExp(
+        r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
+      ).firstMatch(url)?.group(0);
+      if (uuid != null) {
+        detail = await fetchSafe(uuid);
+        if (detail != null) workingUrl = uuid;
+      }
+    }
+
     // 1. Intentar con ruta relativa (Estándar PrismPlus)
-    detail = await fetchSafe(relativeUrl);
-    
+    detail ??= await fetchSafe(relativeUrl);
+
     // 2. Intentar con ruta absoluta (Algunas extensiones viejas)
     if (detail == null) {
       detail = await fetchSafe(url);
@@ -299,11 +328,33 @@ class ImportService {
     }
 
     // 5. Detectar NSFW
-    bool isNsfw = extension.nsfw;
+    //
+    // ── Por qué una extensión MIXTA (ShadeManga/ManhwaWeb) va siempre a +18 ──
+    //
+    // El SDK no tiene forma de decir "esta ficha puntual es +18": esa
+    // separación la hace el propio sitio con un parámetro de BÚSQUEDA
+    // (`erotico=si/no` en ManhwaWeb, análogo en ShadeManga), y `detail()`
+    // recibe solo la URL de la obra — nunca sabe con qué filtro se llegó
+    // hasta ahí. Confirmado leyendo el código real de la extensión de
+    // ManhwaWeb: sus géneros son categorías de contenido (Acción, Romance,
+    // Drama...), no tienen relación ninguna con el eje adulto/normal, así
+    // que ninguna lista de palabras clave puede acertar ahí — es un dato
+    // que la extensión, tal como está hecha hoy, no expone.
+    //
+    // Ante esa incertidumbre real (no un descuido que se pueda arreglar acá
+    // adentro), la app ya tiene una postura tomada en todos lados: cuando no
+    // se puede saber, el contenido va a la Zona +18 y no al Inicio normal —
+    // "mejor una de más en la zona +18 que una de más en la normal" (mismo
+    // criterio que ExtensionUtils.mixtas). `ExtensionUtils.esMixta` es la
+    // MISMA lista que ya usa el resto de la app para esto; se asegura de
+    // estar poblada antes de preguntarle (ver el llamado a
+    // `detectarMixtas()` al principio de `importFromText`).
+    bool isNsfw = extension.nsfw || ExtensionUtils.esMixta(extension.package);
 
     if (detail.genres != null) {
       final nsfwKeywords = [
-        'adulto', 'adult', '18+', '+18', 'nsfw', 'hentai', 'ecchi', 
+        'adulto', 'adult', '18+', '+18', 'nsfw', 'hentai', 'ecchi',
+        'erotic', 'erótic', 'pornograph',
         'maduro', 'mature', 'smut', 'doujinshi', 'gore', 'seinen', 'josei'
       ];
       final hasNsfwGenre = detail.genres!.any((g) =>
