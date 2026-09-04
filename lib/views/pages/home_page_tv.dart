@@ -937,8 +937,12 @@ class _ItemSidebarTV extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color:
-                        elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                    // Mismo motivo que el ícono de al lado: elegido pinta el
+                    // fondo entero con `accentPink` sólido, así que el texto
+                    // no puede ir de ese mismo color o desaparece contra su
+                    // propio fondo — se vio en vivo, foto con el nombre de
+                    // "Inicio" en blanco puro invisible sobre la píldora rosa.
+                    color: HomeTheme.textPrimary,
                   ),
                 ),
               ),
