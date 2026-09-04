@@ -1325,35 +1325,52 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 ),
               ),
             ),
-            // En táctil la sombra sigue estando y ya no se corta, así que
-            // necesita dónde caer: con ocho llegaba a los puntitos. En
-            // escritorio no hay sombra, y dieciséis serían un hueco de gusto.
-            SizedBox(height: _esTactil ? 16 : 8),
-            // ── Los puntitos NO crecen con la tanda ────────────────────
+            // ── Sin puntitos en TV ──────────────────────────────────────
             //
-            // Antes había uno por portada, así que al pedir más páginas la
-            // fila pasaba de ocho rayitas a dieciséis, a veinticuatro… hasta
-            // ocupar el ancho entero y dejar de significar nada.
+            // En modo compartido (TV: `sinVecinos`) la tarjeta YA ocupa el
+            // alto entero que le dio la pantalla (`m.alto == altoDisponible`,
+            // ver `_medirCarrusel`), así que no queda ni un píxel de sobra
+            // para este renglón. Sin esta guarda se dibujaba de todos modos
+            // —Column no recorta— saliéndose por debajo de su caja y quedando
+            // tapado por la fila siguiente, que se pinta después. Reportado
+            // con foto: «los botones de cambiar de imagen están atrás [de
+            // la fila de abajo]».
             //
-            // Ahora son ocho como mucho y cada una representa un tramo. Sirven
-            // para lo mismo —saber por dónde vas— sin volverse una regla
-            // graduada.
-            IndicadoresDePagina(
-              cantidad:
-                  tanda.length < _maxPuntitos ? tanda.length : _maxPuntitos,
-              actual: tanda.length <= _maxPuntitos
-                  ? widget.c.carruselPos.clamp(0, tanda.length - 1)
-                  : (widget.c.carruselPos * _maxPuntitos ~/ tanda.length)
-                      .clamp(0, _maxPuntitos - 1),
-              onTocar: (i) {
-                // Con la tanda larga, cada puntito lleva al principio de su
-                // tramo.
-                final destino = tanda.length <= _maxPuntitos
-                    ? i
-                    : i * tanda.length ~/ _maxPuntitos;
-                _irA((base + destino).toDouble().clamp(0.0, ultimo), grupos);
-              },
-            ),
+            // Tampoco aportan nada en TV: son puntitos para TOCAR, y con
+            // mando no hay con qué tocarlos — el carrusel ya se recorre con
+            // las flechas (`manejarTecla`, más arriba). Mismo criterio que
+            // ya usa `_pistaVisible`, que tampoco se muestra en TV.
+            if (!widget.conFocoTv) ...[
+              // En táctil la sombra sigue estando y ya no se corta, así que
+              // necesita dónde caer: con ocho llegaba a los puntitos. En
+              // escritorio no hay sombra, y dieciséis serían un hueco de gusto.
+              SizedBox(height: _esTactil ? 16 : 8),
+              // ── Los puntitos NO crecen con la tanda ────────────────────
+              //
+              // Antes había uno por portada, así que al pedir más páginas la
+              // fila pasaba de ocho rayitas a dieciséis, a veinticuatro… hasta
+              // ocupar el ancho entero y dejar de significar nada.
+              //
+              // Ahora son ocho como mucho y cada una representa un tramo. Sirven
+              // para lo mismo —saber por dónde vas— sin volverse una regla
+              // graduada.
+              IndicadoresDePagina(
+                cantidad:
+                    tanda.length < _maxPuntitos ? tanda.length : _maxPuntitos,
+                actual: tanda.length <= _maxPuntitos
+                    ? widget.c.carruselPos.clamp(0, tanda.length - 1)
+                    : (widget.c.carruselPos * _maxPuntitos ~/ tanda.length)
+                        .clamp(0, _maxPuntitos - 1),
+                onTocar: (i) {
+                  // Con la tanda larga, cada puntito lleva al principio de su
+                  // tramo.
+                  final destino = tanda.length <= _maxPuntitos
+                      ? i
+                      : i * tanda.length ~/ _maxPuntitos;
+                  _irA((base + destino).toDouble().clamp(0.0, ultimo), grupos);
+                },
+              ),
+            ],
           ],
         );
       });
