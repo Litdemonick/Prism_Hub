@@ -114,7 +114,21 @@ class _BurbujasContinuarLeyendoState extends State<BurbujasContinuarLeyendo> {
     return resultado;
   }
 
-  Future<void> _saltarA(History h) async {
+  /// Primer toque: solo muestra la vista grande, no navega a nada todavía.
+  ///
+  /// Pedido explícito: la burbuja se agranda para ver bien la imagen y el
+  /// título — de ahí, tocar la vista grande recién ahí manda al otro manga,
+  /// y tocar en cualquier otro lado la cierra sin hacer nada. No hay
+  /// temporizador que decida solo.
+  void _mostrarPreview(History h) {
+    setState(() => _expandiendo = h);
+  }
+
+  void _cancelarPreview() {
+    setState(() => _expandiendo = null);
+  }
+
+  Future<void> _confirmarSalto(History h) async {
     if (_saltando) return;
     // Todo lo que necesita el `context` de ESTE widget se saca ANTES de
     // cualquier `await` — un `Navigator`/`ModalRoute` no cambia de
@@ -123,14 +137,7 @@ class _BurbujasContinuarLeyendoState extends State<BurbujasContinuarLeyendo> {
     // que ya se desmontó.
     final rutaVieja = ModalRoute.of(context);
     final navegadorDeEsteLector = Navigator.of(context, rootNavigator: true);
-    setState(() {
-      _saltando = true;
-      _expandiendo = h;
-    });
-    // La animación de agrandarse, primero — nada más. `resumeHistoryItem`
-    // recién se llama después de que se alcanza a VER el círculo grande.
-    await Future<void>.delayed(const Duration(milliseconds: 260));
-    if (!mounted) return;
+    setState(() => _saltando = true);
 
     // ── Por qué `currentContext` y no el `context` de este widget ────────
     //
@@ -200,10 +207,15 @@ class _BurbujasContinuarLeyendoState extends State<BurbujasContinuarLeyendo> {
               esAndroid: esAndroid,
               colapsado: widget.colapsado,
               onToggleColapsado: widget.onToggleColapsado,
-              onTocar: _saltarA,
+              onTocar: _mostrarPreview,
             ),
           if (_expandiendo != null)
-            _BurbujaExpandida(historia: _expandiendo!, diametro: diametro),
+            _BurbujaExpandida(
+              historia: _expandiendo!,
+              diametro: diametro,
+              onConfirmar: () => _confirmarSalto(_expandiendo!),
+              onCancelar: _cancelarPreview,
+            ),
         ],
       );
     });
@@ -279,7 +291,12 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
           if (!widget.colapsado) ...[
             const SizedBox(height: 6),
             SizedBox(
-              height: widget.diametro + 8,
+              // +8 de aire para el marco/sombra del círculo, +20 más para
+              // el título de abajo (ver _Burbuja) — antes esto medía justo
+              // el círculo y el renglón del título se salía por debajo:
+              // el aviso de overflow de Flutter (reportado como "una raya
+              // amarilla").
+              height: widget.diametro + 28,
               child: Row(
                 children: [
                   if (!widget.esAndroid)
@@ -403,7 +420,37 @@ class _Burbuja extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: _CirculoDePortada(historia: historia, diametro: diametro),
+      child: SizedBox(
+        width: diametro + 8,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _CirculoDePortada(historia: historia, diametro: diametro),
+            const SizedBox(height: 3),
+            // Alto FIJO con FittedBox adentro: un título largo se achica
+            // para entrar en una línea en vez de desbordar hacia abajo
+            // (que es lo que se veía como una raya amarilla de aviso en
+            // Android — el overflow real de Flutter). El ancho ya lo
+            // acota el SizedBox de afuera.
+            SizedBox(
+              height: 14,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  historia.title,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -470,43 +517,85 @@ class _CirculoDePortada extends StatelessWidget {
 /// Lo que se ve al tocar una burbuja: el mismo círculo, grande, en el medio
 /// de la pantalla, con el título completo debajo — y de ahí, un instante
 /// después, sigue el salto de verdad al otro lector.
+/// La vista grande al tocar una burbuja: se agranda para ver bien la
+/// portada y el título completo, y AHÍ SE QUEDA — no navega sola. Pedido
+/// explícito: tocar ESTA vista manda al otro manga; tocar en cualquier
+/// otro lado la cierra sin hacer nada, como cancelar.
 class _BurbujaExpandida extends StatelessWidget {
-  const _BurbujaExpandida({required this.historia, required this.diametro});
+  const _BurbujaExpandida({
+    required this.historia,
+    required this.diametro,
+    required this.onConfirmar,
+    required this.onCancelar,
+  });
 
   final History historia;
   final double diametro;
+  final VoidCallback onConfirmar;
+  final VoidCallback onCancelar;
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: diametro, end: diametro * 2.6),
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        builder: (context, tam, child) => Container(
-          color: Colors.black.withValues(alpha: 0.55),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _CirculoDePortada(historia: historia, diametro: tam),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 260),
-                child: Text(
-                  historia.title,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    shadows: [Shadow(blurRadius: 6, color: Colors.black)],
-                  ),
+    // El fondo entero (tocar afuera) cancela; el contenido de adentro
+    // tiene su PROPIO GestureDetector que confirma y, con `opaque`, se
+    // queda con el toque antes de que le llegue al de afuera — sin esto,
+    // tocar la burbuja agrandada cancelaría Y confirmaría a la vez.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onCancelar,
+      child: Container(
+        // Bien liviano a propósito: esto se dibuja sobre el mismo rincón
+        // donde vive el contador de página ("2/34", ver _buildBottomBar en
+        // comic_reader_content.dart) — un fondo oscuro de verdad lo tapaba
+        // justo mientras más se necesita ver que sigue ahí. Reportado con
+        // foto. Con esto tan tenue el círculo igual se destaca (crece y
+        // tiene su propio marco/sombra), pero no esconde nada detrás.
+        color: Colors.black.withValues(alpha: 0.12),
+        alignment: Alignment.center,
+        // FittedBox como red de seguridad: si el espacio disponible es más
+        // chico de lo que este contenido pide (una ventana baja, una
+        // fuente del sistema agrandada), esto lo achica entero en vez de
+        // cortarlo — la garantía real de "que no se corte nada", en vez de
+        // calcular a mano cuánto entra en cada tamaño de pantalla posible.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: diametro, end: diametro * 2.6),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            builder: (context, tam, child) => GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onConfirmar,
+              child: Padding(
+                // Aire alrededor para que el FittedBox no pegue el círculo
+                // contra el borde de la pantalla al achicar.
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _CirculoDePortada(historia: historia, diametro: tam),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 260),
+                      child: Text(
+                        historia.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(blurRadius: 6, color: Colors.black),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
