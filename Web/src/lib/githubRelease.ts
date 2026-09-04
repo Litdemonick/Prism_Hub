@@ -124,6 +124,23 @@ export function detectAndroidVariant(): AndroidVariant {
   return 'arm64-v8a';
 }
 
+export type DetectedPlatform = 'windows' | 'linux' | 'android' | 'unknown';
+
+/** Con qué SO llega quien mira la página — para que el botón principal de
+ * "Instalar" mande directo a la página de ESE sistema, en vez de dejar que
+ * cada uno adivine cuál de las cuatro tarjetas es la suya. */
+export function detectPlatform(): DetectedPlatform {
+  if (typeof navigator === 'undefined') return 'unknown';
+  const ua = navigator.userAgent.toLowerCase();
+  // Android antes que Linux: el user agent de Android SIEMPRE incluye
+  // "linux" además de "android" (el kernel lo es), así que probar Linux
+  // primero clasificaría cualquier celular como PC de escritorio.
+  if (ua.includes('android')) return 'android';
+  if (ua.includes('win')) return 'windows';
+  if (ua.includes('linux')) return 'linux';
+  return 'unknown';
+}
+
 export function getAndroidAsset(
   release?: ReleaseInfo | null,
   variant: AndroidVariant = 'auto',

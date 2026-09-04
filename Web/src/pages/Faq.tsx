@@ -25,8 +25,8 @@ const copy = {
         a: 'Anime, películas, series y manga desde múltiples fuentes, todo desde una sola app. Las extensiones de prism+ están enfocadas en contenido en español.',
       },
       {
-        q: '¿Puedo crear mis propias extensiones?',
-        a: 'Sí. Son archivos JavaScript con un encabezado ==PrismHubExtension== y una clase que implementa latest(), search(), detail() y watch(). Ver la sección Extensiones para el detalle.',
+        q: '¿Puedo instalar una extensión propia o de otro sitio?',
+        a: 'No — las extensiones las arma y firma el equipo de prism+, el repositorio oficial; no es algo que el usuario escriba e instale por su cuenta. Si programás y te falta un sitio, se puede proponer como código en el repositorio de prism+ (ver la sección Extensiones) para que se sume al catálogo oficial.',
       },
       {
         q: '¿Es código abierto?',
@@ -66,8 +66,8 @@ const copy = {
         a: 'Anime, movies, series and manga from multiple sources, all from a single app. The prism+ extensions are focused on Spanish-language content.',
       },
       {
-        q: 'Can I write my own extensions?',
-        a: 'Yes. They are JavaScript files with an ==PrismHubExtension== header and a class implementing latest(), search(), detail() and watch(). See the Extensions section for details.',
+        q: 'Can I install my own extension, or one from someone else?',
+        a: "No — extensions are built and signed by the prism+ team, the official repository; it's not something a user writes and installs on their own. If you code and a site is missing, it can be proposed as code in the prism+ repository (see the Extensions section) to join the official catalog.",
       },
       {
         q: 'Is it open source?',

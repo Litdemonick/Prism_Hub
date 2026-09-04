@@ -63,9 +63,11 @@ const extensionTypes = [
 
 const copy = {
   es: {
-    title: 'Creá',
-    titleAccent: 'extensiones',
-    subtitle: 'Guía para desarrolladores de extensiones PrismHub',
+    title: 'Cómo funcionan',
+    titleAccent: 'las extensiones',
+    subtitle: 'Documentación técnica de prism+, el repositorio oficial que arma y mantiene el catálogo de PrismHub — no algo que el usuario instale por su cuenta.',
+    repoNote: 'Todo el contenido que ves en PrismHub sale de acá:',
+    repoLink: 'github.com/Litdemonick/prism-plus →',
     templateTitle: 'Plantilla base',
     typesTitle: 'Tipos de extensión (@type)',
     typeLabels: { bangumi: 'Anime / Series', manga: 'Manga / Cómic', fikushon: 'Novela' } as Record<string, string>,
@@ -74,15 +76,17 @@ const copy = {
     contributeTitle: 'Cómo contribuir',
     contribute: [
       { icon: Bug, title: 'Reportar bugs', desc: 'Abrí un issue en GitHub con los pasos para reproducir el problema.', href: 'https://github.com/Litdemonick/Prism_Hub/issues' },
-      { icon: Puzzle, title: 'Crear extensiones', desc: 'Implementá latest(), search(), detail() y watch() para un sitio nuevo — se instala y actualiza desde su propia URL.', href: 'https://github.com/Litdemonick/prism-plus' },
+      { icon: Puzzle, title: 'Sumar un sitio nuevo', desc: 'Implementá latest(), search(), detail() y watch() y proponelo como código en el repositorio de prism+ — si se acepta, pasa a formar parte del catálogo oficial para todos.', href: 'https://github.com/Litdemonick/prism-plus' },
       { icon: GitPullRequest, title: 'Pull requests', desc: 'Mejoras de rendimiento, funciones nuevas o traducciones al código de la app son bienvenidas.', href: 'https://github.com/Litdemonick/Prism_Hub/pulls' },
       { icon: Code2, title: 'Ver el código real', desc: 'prism+ es el catálogo oficial que usa la app — mirá el código fuente de sus extensiones ahí.', href: 'https://github.com/Litdemonick/prism-plus' },
     ],
   },
   en: {
-    title: 'Build',
-    titleAccent: 'extensions',
-    subtitle: 'A guide for PrismHub extension developers',
+    title: 'How',
+    titleAccent: 'extensions work',
+    subtitle: "Technical documentation for prism+, the official repository that builds and maintains PrismHub's catalog — not something a user installs on their own.",
+    repoNote: 'Every piece of content you see in PrismHub comes from here:',
+    repoLink: 'github.com/Litdemonick/prism-plus →',
     templateTitle: 'Base template',
     typesTitle: 'Extension types (@type)',
     typeLabels: { bangumi: 'Anime / Series', manga: 'Manga / Comic', fikushon: 'Novel' } as Record<string, string>,
@@ -91,7 +95,7 @@ const copy = {
     contributeTitle: 'How to contribute',
     contribute: [
       { icon: Bug, title: 'Report bugs', desc: 'Open a GitHub issue with steps to reproduce the problem.', href: 'https://github.com/Litdemonick/Prism_Hub/issues' },
-      { icon: Puzzle, title: 'Write extensions', desc: 'Implement latest(), search(), detail() and watch() for a new site — it installs and updates from its own URL.', href: 'https://github.com/Litdemonick/prism-plus' },
+      { icon: Puzzle, title: 'Add a new site', desc: 'Implement latest(), search(), detail() and watch() and propose it as code in the prism+ repository — if accepted, it becomes part of the official catalog for everyone.', href: 'https://github.com/Litdemonick/prism-plus' },
       { icon: GitPullRequest, title: 'Pull requests', desc: 'Performance improvements, new features or translations to the app code are welcome.', href: 'https://github.com/Litdemonick/Prism_Hub/pulls' },
       { icon: Code2, title: 'See the real code', desc: "prism+ is the official catalog the app uses — check out its extensions' source there.", href: 'https://github.com/Litdemonick/prism-plus' },
     ],
@@ -111,6 +115,18 @@ export default function Developers() {
               {c.title} <span className="text-spectrum">{c.titleAccent}</span>
             </h1>
             <p className="text-sm" style={{ color: 'var(--text-faint)' }}>{c.subtitle}</p>
+            <p className="mt-4 text-sm">
+              <span style={{ color: 'var(--text-muted)' }}>{c.repoNote}</span>{' '}
+              <a
+                href="https://github.com/Litdemonick/prism-plus"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline"
+                style={{ color: 'var(--accent)' }}
+              >
+                {c.repoLink}
+              </a>
+            </p>
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4 }} className="surface mb-4 rounded-2xl px-6 py-5">

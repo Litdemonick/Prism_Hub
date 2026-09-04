@@ -1,18 +1,30 @@
 import { motion } from 'motion/react';
-import { ArrowUpRight, Download, GitFork, Check } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { ArrowUpRight, Download, GitFork, Check, ZoomIn, X } from 'lucide-react';
 import Layout from '../components/Layout';
 import DeveloperNote from '../components/DeveloperNote';
+import RequirementsTable from '../components/RequirementsTable';
 import { WindowsIcon, LinuxIcon, AndroidIcon, AndroidTvIcon } from '../components/PlatformIcons';
 import { useLang } from '../lib/i18n';
-import { requirements } from '../lib/requirements';
 import {
   APP_VERSION,
+  detectPlatform,
   formatSize,
   getDirectDownloadHref,
   useExtensionCount,
   useLatestRelease,
   type DownloadPlatform,
 } from '../lib/githubRelease';
+
+// Se lee UNA sola vez, al cargar el módulo — no en el cuerpo de un
+// componente. Date.now() ahí es una función impura (el linter de React lo
+// marca, incluso dentro de useMemo/useEffect), pero acá arriba nunca se
+// vuelve a llamar en cada render: es una constante fija para toda la
+// sesión de la pestaña, que es lo único que hace falta para decidir si una
+// versión sigue siendo "nueva".
+const PAGE_LOAD_TIME = Date.now();
+const DIAS_PARA_DEJAR_DE_SER_NUEVO = 3;
 
 const fadeUp = {
   initial: { opacity: 0, y: 18 },
@@ -36,6 +48,19 @@ function Hero() {
   const { t } = useLang();
   const extensionCount = useExtensionCount();
   const release = useLatestRelease();
+  // Con qué sistema llega quien mira la página. El botón principal manda
+  // DIRECTO a la página de instrucciones de ESE sistema — no descarga un
+  // archivo de una: la idea es que la gente lea antes de instalar (el aviso
+  // del desarrollador, el paso a paso) y no adivine cuál de las tarjetas de
+  // "descargar" de más abajo es la suya.
+  const platform = detectPlatform();
+  const platformHref =
+    platform === 'windows' ? '/windows' : platform === 'linux' ? '/linux' : platform === 'android' ? '/android' : null;
+  const ctaLabel =
+    platform === 'windows' ? t('hero.cta.windows')
+    : platform === 'linux' ? t('hero.cta.linux')
+    : platform === 'android' ? t('hero.cta.android')
+    : t('hero.cta.download');
 
   return (
     <section className="relative overflow-hidden px-5 pb-20 pt-10 md:px-10 md:pb-28 md:pt-16">
@@ -72,14 +97,26 @@ function Hero() {
           transition={{ duration: 0.6, delay: 0.18 }}
           className="mt-9 flex flex-wrap items-center justify-center gap-3"
         >
-          <a
-            href="#descargar"
-            className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.98]"
-            style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
-          >
-            <Download className="h-4 w-4" />
-            {t('hero.cta.download')}
-          </a>
+          {platformHref ? (
+            <Link
+              to={platformHref}
+              className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.98]"
+              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+            >
+              <Download className="h-4 w-4" />
+              {ctaLabel}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => document.getElementById('descargar')?.scrollIntoView({ behavior: 'smooth' })}
+              className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.98]"
+              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+            >
+              <Download className="h-4 w-4" />
+              {ctaLabel}
+            </button>
+          )}
           <a
             href="https://github.com/Litdemonick/Prism_Hub"
             target="_blank"
@@ -122,11 +159,21 @@ function Hero() {
 function Showcase() {
   const { t } = useLang();
   const base = import.meta.env.BASE_URL;
-  const shots = [
+  const shots: { src: string; label: string; portrait?: boolean }[] = [
     { src: `${base}screenshots/desktop-home.png`, label: 'Windows / Linux' },
-    { src: `${base}screenshots/mobile-home.jpeg`, label: 'Android' },
+    { src: `${base}screenshots/mobile-home.jpeg`, label: 'Android', portrait: true },
     { src: `${base}screenshots/desktop-search.png`, label: 'Búsqueda' },
   ];
+  const [open, setOpen] = useState<{ src: string; label: string } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
 
   return (
     <section className="px-5 py-16 md:px-10 md:py-24">
@@ -141,25 +188,64 @@ function Showcase() {
           </p>
         </motion.div>
 
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid items-start gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {shots.map((s, i) => (
-            <motion.div
+            <motion.button
+              type="button"
               key={s.src}
               {...fadeUp}
               transition={{ ...fadeUp.transition, delay: i * 0.08 }}
-              className="device-frame group overflow-hidden rounded-2xl"
+              onClick={() => setOpen(s)}
+              className="device-frame group block w-full cursor-zoom-in overflow-hidden rounded-2xl text-left"
             >
-              <img
-                src={s.src}
-                alt={s.label}
-                loading="lazy"
-                className="aspect-[16/10] w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.04]"
-              />
-              <div className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
-            </motion.div>
+              {/* object-contain, no object-cover: una captura de celular es
+                  vertical, y recortarla a la fuerza en un marco horizontal
+                  (lo que hacía antes) mostraba solo una tira. Cada foto
+                  entra ENTERA, con la proporción que le corresponde. */}
+              <div
+                className={`flex items-center justify-center ${s.portrait ? 'aspect-[3/4]' : 'aspect-[16/10]'}`}
+                style={{ background: 'var(--surface-2)' }}
+              >
+                <img
+                  src={s.src}
+                  alt={s.label}
+                  loading="lazy"
+                  className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]"
+                />
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                {s.label}
+                <ZoomIn className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-60" />
+              </div>
+            </motion.button>
           ))}
         </div>
       </div>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={open.label}
+          onClick={() => setOpen(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-sm"
+        >
+          <button
+            type="button"
+            onClick={() => setOpen(null)}
+            aria-label="Cerrar"
+            className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={open.src}
+            alt={open.label}
+            className="max-h-[90vh] max-w-[92vw] rounded-xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </section>
   );
 }
@@ -205,59 +291,13 @@ function Features() {
 }
 
 function Requirements() {
-  const { t, lang } = useLang();
-  const r = requirements[lang];
-  const rows: { label: string; key: keyof typeof r.min }[] = [
-    { label: t('requirements.os'), key: 'os' },
-    { label: t('requirements.ram'), key: 'ram' },
-    { label: t('requirements.cpu'), key: 'cpu' },
-    { label: t('requirements.storage'), key: 'storage' },
-  ];
-
+  const { t } = useLang();
   return (
     <section className="px-5 py-16 md:px-10 md:py-24">
-      <div className="mx-auto max-w-4xl">
-        <motion.div {...fadeUp} className="mb-10 text-center">
-          <Eyebrow>{t('requirements.eyebrow')}</Eyebrow>
-          <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight sm:text-3xl">
-            {t('requirements.title')}
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-            {t('requirements.desc')}
-          </p>
-        </motion.div>
-
-        <motion.div {...fadeUp} className="surface overflow-hidden rounded-2xl">
-          <div className="grid grid-cols-3 text-sm">
-            <div className="p-4" />
-            <div className="border-b border-l p-4 text-center font-semibold" style={{ borderColor: 'var(--border)' }}>
-              {t('requirements.min')}
-            </div>
-            <div
-              className="border-b border-l p-4 text-center font-semibold"
-              style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
-            >
-              {t('requirements.rec')}
-            </div>
-            {rows.map((row) => (
-              <>
-                <div key={`${row.key}-label`} className="border-t p-4 font-medium" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                  {row.label}
-                </div>
-                <div key={`${row.key}-min`} className="border-t border-l p-4 text-center" style={{ borderColor: 'var(--border)' }}>
-                  {r.min[row.key]}
-                </div>
-                <div key={`${row.key}-rec`} className="border-t border-l p-4 text-center font-medium" style={{ borderColor: 'var(--border)' }}>
-                  {r.rec[row.key]}
-                </div>
-              </>
-            ))}
-          </div>
-        </motion.div>
-        <p className="mx-auto mt-5 max-w-2xl text-center text-xs leading-relaxed" style={{ color: 'var(--text-faint)' }}>
-          {t('requirements.note')}
-        </p>
-      </div>
+      <motion.div {...fadeUp} className="mx-auto mb-10 max-w-4xl text-center">
+        <Eyebrow>{t('requirements.eyebrow')}</Eyebrow>
+      </motion.div>
+      <RequirementsTable />
     </section>
   );
 }
@@ -297,6 +337,10 @@ function DownloadSection() {
           {platforms.map(({ key, label, Icon, href }, i) => {
             const asset = release?.[key];
             const downloadHref = getDirectDownloadHref(release, key);
+            const isNew =
+              !!release?.publishedAt &&
+              PAGE_LOAD_TIME - new Date(release.publishedAt).getTime() <
+                DIAS_PARA_DEJAR_DE_SER_NUEVO * 24 * 60 * 60 * 1000;
             return (
               <motion.div
                 key={key}
@@ -305,11 +349,21 @@ function DownloadSection() {
                 className="surface flex flex-col justify-between rounded-2xl p-6"
               >
                 <div>
-                  <div
-                    className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl"
-                    style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}
-                  >
-                    <Icon className="h-5 w-5" />
+                  <div className="mb-4 flex items-center justify-between">
+                    <div
+                      className="flex h-11 w-11 items-center justify-center rounded-xl"
+                      style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    {isNew && (
+                      <span
+                        className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide"
+                        style={{ background: 'color-mix(in srgb, var(--accent) 18%, transparent)', color: 'var(--accent)' }}
+                      >
+                        {t('platforms.new')}
+                      </span>
+                    )}
                   </div>
                   <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">{label}</h3>
                   <div className="mt-1 flex items-center gap-3 font-mono text-xs" style={{ color: 'var(--text-faint)' }}>

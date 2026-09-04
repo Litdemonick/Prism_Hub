@@ -27,6 +27,9 @@ export const dict = {
     'hero.subtitle':
       'Anime, manga, novelas, series y películas desde extensiones JavaScript que instalás vos. Sin límites de catálogo, sin cuentas, sin anuncios.',
     'hero.cta.download': 'Descargar PrismHub',
+    'hero.cta.windows': 'Instalar en Windows',
+    'hero.cta.linux': 'Instalar en Linux',
+    'hero.cta.android': 'Instalar en Android',
     'hero.cta.source': 'Ver código fuente',
     'hero.stat.extensions': 'extensiones activas',
     'hero.stat.platforms': 'plataformas nativas',
@@ -40,10 +43,10 @@ export const dict = {
     'platforms.new': 'NUEVO',
 
     'features.eyebrow': 'Por qué PrismHub',
-    'features.title': 'Construido para que el catálogo lo pongas vos',
-    'features.f1.title': 'Extensiones, no un catálogo cerrado',
+    'features.title': 'Construido sobre extensiones, no un catálogo fijo',
+    'features.f1.title': 'El contenido no está incrustado en la app',
     'features.f1.desc':
-      'Cada fuente de contenido es un archivo JavaScript que se instala o se escribe. El repositorio oficial trae varias listas; el tuyo lo agregás con una URL.',
+      'Cada fuente es una extensión que mantiene prism+, el repositorio oficial. Sitios nuevos y arreglos llegan actualizando el catálogo, sin esperar una versión nueva de la app entera.',
     'features.f2.title': 'Nativo de verdad',
     'features.f2.desc':
       'Flutter compilado a binario en cada plataforma — no es una página web empaquetada. Arranca rápido y usa la memoria que el aparato realmente tiene.',
@@ -115,6 +118,9 @@ export const dict = {
     'hero.subtitle':
       'Anime, manga, novels, series and movies from JavaScript extensions you install yourself. No catalog limits, no accounts, no ads.',
     'hero.cta.download': 'Download PrismHub',
+    'hero.cta.windows': 'Install on Windows',
+    'hero.cta.linux': 'Install on Linux',
+    'hero.cta.android': 'Install on Android',
     'hero.cta.source': 'View source code',
     'hero.stat.extensions': 'active extensions',
     'hero.stat.platforms': 'native platforms',
@@ -128,10 +134,10 @@ export const dict = {
     'platforms.new': 'NEW',
 
     'features.eyebrow': 'Why PrismHub',
-    'features.title': 'Built so the catalog is entirely up to you',
-    'features.f1.title': 'Extensions, not a closed catalog',
+    'features.title': 'Built on extensions, not a fixed catalog',
+    'features.f1.title': "Content isn't baked into the app",
     'features.f1.desc':
-      'Every content source is a JavaScript file you install or write. The official repository ships several; add your own with a URL.',
+      "Every source is an extension maintained by prism+, the official repository. New sites and fixes ship by updating the catalog, with no need to wait for a whole new app version.",
     'features.f2.title': 'Actually native',
     'features.f2.desc':
       'Flutter compiled to a binary on every platform — not a packaged web page. Starts fast and uses the memory the device actually has.',
