@@ -215,7 +215,21 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   Widget build(BuildContext context) {
     final ancho = widget.ancho ?? TarjetaDeCatalogo.anchoPara(context);
     final altoPortada = ancho * 3 / 2;
-    final radio = BorderRadius.circular(8);
+    // ── Más redondo en televisor ────────────────────────────────────────
+    //
+    // Ocho puntos es lo correcto para una tarjeta de teléfono o de PC, que se
+    // miran de cerca. En un televisor, a tres metros, ese redondeo casi no se
+    // percibe: la portada se lee como un rectángulo con las esquinas sucias,
+    // y encima el marco de foco —que va por fuera y con más radio— dibujaba
+    // una curva que no coincidía con la de la imagen. Reportado con foto: «en
+    // todas las zonas, las cards sus esquinas redondas como ya lo tiene
+    // series».
+    //
+    // `HomeTheme.radioTv` es el mismo número que ya usan las tarjetas grandes
+    // del Inicio, así que todo lo del televisor queda con la misma curva.
+    final radio = BorderRadius.circular(
+      PlatformTv.esTelevisionSync ? HomeTheme.radioTv : 8,
+    );
 
     // ── Si hay mouse lo decide el APARATO, no el ancho de la ventana ──────
     //

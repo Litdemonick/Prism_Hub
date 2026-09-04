@@ -781,51 +781,51 @@ class _SidebarTVState extends State<_SidebarTV> {
       // resplandor de la primera tarjeta de cada fila ya no choca contra un
       // borde recto.
       child: AnimatedContainer(
-          width: anchoObjetivo,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          child: Focus(
-            canRequestFocus: false,
-            skipTraversal: true,
-            onKeyEvent: _frenarEnLosBordes,
-            // Centrado vertical: son pocas categorías fijas, no una lista que
-            // pueda crecer, así que no hace falta que puedan desplazarse —
-            // alcanza con un Column centrado en el alto disponible, más
-            // prolijo que dejarlas pegadas arriba con el resto de la
-            // pantalla vacío debajo.
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (final (i, categoria) in _CategoriaTV.values.indexed)
-                  Padding(
-                    // Más aire entre uno y otro: pedido explícito, "no tan
-                    // pegados y más grandes".
-                    padding: const EdgeInsets.only(bottom: 18),
-                    child: FocusableCard(
-                      focusNode: _nodos[i],
-                      autofocus: pedirFoco && categoria == _CategoriaTV.inicio,
-                      borderRadius: 12,
-                      // Ni borde ni resplandor: acá lo que se elige es un
-                      // ícono suelto rodeado de negro, así que el halo era
-                      // lo único que se veía y quedaba exagerado. La fila
-                      // dibuja su propio fondo suave — se lee mejor y no
-                      // cuesta un desenfoque por cada movimiento del mando.
-                      conMarco: false,
-                      conHalo: false,
-                      onTap: () => widget.onElegir(categoria),
-                      builder: (tieneFoco) => _ItemSidebarTV(
-                        categoria: categoria,
-                        elegido: widget.elegida == categoria,
-                        enfocado: tieneFoco,
-                        expandido: _expandido,
-                      ),
+        width: anchoObjetivo,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onKeyEvent: _frenarEnLosBordes,
+          // Centrado vertical: son pocas categorías fijas, no una lista que
+          // pueda crecer, así que no hace falta que puedan desplazarse —
+          // alcanza con un Column centrado en el alto disponible, más
+          // prolijo que dejarlas pegadas arriba con el resto de la
+          // pantalla vacío debajo.
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final (i, categoria) in _CategoriaTV.values.indexed)
+                Padding(
+                  // Más aire entre uno y otro: pedido explícito, "no tan
+                  // pegados y más grandes".
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: FocusableCard(
+                    focusNode: _nodos[i],
+                    autofocus: pedirFoco && categoria == _CategoriaTV.inicio,
+                    borderRadius: 12,
+                    // Ni borde ni resplandor: acá lo que se elige es un
+                    // ícono suelto rodeado de negro, así que el halo era
+                    // lo único que se veía y quedaba exagerado. La fila
+                    // dibuja su propio fondo suave — se lee mejor y no
+                    // cuesta un desenfoque por cada movimiento del mando.
+                    conMarco: false,
+                    conHalo: false,
+                    onTap: () => widget.onElegir(categoria),
+                    builder: (tieneFoco) => _ItemSidebarTV(
+                      categoria: categoria,
+                      elegido: widget.elegida == categoria,
+                      enfocado: tieneFoco,
+                      expandido: _expandido,
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -865,26 +865,45 @@ class _ItemSidebarTV extends StatelessWidget {
     // Sin relleno de color en el elegido: lo que lo distingue es que está
     // encendido (el resto va a media luz) y el resplandor alrededor.
     final apagado = !elegido && !enfocado;
+    // Sobre el acento pleno el ícono va en blanco: pintarlo del mismo color
+    // que su fondo lo haría desaparecer. Ver el bloque del fondo, abajo.
     final icono = Icon(
       categoria.icono,
       size: 27,
-      color: elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
+      color: HomeTheme.textPrimary,
     );
-    // ── El fondo, en vez del resplandor ────────────────────────────────
+    // ── El fondo: sólido, no un velo ───────────────────────────────────
     //
-    //   por encima (enfocado)  → un gris claro apenas, como cualquier menú
-    //   la que se está viendo  → el acento en bajito
-    //   las dos cosas          → el acento un poco más presente
+    // Antes eran tintes translúcidos —el acento al 18/30 %, un gris al 12 %—
+    // y sobre un fondo liso se veían bien. El problema aparece cuando el
+    // panel se abre ENCIMA de las tarjetas: un velo deja pasar la portada
+    // que hay detrás, así que el botón se mezclaba con la imagen y el
+    // nombre de la categoría quedaba ilegible. Reportado con foto: «los
+    // botones del panel izquierdo, en vez de blancos, ponelos de color
+    // sólido para que se vea qué dicen».
     //
-    // Nada de sombras: son lo más caro que dibuja la GPU y acá se
-    // recalcularían en cada apretón del mando.
+    // Ahora son opacos, así que tapan lo que tengan detrás y se leen igual
+    // sobre cualquier cosa:
+    //
+    //   la que se está viendo  → el acento pleno, como la píldora de la foto
+    //   por encima (enfocado)  → una superficie clara, opaca
+    //   ninguna de las dos     → sin fondo, para que el rail no sea una
+    //                            columna de cajas
+    //
+    // Nada de sombras ni degradados: son lo más caro que dibuja la GPU y acá
+    // se recalcularían en cada apretón del mando.
     final Color fondo;
-    if (elegido && enfocado) {
-      fondo = HomeTheme.accentPink.withValues(alpha: 0.30);
-    } else if (elegido) {
-      fondo = HomeTheme.accentPink.withValues(alpha: 0.18);
+    if (elegido) {
+      fondo = HomeTheme.accentPink;
     } else if (enfocado) {
-      fondo = HomeTheme.contraste.withValues(alpha: 0.12);
+      // El gris claro de siempre, pero OPACO. `alphaBlend` calcula qué color
+      // sólido se ve igual que ese velo blanco sobre el fondo de la app, así
+      // que a la vista es el mismo tono de antes y encima ya no deja pasar
+      // la portada que haya detrás — que era todo el problema.
+      fondo = Color.alphaBlend(
+        HomeTheme.contraste.withValues(alpha: 0.22),
+        HomeTheme.bg,
+      );
     } else {
       fondo = Colors.transparent;
     }
@@ -1213,7 +1232,11 @@ class _TarjetaDensaTv extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           FocusableCard(
-            borderRadius: _radioGrandeTv,
+            // La MISMA curva que la portada (`TarjetaDeCatalogo` usa
+            // `radioTv` en televisor). Con el radio grande de los destacados,
+            // el marco dibujaba una esquina más abierta que la de la imagen y
+            // se veía como si el borde no encajara.
+            borderRadius: HomeTheme.radioTv,
             // Solo la portada lleva el marco: el nombre va afuera, debajo.
             altoMarco: ancho * 3 / 2,
             onTap: () => _abrir(context, item, package),
@@ -1367,27 +1390,50 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
             SizedBox(
               // Portada + aire + una línea de título (lo pone la tarjeta).
               height: TarjetaDeCatalogo.altoDeUnaLineaDeAncho(ancho),
-              child: ListView.separated(
-                controller: _scroll,
-                scrollDirection: Axis.horizontal,
-                clipBehavior: Clip.none,
-                scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
-                // Que la tarjeta que sale de pantalla se DESTRUYA y suelte
-                // su portada, en vez de quedarse viva ocupando el techo de
-                // imágenes. Ninguna de estas tarjetas pide seguir viva.
-                addAutomaticKeepAlives: false,
-                itemCount: widget.items.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(width: _huecoPosterTv),
-                itemBuilder: (context, i) {
-                  final par = widget.items[i];
-                  return _TarjetaDensaTv(
-                    package: par.$1,
-                    item: par.$2,
-                    ancho: ancho,
-                    encabezado: widget.rotulo,
-                  );
-                },
+              // ── Recortada a los costados, abierta arriba y abajo ───────
+              //
+              // Estaba con `Clip.none` a secas para que el marco de foco
+              // pudiera salirse de la fila. Pero `Clip.none` no distingue
+              // ejes: también dejaba que las tarjetas que se van POR LA
+              // IZQUIERDA al desplazar la fila se siguieran dibujando fuera
+              // de ella, encima del rail de categorías. Reportado con foto:
+              // «las cards se comen la zona del panel izquierdo» y «los
+              // botones están atrás del card».
+              //
+              // `_SoloCostados` es justo para esto y ya lo usaban las filas
+              // de Inicio: corta a izquierda y derecha, donde molesta, y deja
+              // pasar arriba y abajo, que es por donde sale el resplandor.
+              //
+              // El aire lateral tiene que ser mayor que lo que sobresale el
+              // marco de foco (`_grosorDelMarco`, 3 puntos) o volveríamos a
+              // ver el borde mordido — reportado también: «en esa zona se
+              // corta el borde de selección de la card». Con 24 sobra, y
+              // sigue siendo menos que el aire que la fila tiene hasta el
+              // rail.
+              child: ClipRect(
+                clipper: const RecorteDeFila(aireLateral: 24),
+                child: ListView.separated(
+                  controller: _scroll,
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
+                  // Que la tarjeta que sale de pantalla se DESTRUYA y suelte
+                  // su portada, en vez de quedarse viva ocupando el techo de
+                  // imágenes. Ninguna de estas tarjetas pide seguir viva.
+                  addAutomaticKeepAlives: false,
+                  itemCount: widget.items.length,
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(width: _huecoPosterTv),
+                  itemBuilder: (context, i) {
+                    final par = widget.items[i];
+                    return _TarjetaDensaTv(
+                      package: par.$1,
+                      item: par.$2,
+                      ancho: ancho,
+                      encabezado: widget.rotulo,
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -2090,7 +2136,25 @@ class _BarraSuperiorTVState extends State<_BarraSuperiorTV> {
     // toda la barra —el nombre y los seis botones con sus iconos— y, sin
     // límite, también lo que quede alrededor. Con esto, cambiar la hora
     // repinta la barra y nada más.
-    return RepaintBoundary(child: barra);
+    //
+    // ── Y su propio margen a la derecha ────────────────────────────────
+    //
+    // La columna que la contiene se quedó SIN margen derecho a propósito,
+    // para que las filas de tarjetas lleguen hasta el filo y se vea que
+    // siguen. Pero la barra no es una fila: acá el último elemento es el
+    // reloj, y sin margen quedaba pegado al borde de la pantalla —
+    // reportado con foto: «la hora se pegó a la derecha».
+    //
+    // Se lo devuelve solo a la barra, que es la única que lo necesita. El
+    // mismo overscan que usa el resto de la pantalla, no un número aparte:
+    // en un televisor que recorta el borde, esto es lo que evita que la
+    // hora quede cortada por la mitad.
+    return RepaintBoundary(
+      child: Padding(
+        padding: EdgeInsets.only(right: HomeTheme.overscanTv(context)),
+        child: barra,
+      ),
+    );
   }
 }
 

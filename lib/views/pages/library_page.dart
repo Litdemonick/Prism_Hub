@@ -14,6 +14,7 @@ import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/tv/recorte_de_fila.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -879,17 +880,25 @@ class _FilaAnchaTv extends StatelessWidget {
         SizedBox(
           // Aire de más para que el marco de foco no quede mordido.
           height: alto + 16,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            addAutomaticKeepAlives: false,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, i) => _TarjetaAnchaTv(
-              item: items[i],
-              ancho: ancho,
-              alto: alto,
+          // Recortada a los costados y abierta arriba y abajo: sin esto, las
+          // tarjetas que se van desplazando fuera de la fila se seguían
+          // dibujando encima del rail de categorías. Reportado con foto: «en
+          // continuar viendo las cards se comen la zona del panel
+          // izquierdo». Ver `RecorteDeFila`.
+          child: ClipRect(
+            clipper: const RecorteDeFila(aireLateral: 24),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              addAutomaticKeepAlives: false,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, i) => _TarjetaAnchaTv(
+                item: items[i],
+                ancho: ancho,
+                alto: alto,
+              ),
             ),
           ),
         ),
