@@ -18,6 +18,32 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+/// El pulgar del scrollbar del lector: nunca más chico que 32 (para que se
+/// pueda agarrar con el dedo) ni más grande que el propio riel.
+///
+/// ── El crash que esto arregla ──────────────────────────────────────────
+///
+/// Antes era `deseada.clamp(32.0, trackHeight)` directo. `clamp` exige que
+/// el límite de abajo no supere al de arriba, y con un riel más bajo que 32
+/// —una ventana angosta recién abierta, un panel dividido, el primer
+/// cuadro de layout antes de que el `LayoutBuilder` tenga la medida
+/// definitiva— el límite de abajo (32) terminaba siendo MAYOR que el de
+/// arriba (`trackHeight`). Eso no da un valor raro: `clamp` lo revienta con
+/// `Invalid argument(s)`, y como pasa adentro del `build`, tira abajo toda
+/// la pantalla del lector. Así entró en el registro: `Invalid argument(s):
+/// 32.0` en `thumbHeightFor`.
+///
+/// Achicando primero el mínimo hasta el tamaño del riel (nunca puede ser
+/// mayor que él) el límite de abajo deja de poder superar al de arriba, así
+/// que el `clamp` de adentro ya no puede fallar. Con un riel diminuto el
+/// pulgar simplemente ocupa el riel entero, que es lo correcto: no hay
+/// margen para deslizarlo igual.
+double _alturaDelPulgar(double deseada, double trackHeight) {
+  if (trackHeight <= 0) return 0;
+  final minimo = trackHeight < 32.0 ? trackHeight : 32.0;
+  return deseada.clamp(minimo, trackHeight);
+}
+
 class ComicReaderContent extends StatefulWidget {
   const ComicReaderContent(this.tag, {super.key});
   final String tag;
@@ -379,8 +405,10 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   Widget _buildCascadeScrollbar(int itemCount, {required bool aLaIzquierda}) {
     if (itemCount <= 1) return const SizedBox.shrink();
 
-    double thumbHeightFor(double trackHeight) =>
-        (trackHeight / itemCount * 3).clamp(32.0, trackHeight);
+    double thumbHeightFor(double trackHeight) => _alturaDelPulgar(
+          (trackHeight / itemCount * 3),
+          trackHeight,
+        );
 
     void jumpToLocalY(double trackHeight, double localY) {
       final thumbHeight = thumbHeightFor(trackHeight);
@@ -843,6 +871,33 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   if (!identical(_lastWatchData, _c.watchData.value)) {
                     _lastWatchData = _c.watchData.value;
                     _cascadeScrollPosition = null;
+                    // ── El bug real: esto se olvidaba de limpiar también ──
+                    //
+                    // `_cascadeScrollPosition` se limpiaba, pero
+                    // `_cascadeScrollOffset`/`_cascadeScrollMax`/
+                    // `_cascadeScrollMin` NO — y son justo los que
+                    // `_scrollCascadeBy`/`_forwardBorderWheelScroll` usan
+                    // como respaldo mientras el `ScrollablePositionedList`
+                    // nuevo todavía no mandó su primera notificación (eso es
+                    // lo que reasigna estos tres, en el `NotificationListener`
+                    // de más abajo).
+                    //
+                    // Si el usuario scrollea en esa ventanita —cambió de
+                    // capítulo y movió la rueda enseguida— el camino de
+                    // respaldo calculaba el destino a partir del offset del
+                    // capítulo ANTERIOR, típicamente cerca de su final, y
+                    // `animateScroll` lo aplica como delta sobre la lista
+                    // nueva (que arranca en 0). El resultado: el capítulo
+                    // recién abierto salta hacia el fondo. Reportado en vivo:
+                    // «al cambiar de capítulo y hacer scroll hacia abajo, el
+                    // scroll se dispara y lleva al final».
+                    //
+                    // Arrancando en cero los tres, ese respaldo no tiene nada
+                    // viejo que arrastrar: como mucho no hace nada hasta que
+                    // llegue la notificación real.
+                    _cascadeScrollOffset = 0;
+                    _cascadeScrollMax = double.maxFinite;
+                    _cascadeScrollMin = 0;
                     // Capítulo nuevo = otras URLs: se limpia el registro de
                     // precargadas para que no crezca sin límite a lo largo de
                     // una sesión de lectura larga.
@@ -1779,8 +1834,10 @@ class _PagedPageState extends State<_PagedPage> {
   double _thumbHeight(double trackHeight, ScrollPosition position) {
     final contentExtent = position.maxScrollExtent + position.viewportDimension;
     if (contentExtent <= 0) return trackHeight;
-    return (trackHeight * position.viewportDimension / contentExtent)
-        .clamp(32.0, trackHeight);
+    return _alturaDelPulgar(
+      trackHeight * position.viewportDimension / contentExtent,
+      trackHeight,
+    );
   }
 
   @override
