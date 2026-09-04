@@ -43,8 +43,6 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
   int _currentProgress = 0;
   int _totalProgress = 0;
   ImportResult? _result;
-  String? _loadedFileName;
-  int? _loadedFileLines;
 
   @override
   void dispose() {
@@ -54,6 +52,10 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
 
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
+    // Leer el portapapeles tarda, y en ese rato el diálogo puede haberse
+    // cerrado. Sin esto se seguía usando su `context` para abrir el aviso de
+    // reemplazo, sobre una pantalla que ya no está.
+    if (!mounted) return;
     if (data?.text != null && data!.text!.isNotEmpty) {
       if (_textController.text.isNotEmpty) {
         final confirm = await _confirmReplace(context);
@@ -61,8 +63,6 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
       }
       setState(() {
         _textController.text = data.text!;
-        _loadedFileName = null;
-        _loadedFileLines = null;
       });
     }
   }
@@ -238,7 +238,7 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
               color: HomeTheme.cardSurface,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, spreadRadius: 5)
+                BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: 5)
               ],
             ),
             child: SingleChildScrollView(
@@ -254,7 +254,7 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                         width: 48,
                         height: 6,
                         decoration: BoxDecoration(
-                          color: HomeTheme.border.withOpacity(0.5),
+                          color: HomeTheme.border.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
@@ -265,7 +265,7 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: HomeTheme.accentPink.withOpacity(0.15),
+                            color: HomeTheme.accentPink.withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(Icons.download_rounded, color: HomeTheme.accentPink, size: 28),
@@ -330,9 +330,9 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                                 const SizedBox(height: 20),
                                 Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.2),
+                                  color: Colors.black.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: HomeTheme.border.withOpacity(0.3)),
+                                  border: Border.all(color: HomeTheme.border.withValues(alpha: 0.3)),
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(16),
@@ -343,7 +343,7 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                                     style: TextStyle(color: HomeTheme.textPrimary, height: 1.5),
                                     decoration: InputDecoration(
                                       hintText: 'import.text-hint'.i18n,
-                                      hintStyle: TextStyle(color: HomeTheme.textMuted.withOpacity(0.6)),
+                                      hintStyle: TextStyle(color: HomeTheme.textMuted.withValues(alpha: 0.6)),
                                       border: InputBorder.none,
                                       contentPadding: const EdgeInsets.all(20),
                                     ),
@@ -360,7 +360,7 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(vertical: 18),
                                       elevation: 8,
-                                      shadowColor: HomeTheme.accentPink.withOpacity(0.5),
+                                      shadowColor: HomeTheme.accentPink.withValues(alpha: 0.5),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(16),
                                       ),
@@ -368,7 +368,7 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                                     child: Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        Icon(Icons.auto_awesome_rounded, size: 20),
+                                        const Icon(Icons.auto_awesome_rounded, size: 20),
                                         const SizedBox(width: 12),
                                         Text(
                                           'import.import-button'.i18n,
@@ -397,9 +397,9 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: HomeTheme.accentPink.withOpacity(0.1),
+        color: HomeTheme.accentPink.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: HomeTheme.accentPink.withOpacity(0.3)),
+        border: Border.all(color: HomeTheme.accentPink.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
@@ -441,9 +441,9 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: HomeTheme.accentPink.withOpacity(0.05),
+            color: HomeTheme.accentPink.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: HomeTheme.accentPink.withOpacity(0.2)),
+            border: Border.all(color: HomeTheme.accentPink.withValues(alpha: 0.2)),
           ),
           child: Column(
             children: [
@@ -498,12 +498,12 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                 padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [HomeTheme.accentPink.withOpacity(0.2), Colors.transparent],
+                    colors: [HomeTheme.accentPink.withValues(alpha: 0.2), Colors.transparent],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: HomeTheme.accentPink.withOpacity(0.3)),
+                  border: Border.all(color: HomeTheme.accentPink.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   children: [
@@ -541,7 +541,7 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
-                        color: HomeTheme.accentPink.withOpacity(0.2),
+                        color: HomeTheme.accentPink.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text('${e.value}', style: TextStyle(color: HomeTheme.accentPink, fontWeight: FontWeight.bold)),
@@ -562,7 +562,7 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
             decoration: BoxDecoration(
               color: Colors.black12,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: HomeTheme.accentRed.withOpacity(0.3)),
+              border: Border.all(color: HomeTheme.accentRed.withValues(alpha: 0.3)),
             ),
             child: ListView.separated(
               shrinkWrap: true,
@@ -587,9 +587,9 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: HomeTheme.accentRed.withOpacity(0.1),
+              color: HomeTheme.accentRed.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: HomeTheme.accentRed.withOpacity(0.3)),
+              border: Border.all(color: HomeTheme.accentRed.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
@@ -753,9 +753,9 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: HomeTheme.accentPink.withOpacity(0.05),
+            color: HomeTheme.accentPink.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: HomeTheme.accentPink.withOpacity(0.2)),
+            border: Border.all(color: HomeTheme.accentPink.withValues(alpha: 0.2)),
           ),
           child: Column(
             children: [
@@ -847,9 +847,9 @@ class _ImportDialogContentState extends State<_ImportDialogContent> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.05),
+              color: Colors.red.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red.withOpacity(0.2)),
+              border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
             ),
             child: ListView.builder(
               shrinkWrap: true,
@@ -907,7 +907,7 @@ class _ModernOutlineBtn extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          border: Border.all(color: HomeTheme.border.withOpacity(0.5)),
+          border: Border.all(color: HomeTheme.border.withValues(alpha: 0.5)),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -961,9 +961,9 @@ class _MiniStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -989,9 +989,9 @@ class _DesktopStatBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1046,9 +1046,9 @@ class _LinkGrabberTipWidgetState extends State<_LinkGrabberTipWidget> with Singl
     return Container(
       margin: const EdgeInsets.only(top: 16),
       decoration: BoxDecoration(
-        color: HomeTheme.accentPink.withOpacity(0.05),
+        color: HomeTheme.accentPink.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: HomeTheme.accentPink.withOpacity(0.2)),
+        border: Border.all(color: HomeTheme.accentPink.withValues(alpha: 0.2)),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -1119,7 +1119,7 @@ class _LinkGrabberTipWidgetState extends State<_LinkGrabberTipWidget> with Singl
                       icon: const Icon(Icons.extension_rounded, size: 18),
                       label: const Text('Descargar Link Grabber (Web)', style: TextStyle(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: HomeTheme.accentPink.withOpacity(0.15),
+                        backgroundColor: HomeTheme.accentPink.withValues(alpha: 0.15),
                         foregroundColor: HomeTheme.accentPink,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
