@@ -1,39 +1,18 @@
 import { motion } from 'motion/react';
-import Navbar from '../components/Navbar';
-import PrismBg from '../components/PrismBg';
+import Layout from '../components/Layout';
+import ConsoleCommand from '../components/ConsoleCommand';
+import { useLang } from '../lib/i18n';
 
-const sections = [
-  {
-    title: '1. ¿Qué es PrismHub?',
-    content: (
-      <div className="space-y-3">
-        <p>PrismHub es una aplicación multiplataforma de streaming y lectura para anime, manga, novelas, series y películas. Su arquitectura se basa en <span className="text-violet-400">extensiones JavaScript</span> que permiten añadir cualquier fuente de contenido sin modificar la app.</p>
-        <p>Es open source bajo <span className="text-violet-400">AGPL-3.0</span>, mantenido activamente con mejoras continuas.</p>
-        <a href="https://github.com/Litdemonick/Prism_Hub" target="_blank" rel="noopener noreferrer" className="text-violet-400 underline hover:text-violet-300 transition-colors inline-block">Repositorio en GitHub →</a>
-      </div>
-    ),
-  },
-  {
-    title: '2. Instalación',
-    content: (
-      <div className="space-y-4">
-        {[
-          { label: 'Linux', cmd: 'curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash' },
-          { label: 'Windows (PowerShell)', cmd: 'irm https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.ps1 | iex' },
-        ].map(({ label, cmd }) => (
-          <div key={label}>
-            <p className="text-xs text-white/40 mb-2 font-mono">{label}</p>
-            <pre className="glass-card rounded-xl px-4 py-3 text-xs font-mono text-violet-300 overflow-x-auto scrollbar-thin whitespace-nowrap">{cmd}</pre>
-          </div>
-        ))}
-        <p className="text-white/40 text-xs">Android: descarga el APK desde <a href="https://github.com/Litdemonick/Prism_Hub/releases/latest" target="_blank" rel="noopener noreferrer" className="text-violet-400 underline">Releases →</a></p>
-      </div>
-    ),
-  },
-  {
-    title: '3. Formato de extensión',
-    content: (
-      <pre className="glass-card rounded-xl px-4 py-3 text-xs font-mono text-violet-300 leading-relaxed overflow-x-auto scrollbar-thin">{`// ==PrismHubExtension==
+const apiRows: [string, string, string][] = [
+  ["this.request('/ruta')", "this.request('/path')", 'HTTP al webSite base — incluye UA y cookies'],
+  ['fetch(url, options)', 'fetch(url, options)', 'HTTP a cualquier URL externa'],
+  ['this.querySelector(html, sel)', 'this.querySelector(html, sel)', 'Selector CSS sobre HTML'],
+  ['this.queryXPath(html, xpath)', 'this.queryXPath(html, xpath)', 'XPath sobre HTML'],
+  ['CryptoJS', 'CryptoJS', 'Librería CryptoJS pre-cargada'],
+  ['md5(str)', 'md5(str)', 'Hash MD5'],
+];
+
+const extensionSample = `// ==PrismHubExtension==
 // @name         MiExtension
 // @version      1.0.0
 // @author       TuNombre
@@ -49,55 +28,9 @@ export default class extends Extension {
   async search(kw, page) { /* [{title, url, cover}] */ }
   async detail(url) { /* {title, cover, desc, episodes} */ }
   async watch(url) { /* {type:'hls'|'mp4', url, headers} */ }
-}`}</pre>
-    ),
-  },
-  {
-    title: '4. API disponible en extensiones',
-    content: (
-      <div className="overflow-x-auto scrollbar-thin">
-        <table className="w-full text-left text-xs md:text-sm min-w-[480px]">
-          <thead>
-            <tr className="border-b border-white/10">
-              <th className="py-2 pr-4 text-white/40 font-normal">Método</th>
-              <th className="py-2 text-white/40 font-normal">Descripción</th>
-            </tr>
-          </thead>
-          <tbody className="text-white/60">
-            {[
-              ["this.request('/ruta')", 'HTTP al webSite base — incluye UA y cookies'],
-              ['fetch(url, options)', 'HTTP a cualquier URL externa'],
-              ['this.querySelector(html, sel)', 'Selector CSS sobre HTML'],
-              ['this.queryXPath(html, xpath)', 'XPath sobre HTML'],
-              ['CryptoJS', 'Librería CryptoJS pre-cargada'],
-              ['md5(str)', 'Hash MD5'],
-            ].map(([fn, desc]) => (
-              <tr key={fn} className="border-b border-white/5">
-                <td className="py-2 pr-4 font-mono text-violet-400 text-xs whitespace-nowrap">{fn}</td>
-                <td className="py-2 text-xs">{desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    ),
-  },
-  {
-    title: '5. Repositorios de extensiones',
-    content: (
-      <div className="space-y-4">
-        <div>
-          <p className="text-violet-400 text-xs mb-1 font-mono">prism+ — oficial (configurado por defecto)</p>
-          <pre className="glass-card rounded-xl px-4 py-2 text-xs font-mono text-white/50 overflow-x-auto scrollbar-thin">https://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json</pre>
-        </div>
-        <p className="text-white/30 text-xs">¿Tenés tu propio repo de extensiones? Ajustes → Extensiones → URL del repositorio → pegar la URL de tu index.json → Recargar</p>
-      </div>
-    ),
-  },
-  {
-    title: '6. Estructura del repositorio',
-    content: (
-      <pre className="glass-card rounded-xl px-4 py-3 text-xs font-mono text-violet-300 leading-relaxed">{`Prism_Hub/               ← app Flutter
+}`;
+
+const treeSample = `Prism_Hub/               ← app Flutter
 ├── lib/
 │   ├── controllers/    ← Lógica de negocio (GetX)
 │   ├── data/services/  ← Runtime JS + Isar DB
@@ -110,48 +43,178 @@ export default class extends Extension {
 
 prism-plus/              ← repo aparte, extensiones oficiales
 ├── extensions/         ← código fuente de cada extensión
-├── sdk/                ← helpers (HTML parsing, resolvers de embeds)
-└── index.json          ← catálogo que consume la app`}</pre>
-    ),
-  },
-  {
-    title: '7. Compilar desde código fuente',
-    content: (
-      <pre className="glass-card rounded-xl px-4 py-3 text-xs font-mono text-violet-300 leading-relaxed">{`# Requiere Flutter 3.22+
+├── sdk/                ← helpers (parsing HTML, resolvers de embeds)
+└── index.json          ← catálogo que consume la app`;
+
+const buildSample = `# Requiere Flutter 3.22+
 flutter pub get
 flutter build windows --release
 flutter build apk --release
-flutter build linux --release`}</pre>
-    ),
+flutter build linux --release`;
+
+const copy = {
+  es: {
+    title: 'Documentación',
+    subtitle: 'PrismHub · Open Source · AGPL-3.0',
+    sections: {
+      s1: '1. ¿Qué es PrismHub?',
+      s1p1:
+        'Una aplicación multiplataforma de streaming y lectura para anime, manga y series/películas. Su arquitectura se basa en extensiones JavaScript que permiten agregar cualquier fuente de contenido sin modificar la app.',
+      s1p2: 'Es open source bajo AGPL-3.0, mantenida activamente.',
+      repoLink: 'Repositorio en GitHub →',
+      s2: '2. Instalación',
+      androidNote: 'Android: descargá el APK desde',
+      releasesLink: 'Releases →',
+      s3: '3. Formato de extensión',
+      s4: '4. API disponible en extensiones',
+      apiMethod: 'Método',
+      apiDesc: 'Descripción',
+      s5: '5. Repositorios de extensiones',
+      officialRepo: 'prism+ — oficial (configurado por defecto)',
+      ownRepo: '¿Tenés tu propio repo? Ajustes → Extensiones → URL del repositorio → pegar tu index.json → Recargar',
+      s6: '6. Estructura del repositorio',
+      s7: '7. Compilar desde código fuente',
+    },
   },
-];
+  en: {
+    title: 'Documentation',
+    subtitle: 'PrismHub · Open Source · AGPL-3.0',
+    sections: {
+      s1: '1. What is PrismHub?',
+      s1p1:
+        'A cross-platform streaming and reading app for anime, manga and series/movies. Its architecture is built on JavaScript extensions that let you add any content source without touching the app.',
+      s1p2: 'Open source under AGPL-3.0, actively maintained.',
+      repoLink: 'Repository on GitHub →',
+      s2: '2. Installation',
+      androidNote: 'Android: download the APK from',
+      releasesLink: 'Releases →',
+      s3: '3. Extension format',
+      s4: '4. API available inside extensions',
+      apiMethod: 'Method',
+      apiDesc: 'Description',
+      s5: '5. Extension repositories',
+      officialRepo: 'prism+ — official (configured by default)',
+      ownRepo: 'Have your own repo? Settings → Extensions → repository URL → paste your index.json → Reload',
+      s6: '6. Repository layout',
+      s7: '7. Building from source',
+    },
+  },
+} as const;
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-40px' }}
+      transition={{ duration: 0.4 }}
+      className="surface rounded-2xl px-6 py-5"
+    >
+      <h2 className="mb-4 font-[family-name:var(--font-display)] text-base font-semibold md:text-lg">{title}</h2>
+      <div className="text-xs leading-relaxed md:text-sm" style={{ color: 'var(--text-muted)' }}>
+        {children}
+      </div>
+    </motion.div>
+  );
+}
 
 export default function Docs() {
+  const { lang } = useLang();
+  const s = copy[lang].sections;
+
   return (
-    <div className="w-full min-h-screen flex items-start justify-center p-3 md:p-5 bg-[#08080f]">
-      <section className="relative w-full max-w-[1536px] min-h-[calc(100vh-1.5rem)] rounded-[1.5rem] md:rounded-[3rem] overflow-hidden flex flex-col items-center">
-        <PrismBg />
-        <div className="relative z-10 w-full h-full flex flex-col items-center">
-          <Navbar />
-          <div className="flex-1 w-full max-w-3xl px-6 pb-16 pt-4">
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-10 text-center">
-              <h1 className="text-3xl md:text-5xl font-normal text-white tracking-tight mb-2">Documentación</h1>
-              <p className="text-white/30 text-sm">
-                PrismHub · Open Source · AGPL-3.0 ·{' '}
-                <a href="https://github.com/Litdemonick/Prism_Hub" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300 transition-colors">GitHub</a>
-              </p>
-            </motion.div>
-            <div className="flex flex-col gap-4">
-              {sections.map((section, i) => (
-                <motion.div key={i} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: i * 0.05 }} className="rounded-2xl glass-card px-6 py-5">
-                  <h2 className="text-white text-base md:text-lg font-normal mb-4">{section.title}</h2>
-                  <div className="text-white/60 text-xs md:text-sm font-normal leading-relaxed">{section.content}</div>
-                </motion.div>
-              ))}
-            </div>
+    <Layout>
+      <section className="px-5 py-16 md:px-10 md:py-24">
+        <div className="mx-auto max-w-3xl">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-10 text-center">
+            <h1 className="mb-2 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight md:text-5xl">{copy[lang].title}</h1>
+            <p className="text-sm" style={{ color: 'var(--text-faint)' }}>
+              {copy[lang].subtitle} ·{' '}
+              <a href="https://github.com/Litdemonick/Prism_Hub" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                GitHub
+              </a>
+            </p>
+          </motion.div>
+
+          <div className="flex flex-col gap-4">
+            <Section title={s.s1}>
+              <div className="space-y-3">
+                <p>{s.s1p1}</p>
+                <p>{s.s1p2}</p>
+                <a
+                  href="https://github.com/Litdemonick/Prism_Hub"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block underline"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  {s.repoLink}
+                </a>
+              </div>
+            </Section>
+
+            <Section title={s.s2}>
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 font-mono text-xs" style={{ color: 'var(--text-faint)' }}>Linux</p>
+                  <ConsoleCommand command="curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash" />
+                </div>
+                <div>
+                  <p className="mb-2 font-mono text-xs" style={{ color: 'var(--text-faint)' }}>Windows (PowerShell)</p>
+                  <ConsoleCommand command="irm https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.ps1 | iex" />
+                </div>
+                <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+                  {s.androidNote}{' '}
+                  <a href="https://github.com/Litdemonick/Prism_Hub/releases/latest" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: 'var(--accent)' }}>
+                    {s.releasesLink}
+                  </a>
+                </p>
+              </div>
+            </Section>
+
+            <Section title={s.s3}>
+              <pre className="code-block scrollbar-thin overflow-x-auto rounded-xl px-4 py-3 text-xs leading-relaxed" style={{ color: 'var(--accent)' }}>{extensionSample}</pre>
+            </Section>
+
+            <Section title={s.s4}>
+              <div className="scrollbar-thin overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left text-xs md:text-sm">
+                  <thead>
+                    <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+                      <th className="py-2 pr-4 font-medium" style={{ color: 'var(--text-faint)' }}>{s.apiMethod}</th>
+                      <th className="py-2 font-medium" style={{ color: 'var(--text-faint)' }}>{s.apiDesc}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apiRows.map(([fn, , desc]) => (
+                      <tr key={fn} className="border-b" style={{ borderColor: 'var(--border)' }}>
+                        <td className="whitespace-nowrap py-2 pr-4 font-mono text-xs" style={{ color: 'var(--accent)' }}>{fn}</td>
+                        <td className="py-2 text-xs">{desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+
+            <Section title={s.s5}>
+              <div className="space-y-3">
+                <p className="mb-1 font-mono text-xs" style={{ color: 'var(--accent)' }}>{s.officialRepo}</p>
+                <pre className="code-block scrollbar-thin overflow-x-auto rounded-xl px-4 py-2 text-xs">https://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json</pre>
+                <p className="text-xs" style={{ color: 'var(--text-faint)' }}>{s.ownRepo}</p>
+              </div>
+            </Section>
+
+            <Section title={s.s6}>
+              <pre className="code-block scrollbar-thin overflow-x-auto rounded-xl px-4 py-3 text-xs leading-relaxed" style={{ color: 'var(--accent)' }}>{treeSample}</pre>
+            </Section>
+
+            <Section title={s.s7}>
+              <pre className="code-block scrollbar-thin overflow-x-auto rounded-xl px-4 py-3 text-xs leading-relaxed" style={{ color: 'var(--accent)' }}>{buildSample}</pre>
+            </Section>
           </div>
         </div>
       </section>
-    </div>
+    </Layout>
   );
 }

@@ -1,7 +1,9 @@
 import { motion } from 'motion/react';
-import { Download, Settings2, ShieldCheck, FolderDown } from 'lucide-react';
-import Navbar from '../components/Navbar';
-import PrismBg from '../components/PrismBg';
+import { Download, Settings2, ShieldCheck, FolderDown, Tv, AlertTriangle, Usb, FileDown } from 'lucide-react';
+import Layout from '../components/Layout';
+import DeveloperNote from '../components/DeveloperNote';
+import { AndroidIcon } from '../components/PlatformIcons';
+import { useLang } from '../lib/i18n';
 import {
   useLatestRelease,
   formatSize,
@@ -11,37 +13,88 @@ import {
   type AndroidVariant,
 } from '../lib/githubRelease';
 
-const DroidIcon = () => (
-  <svg fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="w-5 h-5 text-violet-400">
-    <path d="M17.523 15.341A5.036 5.036 0 0 0 17 13v-2a5 5 0 0 0-10 0v2c0 .857-.122 1.476-.523 2.341C6 16 5 17 5 18c0 .553.448 1 1 1h12c.552 0 1-.447 1-1 0-1-1-2-1.477-2.659zM12 23c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm-1-19.938C8.162 3.553 6 6.027 6 9v.268A3 3 0 0 1 7 9a3 3 0 0 1 3-3c0-.656-.216-1.268-.582-1.765L9 4l.418-.579A2.994 2.994 0 0 1 12 3c1.15 0 2.16.647 2.678 1.597L15.1 4.5l.322.5A3 3 0 0 1 18 9a3 3 0 0 1 1-.268V9c0-2.973-2.162-5.447-5-5.938z" />
-  </svg>
-);
-
-const steps = [
-  {
-    Icon: Settings2,
-    title: 'Habilitá "Orígenes desconocidos"',
-    desc: 'Ajustes → Seguridad (o Aplicaciones) → permitir instalar desde el navegador/archivos. Android te lo va a pedir solo la primera vez.',
-  },
-  {
-    Icon: FolderDown,
-    title: 'Descargá el APK correcto',
-    desc: 'arm64-v8a cubre casi todos los celulares desde 2017. Si no arranca, probá armeabi-v7a.',
-  },
-  {
-    Icon: ShieldCheck,
-    title: 'Instalá y listo',
-    desc: 'Abrí el archivo descargado y confirmá — sin Play Store, sin cuentas, sin anuncios.',
-  },
-];
-
 const allVariants: { label: string; key: AndroidVariant }[] = [
   { label: 'ARM64 (arm64-v8a)', key: 'arm64-v8a' },
   { label: 'ARM32 (armeabi-v7a)', key: 'armeabi-v7a' },
   { label: 'x86_64', key: 'x86_64' },
 ];
 
+const copy = {
+  es: {
+    title: 'Instalar en Android',
+    androidVersion: 'Android 7.0 o superior · sin Google Play',
+    otherArch: 'Otras arquitecturas:',
+    tvTitle: '¿Vas a instalarlo en un televisor?',
+    tvDesc:
+      'Es el mismo APK de arriba — la app detecta sola que corre en Android TV y cambia a su propia interfaz para control remoto. Un televisor no tiene el mismo navegador que un celular, así que el APK tiene que llegar por alguna de estas tres formas:',
+    tvSteps: [
+      { Icon: Usb, title: 'Por USB', desc: 'Descargalo en el celular o la PC, copialo a un pendrive y abrilo desde el gestor de archivos del televisor.' },
+      { Icon: FileDown, title: 'Con la app "Downloader"', desc: 'Instalá "Downloader" (de AFTVnews) desde la tienda del televisor, y ahí pegá la URL del APK de la sección de arriba — la descarga e instala directo, sin cables.' },
+      { Icon: Tv, title: 'Gestor de archivos con red', desc: 'Si el televisor tiene uno con soporte SMB/FTP, se puede compartir la carpeta de descargas del celular o la PC y abrir el APK desde ahí.' },
+    ],
+    steps: [
+      {
+        Icon: Settings2,
+        title: 'Habilitá "Orígenes desconocidos"',
+        desc: 'Ajustes → Seguridad (o Aplicaciones) → permitir instalar desde el navegador/archivos. Android lo pide solo la primera vez.',
+      },
+      {
+        Icon: FolderDown,
+        title: 'Descargá el APK correcto',
+        desc: 'arm64-v8a cubre casi todos los celulares desde 2017. Si no arranca, probá armeabi-v7a.',
+      },
+      {
+        Icon: AlertTriangle,
+        title: '¿Play Protect dice "esta app puede dañar tu dispositivo"?',
+        desc: 'Es el aviso genérico para cualquier app sin firmar de Google — no un análisis real. Tocá "Más detalles" (o los tres puntitos) → "Instalar de todas formas".',
+      },
+      {
+        Icon: ShieldCheck,
+        title: 'Instalá y listo',
+        desc: 'Abrí el archivo descargado y confirmá — sin Play Store, sin cuentas, sin anuncios.',
+      },
+    ],
+  },
+  en: {
+    title: 'Install on Android',
+    androidVersion: 'Android 7.0 or later · no Google Play',
+    otherArch: 'Other architectures:',
+    tvTitle: 'Installing on a TV?',
+    tvDesc:
+      "It's the same APK from above — the app detects on its own that it's running on Android TV and switches to its own remote-friendly interface. A TV doesn't have the same browser a phone does, so the APK needs to get there one of these three ways:",
+    tvSteps: [
+      { Icon: Usb, title: 'Over USB', desc: 'Download it on your phone or PC, copy it to a flash drive, and open it from the TV\'s file manager.' },
+      { Icon: FileDown, title: 'With the "Downloader" app', desc: 'Install "Downloader" (by AFTVnews) from the TV\'s app store, then paste the APK URL from the section above — it downloads and installs it directly, no cables needed.' },
+      { Icon: Tv, title: 'A network file manager', desc: 'If the TV has one with SMB/FTP support, share the downloads folder from your phone or PC and open the APK from there.' },
+    ],
+    steps: [
+      {
+        Icon: Settings2,
+        title: 'Enable "Unknown sources"',
+        desc: 'Settings → Security (or Apps) → allow installing from your browser/files app. Android only asks once.',
+      },
+      {
+        Icon: FolderDown,
+        title: 'Download the right APK',
+        desc: "arm64-v8a covers almost every phone from 2017 onward. If it won't launch, try armeabi-v7a.",
+      },
+      {
+        Icon: AlertTriangle,
+        title: 'Does Play Protect say "this app can harm your device"?',
+        desc: "That's Google's generic warning for any unsigned app — not a real scan result. Tap \"More details\" (or the three-dot menu) → \"Install anyway\".",
+      },
+      {
+        Icon: ShieldCheck,
+        title: 'Install and done',
+        desc: 'Open the downloaded file and confirm — no Play Store, no accounts, no ads.',
+      },
+    ],
+  },
+} as const;
+
 export default function Android() {
+  const { lang } = useLang();
+  const c = copy[lang];
   const release = useLatestRelease();
   const detectedVariant = detectAndroidVariant();
   const mainHref = getAndroidDownloadHref(release);
@@ -50,91 +103,108 @@ export default function Android() {
   const otherVariants = allVariants.filter((v) => v.key !== detectedVariant);
 
   return (
-    <div className="w-full h-screen flex items-center justify-center p-3 md:p-5 bg-[#08080f]">
-      <section className="relative w-full max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden flex flex-col items-center">
-        <PrismBg />
-        <div className="relative z-10 w-full h-full flex flex-col items-center">
-          <Navbar />
-          <div className="flex-1 flex items-center justify-center px-6 w-full overflow-y-auto py-10">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="w-full max-w-lg"
+    <Layout>
+      <section className="px-5 py-16 md:px-10 md:py-24">
+        <div className="mx-auto max-w-lg">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <div className="mb-6 flex items-center justify-center gap-2.5">
+              <span style={{ color: 'var(--accent)' }}>
+                <AndroidIcon className="h-6 w-6" />
+              </span>
+              <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight">{c.title}</h1>
+            </div>
+
+            <a
+              href={mainHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
             >
-              <div className="flex items-center gap-2 mb-6 justify-center">
-                <DroidIcon />
-                <span className="text-white text-lg font-normal">Instalar en Android</span>
-              </div>
+              <Download className="h-4 w-4" />
+              {mainAsset?.size ? `${mainLabel} · ${formatSize(mainAsset.size)}` : mainLabel}
+            </a>
+            <p className="mt-3 text-center text-xs" style={{ color: 'var(--text-faint)' }}>{c.androidVersion}</p>
 
-              <motion.a
-                href={mainHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                className="flex items-center justify-center gap-2 w-full py-4 rounded-2xl text-white text-sm bg-[#22c55e]/12 border border-[#22c55e]/35 hover:bg-[#22c55e]/18 transition-all btn-glow"
-              >
-                <Download className="w-4 h-4 text-[#22c55e]" />
-                {mainAsset?.size
-                  ? `Descargar APK (${mainLabel}) · ${formatSize(mainAsset.size)}`
-                  : `Descargar APK (${mainLabel})`}
-              </motion.a>
-              <p className="mt-3 text-[12px] text-white/30 font-normal text-center">
-                Android 5.0 o superior · sin Google Play
-              </p>
-
-              {otherVariants.length > 0 && (
-                <div className="mt-5 flex flex-col gap-2">
-                  <p className="text-[11px] text-white/25 font-normal text-center">
-                    Otras arquitecturas:
-                  </p>
-                  <div className="flex gap-2 justify-center">
-                    {otherVariants.map((v) => {
-                      const href = getAndroidDownloadHref(release, v.key);
-                      const asset = getAndroidAsset(release, v.key);
-                      return (
-                        <motion.a
-                          key={v.key}
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.97 }}
-                          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white/70 text-[12px] bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] hover:text-white transition-all"
-                        >
-                          <Download className="w-3 h-3" />
-                          {asset?.size ? `${v.label} · ${formatSize(asset.size)}` : v.label}
-                        </motion.a>
-                      );
-                    })}
-                  </div>
+            {otherVariants.length > 0 && (
+              <div className="mt-5 flex flex-col gap-2">
+                <p className="text-center text-[11px]" style={{ color: 'var(--text-faint)' }}>{c.otherArch}</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {otherVariants.map((v) => {
+                    const href = getAndroidDownloadHref(release, v.key);
+                    const asset = getAndroidAsset(release, v.key);
+                    return (
+                      <a
+                        key={v.key}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="surface flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs transition-opacity hover:opacity-80"
+                      >
+                        <Download className="h-3 w-3" />
+                        {asset?.size ? `${v.label} · ${formatSize(asset.size)}` : v.label}
+                      </a>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
 
-              <div className="mt-8 flex flex-col gap-4">
-                {steps.map((s, i) => (
-                  <motion.div
-                    key={s.title}
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: 0.15 + i * 0.1 }}
-                    className="glass-card rounded-2xl p-4 flex items-start gap-3"
+            <div className="mt-8 flex flex-col gap-3">
+              {c.steps.map((s, i) => (
+                <motion.div
+                  key={s.title}
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.4, delay: 0.1 + i * 0.08 }}
+                  className="surface flex items-start gap-3 rounded-2xl p-4"
+                >
+                  <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                    style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-violet-500/12 border border-violet-500/25 flex items-center justify-center shrink-0">
-                      <s.Icon className="w-4 h-4 text-violet-300" />
-                    </div>
+                    <s.Icon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-[13px] font-semibold">{s.title}</div>
+                    <div className="text-[12px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>{s.desc}</div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="surface mt-4 rounded-2xl p-5">
+              <div className="mb-4 flex items-start gap-3">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}
+                >
+                  <Tv className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="mb-1 text-[13px] font-semibold">{c.tvTitle}</div>
+                  <div className="text-[12px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>{c.tvDesc}</div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+                {c.tvSteps.map((s) => (
+                  <div key={s.title} className="flex items-start gap-3 pl-11">
+                    <s.Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--accent)' }} />
                     <div>
-                      <div className="text-white/80 text-[13px] mb-0.5">{s.title}</div>
-                      <div className="text-white/35 text-[12px] leading-relaxed">{s.desc}</div>
+                      <div className="mb-0.5 text-[12px] font-semibold">{s.title}</div>
+                      <div className="text-[11px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>{s.desc}</div>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
-            </motion.div>
-          </div>
+            </div>
+
+            <div className="mt-4">
+              <DeveloperNote />
+            </div>
+          </motion.div>
         </div>
       </section>
-    </div>
+    </Layout>
   );
 }

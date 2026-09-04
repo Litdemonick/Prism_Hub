@@ -1,230 +1,167 @@
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
-@font-face {
-    font-family: "Helvetica Regular";
-    src: url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.eot");
-    src: url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.eot?#iefix")format("embedded-opentype"),
-    url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.woff2")format("woff2"),
-    url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.woff")format("woff"),
-    url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.ttf")format("truetype"),
-    url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.svg#Helvetica Regular")format("svg");
-}
-
 @theme {
-  --font-helvetica: "Helvetica Regular", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* ── Tokens ─────────────────────────────────────────────────────────────
+ * Oscuro es el default (así nació PrismHub), claro está definido con el
+ * mismo cuidado — el toggle tiene que dar dos temas terminados, no uno
+ * "de verdad" y otro invertido a las apuradas.
+ *
+ * El acento (--accent) es EL MISMO hex que usa la app nativa en cada modo
+ * (HomeTheme.accentPink: D777ED en oscuro, 9B3BB8 en claro) — no un violeta
+ * genérico de plantilla: quien usa la app reconoce el color en la web.
+ */
 :root {
-  font-family: var(--font-helvetica);
+  --bg: #0a0a10;
+  --bg-soft: #0d0d14;
+  --surface: #15151e;
+  --surface-2: #1c1c28;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --text: #f4f3f9;
+  --text-muted: #a19eb0;
+  --text-faint: #706d80;
+  --accent: #d777ed;
+  --accent-ink: #1a0620;
+  --accent-2: #7c6cf6;
+  --accent-3: #22d3ee;
+  --shadow-color: 270deg 60% 3%;
 }
+
+:root[data-theme="light"] {
+  --bg: #f8f7fb;
+  --bg-soft: #f1eef8;
+  --surface: #ffffff;
+  --surface-2: #f2eff9;
+  --border: rgba(23, 18, 34, 0.10);
+  --border-strong: rgba(23, 18, 34, 0.20);
+  --text: #17131f;
+  --text-muted: #5d5868;
+  --text-faint: #8d899b;
+  --accent: #9b3bb8;
+  --accent-ink: #fdf3ff;
+  --accent-2: #6d28d9;
+  --accent-3: #0891b2;
+  --shadow-color: 270deg 30% 80%;
+}
+
+* { border-color: var(--border); }
+
+html { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
 
 body {
   margin: 0;
   overflow-x: hidden;
-  /* Antes #08080f (casi negro puro) — a pedido, un poco menos extremo sin
-     dejar de ser modo oscuro. */
-  background-color: #0d0d16;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-/* ── Fondo persistente para TODA la página (no solo el hero) ──────────────
- * fixed: no depende de la altura del contenido, siempre cubre la pantalla
- * completa detrás de cualquier sección mientras se scrollea. Mucho más
- * sutil que el del hero (menos opacidad, menos orbes) para no competir con
- * el texto de las secciones normales. */
-.page-glow {
+h1, h2, h3, h4 { font-family: var(--font-display); }
+
+/* ── Foco visible, en cualquier aparato ───────────────────────────────────
+ * La app nativa aprendió esto mismo con el mando de un televisor: un halo
+ * translúcido no alcanza cuando el foco es la ÚNICA pista de dónde está
+ * parado el usuario — hace falta un anillo sólido y de buen contraste. Un
+ * televisor que abre esta página con su navegador (o cualquiera navegando
+ * con Tab) depende de esto para saber dónde está.
+ */
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* ── Superficie de tarjeta ── */
+.surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.surface-2 {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+/* ── Texto con el espectro del prisma, para un titular puntual ──────────
+ * A propósito NO se usa en todos los títulos: es la firma de la marca, y
+ * repetirla en cada encabezado la vuelve ruido en vez de acento.
+ */
+.text-spectrum {
+  background: linear-gradient(100deg, var(--accent) 0%, var(--accent-2) 55%, var(--accent-3) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── La barra espectro: el motivo gráfico del prisma ──────────────────────
+ * Una franja delgada que separa el acento en su banda de color, en vez de
+ * mezclarlo todo en un degradado difuso de fondo (el look genérico que se
+ * quería dejar atrás). Se usa como divisor puntual, no como fondo.
+ */
+.spectrum-bar {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 50%, var(--accent-3) 100%);
+}
+
+/* ── Fondo ambiental, sutil y fijo ─────────────────────────────────────── */
+.ambient-glow {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  /* Antes muy tenue (0.07-0.10) — a pedido, mismo nivel de presencia que el
-     glow del hero, no un detalle apenas visible. */
   background:
-    radial-gradient(ellipse 80% 60% at 10% 0%, rgba(124, 58, 237, 0.24) 0%, transparent 65%),
-    radial-gradient(ellipse 70% 55% at 90% 25%, rgba(79, 70, 229, 0.20) 0%, transparent 60%),
-    radial-gradient(ellipse 65% 55% at 25% 60%, rgba(6, 182, 212, 0.16) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 90%, rgba(124, 58, 237, 0.16) 0%, transparent 60%);
+    radial-gradient(60% 40% at 15% -5%, color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 65%),
+    radial-gradient(50% 40% at 100% 10%, color-mix(in srgb, var(--accent-2) 14%, transparent) 0%, transparent 60%);
 }
 
-/* ── Prism animated background ── */
-.prism-bg {
+.grain {
   position: absolute;
   inset: 0;
-  background: #08080f;
-  overflow: hidden;
-}
-
-.prism-bg::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 60% 60% at 20% 40%, rgba(124, 58, 237, 0.18) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 50% at 80% 20%, rgba(79, 70, 229, 0.14) 0%, transparent 65%),
-    radial-gradient(ellipse 40% 40% at 65% 75%, rgba(6, 182, 212, 0.10) 0%, transparent 60%);
-  animation: prism-pulse 10s ease-in-out infinite alternate;
-}
-
-@keyframes prism-pulse {
-  0%   { opacity: 0.7; transform: scale(1); }
-  100% { opacity: 1;   transform: scale(1.08); }
-}
-
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  animation: orb-float 9s ease-in-out infinite;
-}
-
-.orb-1 {
-  width: 500px;
-  height: 500px;
-  background: rgba(124, 58, 237, 0.14);
-  top: -15%;
-  left: 10%;
-  animation-duration: 9s;
-  animation-delay: 0s;
-}
-
-.orb-2 {
-  width: 350px;
-  height: 350px;
-  background: rgba(79, 70, 229, 0.11);
-  bottom: 5%;
-  right: 8%;
-  animation-duration: 11s;
-  animation-delay: -4s;
-}
-
-.orb-3 {
-  width: 250px;
-  height: 250px;
-  background: rgba(6, 182, 212, 0.09);
-  top: 45%;
-  left: 58%;
-  animation-duration: 13s;
-  animation-delay: -7s;
-}
-
-@keyframes orb-float {
-  0%, 100% { transform: translateY(0px) scale(1);    }
-  50%       { transform: translateY(-40px) scale(1.06); }
-}
-
-/* ── Grid noise overlay ── */
-.prism-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size: 60px 60px;
   pointer-events: none;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--text) 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--text) 3%, transparent) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(80% 60% at 50% 0%, black, transparent);
 }
 
 /* ── Scrollbar ── */
 .scrollbar-thin::-webkit-scrollbar { height: 4px; width: 4px; }
-.scrollbar-thin::-webkit-scrollbar-track  { background: transparent; }
-.scrollbar-thin::-webkit-scrollbar-thumb  { background: rgba(124,58,237,0.3); border-radius: 999px; }
-.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(124,58,237,0.5); }
-.scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.3) transparent; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 999px; }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--accent) 40%, transparent) transparent; }
 
-/* ── Glow button ── */
-.btn-glow {
-  position: relative;
-  overflow: hidden;
-  transition: box-shadow 0.3s;
-}
-.btn-glow:hover {
-  box-shadow: 0 0 24px rgba(124, 58, 237, 0.5);
-}
-
-/* ── Prism gradient text ── */
-.prism-text {
-  background: linear-gradient(135deg, #a78bfa, #818cf8, #67e8f9);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* ── Bottom-right corner fill ── */
-.corner-fill { fill: #08080f; }
-
-/* ── Card glass ── */
-.glass-card {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* ── Gradient border card ── */
-.card-glow {
-  position: relative;
-  background: rgba(255, 255, 255, 0.022);
-  backdrop-filter: blur(16px);
-}
-.card-glow::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    135deg,
-    rgba(124, 58, 237, 0.38) 0%,
-    rgba(79, 70, 229, 0.10) 45%,
-    rgba(6, 182, 212, 0.28) 100%
-  );
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* ── Section badge ── */
-.section-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 1rem;
-  border-radius: 9999px;
-  background: rgba(124, 58, 237, 0.10);
-  border: 1px solid rgba(124, 58, 237, 0.22);
-  color: rgba(167, 139, 250, 0.85);
-  font-size: 0.68rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-/* ── Code block ── */
+/* ── Código ── */
 .code-block {
-  background: rgba(0, 0, 0, 0.38);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--surface-2) 100%, black 6%);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
 }
 
-/* ── Glow divider line ── */
-.glow-line {
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(124, 58, 237, 0.45) 50%,
-    transparent 100%
-  );
+pre, code { font-family: var(--font-mono); }
+
+/* ── Marco de aparato (para las capturas) ────────────────────────────── */
+.device-frame {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: 0 30px 80px -30px hsl(var(--shadow-color) / 0.6);
 }
 
-/* ── Animated orb glow behind hero ── */
-.orb-1 { animation-name: orb-float; }
-.orb-2 { animation-name: orb-float; }
-.orb-3 { animation-name: orb-float; }
-
-/* ── Feature / platform card hover lift ── */
-.card-glow {
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-.card-glow:hover {
-  box-shadow: 0 20px 60px rgba(124, 58, 237, 0.14);
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

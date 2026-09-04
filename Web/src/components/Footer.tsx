@@ -1,61 +1,58 @@
-import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
-
-const columns = [
-  {
-    title: 'Producto',
-    links: [
-      { label: 'Inicio', to: '/' },
-      { label: 'Documentación', to: '/docs' },
-      { label: 'Preguntas frecuentes', to: '/faq' },
-      { label: 'Extensiones', to: '/developers' },
-    ],
-  },
-  {
-    title: 'Instalar',
-    links: [
-      { label: 'Windows', to: '/windows' },
-      { label: 'Linux', to: '/linux' },
-      { label: 'Android', to: '/android' },
-      { label: 'Releases en GitHub', to: 'https://github.com/Litdemonick/Prism_Hub/releases', external: true },
-    ],
-  },
-  {
-    title: 'Proyecto',
-    links: [
-      { label: 'Código fuente', to: 'https://github.com/Litdemonick/Prism_Hub', external: true },
-      { label: 'Extensiones (prism+)', to: 'https://github.com/Litdemonick/prism-plus', external: true },
-      { label: 'Licencia AGPL-3.0', to: '/license' },
-      { label: 'Reportar un bug', to: 'https://github.com/Litdemonick/Prism_Hub/issues', external: true },
-    ],
-  },
-];
+import { useLang } from '../lib/i18n';
 
 export default function Footer() {
+  const { t } = useLang();
+
+  const columns = [
+    {
+      title: t('footer.product'),
+      links: [
+        { label: t('nav.home'), to: '/' },
+        { label: t('nav.docs'), to: '/docs' },
+        { label: t('nav.faq'), to: '/faq' },
+        { label: t('nav.developers'), to: '/developers' },
+      ],
+    },
+    {
+      title: t('footer.install'),
+      links: [
+        { label: t('platforms.windows'), to: '/windows' },
+        { label: t('platforms.linux'), to: '/linux' },
+        { label: t('platforms.android'), to: '/android' },
+        { label: t('footer.allReleases'), to: 'https://github.com/Litdemonick/Prism_Hub/releases', external: true },
+      ],
+    },
+    {
+      title: t('footer.project'),
+      links: [
+        { label: t('footer.source'), to: 'https://github.com/Litdemonick/Prism_Hub', external: true },
+        { label: t('footer.extensionsRepo'), to: 'https://github.com/Litdemonick/prism-plus', external: true },
+        { label: t('nav.license'), to: '/license' },
+        { label: t('footer.reportBug'), to: 'https://github.com/Litdemonick/Prism_Hub/issues', external: true },
+      ],
+    },
+  ];
+
   return (
-    <motion.footer
-      initial={{ opacity: 0 }}
-      whileInView={{ opacity: 1 }}
-      viewport={{ once: true, margin: '-40px' }}
-      transition={{ duration: 0.6 }}
-      className="relative border-t border-white/[0.06] pt-16 pb-8 px-6"
-    >
-      <div className="absolute inset-0 bg-gradient-to-t from-violet-950/6 to-transparent pointer-events-none" />
-      <div className="relative max-w-6xl mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-14">
+    <footer className="relative border-t px-5 pb-8 pt-14 md:px-10" style={{ borderColor: 'var(--border)' }}>
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-12 grid grid-cols-2 gap-10 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-2.5 mb-3">
-              <img src={`${import.meta.env.BASE_URL}brand/logo.png`} alt="PrismHub" className="w-8 h-8 rounded-lg" />
-              <span className="prism-text text-base font-normal tracking-tight">PrismHub</span>
+            <div className="mb-3 flex items-center gap-2.5">
+              <img src={`${import.meta.env.BASE_URL}brand/logo.png`} alt="PrismHub" className="h-8 w-8 rounded-lg" />
+              <span className="font-[family-name:var(--font-display)] text-base font-semibold tracking-tight">PrismHub</span>
             </div>
-            <p className="text-white/30 text-xs leading-relaxed max-w-[220px]">
-              Anime, manga, novelas, series y películas — sin límites. Open source, nativo, sin anuncios.
+            <p className="max-w-[220px] text-xs leading-relaxed" style={{ color: 'var(--text-faint)' }}>
+              {t('footer.tagline')}
             </p>
           </div>
           {columns.map((col) => (
             <div key={col.title}>
-              <div className="text-white/50 text-xs uppercase tracking-widest mb-4">{col.title}</div>
+              <div className="mb-4 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                {col.title}
+              </div>
               <ul className="flex flex-col gap-2.5">
                 {col.links.map((l) => (
                   <li key={l.label}>
@@ -64,16 +61,14 @@ export default function Footer() {
                         href={l.to}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-white/40 hover:text-white text-[13px] transition-colors group"
+                        className="group flex items-center gap-1 text-[13px] transition-colors hover:text-[var(--text)]"
+                        style={{ color: 'var(--text-faint)' }}
                       >
                         {l.label}
-                        <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                        <ArrowUpRight className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-70" />
                       </a>
                     ) : (
-                      <Link
-                        to={l.to}
-                        className="text-white/40 hover:text-white text-[13px] transition-colors"
-                      >
+                      <Link to={l.to} className="text-[13px] transition-colors hover:text-[var(--text)]" style={{ color: 'var(--text-faint)' }}>
                         {l.label}
                       </Link>
                     )}
@@ -84,20 +79,20 @@ export default function Footer() {
           ))}
         </div>
 
-        <div className="glow-line mb-8" />
+        <div className="spectrum-bar mb-8 opacity-30" />
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-white/25 text-xs">
-          <span>© 2026 Soul_Of_The_sun · AGPL-3.0</span>
+        <div className="flex flex-col items-center justify-between gap-4 text-xs sm:flex-row" style={{ color: 'var(--text-faint)' }}>
+          <span>&copy; 2026 Soul_Of_The_sun · AGPL-3.0</span>
           <a
             href="https://github.com/Litdemonick"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-white/50 transition-colors underline underline-offset-2"
+            className="underline decoration-dotted underline-offset-4 transition-colors hover:text-[var(--text)]"
           >
             github.com/Litdemonick
           </a>
         </div>
       </div>
-    </motion.footer>
+    </footer>
   );
 }

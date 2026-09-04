@@ -1,820 +1,407 @@
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
+import { ArrowUpRight, Download, GitFork, Check } from 'lucide-react';
+import Layout from '../components/Layout';
+import DeveloperNote from '../components/DeveloperNote';
+import { WindowsIcon, LinuxIcon, AndroidIcon, AndroidTvIcon } from '../components/PlatformIcons';
+import { useLang } from '../lib/i18n';
+import { requirements } from '../lib/requirements';
 import {
-  Puzzle, Zap, BookOpen, Layers, ScrollText,
-  Shield, Code2, ArrowUpRight, Terminal,
-  Sparkles, Monitor, Smartphone,
-} from 'lucide-react';
-import { useState, type ReactElement } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Hero from '../components/Hero';
-import Footer from '../components/Footer';
-import {
-  REPO, formatDate, formatSize, useExtensionCount, useReleases,
+  APP_VERSION,
+  formatSize,
+  getDirectDownloadHref,
+  useExtensionCount,
+  useLatestRelease,
+  type DownloadPlatform,
 } from '../lib/githubRelease';
 
-/* ── Platform icons ───────────────────────────────────────── */
-const WinIcon = () => (
-  <svg viewBox="0 0 22 22" className="w-8 h-8" fill="#0ea5e9">
-    <rect x="0"  y="0"  width="9.5" height="9.5" rx="1.2"/>
-    <rect x="12.5" y="0"  width="9.5" height="9.5" rx="1.2"/>
-    <rect x="0"  y="12.5" width="9.5" height="9.5" rx="1.2"/>
-    <rect x="12.5" y="12.5" width="9.5" height="9.5" rx="1.2"/>
-  </svg>
-);
+const fadeUp = {
+  initial: { opacity: 0, y: 18 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, margin: '-60px' },
+  transition: { duration: 0.5, ease: 'easeOut' as const },
+};
 
-const LinuxIcon = () => (
-  <svg viewBox="0 0 448 512" className="w-7 h-7" fill="#f97316">
-    <path d="M220.8 123.3c1 .5 1.8 1.7 3 1.7 1.1 0 2.8-.4 2.9-1.5.2-1.4-1.9-2.3-3.2-2.9-1.7-.7-3.9-1-5.5-.1-.4.2-.8.7-.6 1.1.3 1.3 2.3 1.1 3.4 1.7zm-21.9 1.7c1.2 0 2-1.2 3-1.7 1.1-.6 3.1-.4 3.5-1.6.2-.4-.2-.9-.6-1.1-1.6-.9-3.8-.6-5.5.1-1.3.6-3.4 1.5-3.2 2.9.1 1 1.8 1.5 2.8 1.4zM420 403.8c-3.6-4-5.3-11.6-7.2-19.7-1.8-8.1-3.9-16.8-10.5-22.4-1.3-1.1-2.6-2.1-4-2.9-1.3-.8-2.7-1.5-4.1-2 9.2-27.3 5.6-54.5-3.7-79.1-11.4-30.1-31.3-56.4-46.5-74.4-17.1-21.5-33.7-41.9-33.4-72C311.1 85.4 315.7.1 234.8 0 132.4-.2 158 103.4 156.9 135.2c-1.7 23.4-6.4 41.8-22.5 64.7-18.9 22.5-45.5 58.8-58.1 96.7-6 17.9-8.8 36.1-6.2 53.3-6.5 5.8-11.4 14.7-16.6 20.2-4.2 4.3-10.3 5.9-17 8.3s-14 6-18.5 14.5c-2.1 3.9-2.8 8.1-2.8 12.4 0 3.9.6 7.9 1.2 11.8 1.2 8.1 2.5 15.7.8 20.8-5.2 14.4-5.9 24.4-2.2 31.7 3.8 7.3 11.4 10.5 20.1 12.3 17.3 3.6 40.8 2.7 59.3 12.5 19.8 10.4 39.9 14.1 55.9 10.4 11.6-2.6 21.1-9.6 25.9-20.2 12.5-.1 26.3-5.4 48.3-6.6 14.9-1.2 33.6 5.3 55.1 4.1.6 2.3 1.4 4.6 2.5 6.7v.1c8.3 16.7 23.8 24.3 40.3 23 16.6-1.3 34.1-11 48.3-27.9 13.6-16.4 36-23.2 50.9-32.2 7.4-4.5 13.4-10.1 13.9-18.3.4-8.2-4.4-17.3-15.5-29.7z"/>
-  </svg>
-);
-
-const DroidIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#22c55e">
-    <path d="M17.523 15.341A5.036 5.036 0 0 0 17 13v-2a5 5 0 0 0-10 0v2c0 .857-.122 1.476-.523 2.341C6 16 5 17 5 18c0 .553.448 1 1 1h12c.552 0 1-.447 1-1 0-1-1-2-1.477-2.659zM12 23c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm-1-19.938C8.162 3.553 6 6.027 6 9v.268A3 3 0 0 1 7 9a3 3 0 0 1 3-3c0-.656-.216-1.268-.582-1.765L9 4l.418-.579A2.994 2.994 0 0 1 12 3c1.15 0 2.16.647 2.678 1.597L15.1 4.5l.322.5A3 3 0 0 1 18 9a3 3 0 0 1 1-.268V9c0-2.973-2.162-5.447-5-5.938z"/>
-  </svg>
-);
-
-/* ── Data ─────────────────────────────────────────────────── */
-const baseStats = [
-  { value: '3',    label: 'Plataformas' },
-  { value: 'Beta', label: 'En desarrollo' },
-  { value: '100%', label: 'Open Source' },
-];
-
-const features = [
-  {
-    Icon: Puzzle, title: 'Extensiones JavaScript',
-    desc: 'Cualquier fuente de contenido como archivo .js — instalar una nueva no requiere actualizar la app. Cada extensión se actualiza por separado cuando su fuente cambia.',
-    bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.28)',
-  },
-  {
-    Icon: Zap, title: 'Failover automático',
-    desc: 'Si el servidor falla, el player cambia al siguiente al instante. Cero cortes por errores de red.',
-    bg: 'rgba(79,70,229,0.12)', border: 'rgba(79,70,229,0.28)',
-  },
-  {
-    Icon: BookOpen, title: 'Historial y progreso',
-    desc: 'Seguimiento local por episodio, favoritos y lista de pendientes. Sin cuentas ni servidores externos.',
-    bg: 'rgba(6,182,212,0.10)', border: 'rgba(6,182,212,0.24)',
-  },
-  {
-    Icon: ScrollText, title: 'Lector de manga',
-    desc: 'Modo paginado o modo cascada (scroll continuo tipo webtoon) — elegís cómo leer cada serie.',
-    bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.28)',
-  },
-  {
-    Icon: Layers, title: 'Multiplataforma nativo',
-    desc: 'Compilado nativamente para Windows, Android y Linux. Mismas extensiones en todos tus dispositivos.',
-    bg: 'rgba(6,182,212,0.10)', border: 'rgba(6,182,212,0.24)',
-  },
-];
-
-const techStack = [
-  { label: 'Flutter / Dart', desc: 'Un solo código para Windows, Linux y Android nativo' },
-  { label: 'media_kit + libmpv', desc: 'El mismo motor de video que mpv/VLC, con failover automático de servidor' },
-  { label: 'Extensiones JS (QuickJS)', desc: 'Cada fuente corre en un sandbox aislado — instalás/actualizás sin tocar la app' },
-  { label: 'GetX', desc: 'Estado reactivo liviano en toda la app' },
-  { label: 'AGPL-3.0', desc: '100% open source, código abierto para siempre' },
-] as const;
-
-const platformMeta = {
-  windows: { Icon: WinIcon, color: '#0ea5e9', label: 'Windows' },
-  linux: { Icon: LinuxIcon, color: '#f97316', label: 'Linux' },
-  android: { Icon: DroidIcon, color: '#22c55e', label: 'Android' },
-} as const;
-
-/* ── Changelog: parser minimalista de markdown (## / ### / listas / **bold**
- * / [link](url)) — sin librería nueva y sin dangerouslySetInnerHTML, el
- * body de la release ya viene de nuestro propio workflow. ─────────────── */
-function renderInline(text: string, keyPrefix: string): ReactElement {
-  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
+function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      {parts.map((part, i) => {
-        const bold = /^\*\*([^*]+)\*\*$/.exec(part);
-        if (bold) {
-          return <strong key={`${keyPrefix}-${i}`} className="text-white/80 font-medium">{bold[1]}</strong>;
-        }
-        const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
-        if (link) {
-          return (
-            <a
-              key={`${keyPrefix}-${i}`}
-              href={link[2]}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-violet-300 underline underline-offset-2 hover:text-violet-200"
-            >
-              {link[1]}
-            </a>
-          );
-        }
-        return <span key={`${keyPrefix}-${i}`}>{part}</span>;
-      })}
-    </>
+    <div
+      className="mb-4 inline-flex items-center gap-2 rounded-full border px-3.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]"
+      style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
+    >
+      {children}
+    </div>
   );
 }
 
-function Changelog({ body }: { body?: string }) {
-  if (!body) return null;
-  const blocks: ReactElement[] = [];
-  let listItems: string[] = [];
-  const flushList = () => {
-    if (listItems.length) {
-      blocks.push(
-        <ul key={`ul-${blocks.length}`} className="list-disc list-inside space-y-1 mb-3 ml-1">
-          {listItems.map((item, i) => (
-            <li key={i} className="text-white/50 text-[13px] leading-relaxed">
-              {renderInline(item, `li-${blocks.length}-${i}`)}
-            </li>
-          ))}
-        </ul>,
-      );
-      listItems = [];
-    }
-  };
-  body.split('\n').forEach((raw, i) => {
-    const line = raw.trim();
-    if (!line) {
-      flushList();
-      return;
-    }
-    if (line.startsWith('### ')) {
-      flushList();
-      blocks.push(
-        <h5 key={i} className="text-white text-sm font-medium mt-3 mb-1.5">
-          {renderInline(line.slice(4), `h5-${i}`)}
-        </h5>,
-      );
-    } else if (line.startsWith('## ')) {
-      flushList();
-      blocks.push(
-        <h4 key={i} className="text-white text-[15px] font-normal mt-4 mb-2 first:mt-0">
-          {renderInline(line.slice(3), `h4-${i}`)}
-        </h4>,
-      );
-    } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      listItems.push(line.slice(2));
-    } else {
-      flushList();
-      blocks.push(
-        <p key={i} className="text-white/50 text-[13px] leading-relaxed mb-2">
-          {renderInline(line, `p-${i}`)}
-        </p>,
-      );
-    }
-  });
-  flushList();
-  return <div>{blocks}</div>;
+function Hero() {
+  const { t } = useLang();
+  const extensionCount = useExtensionCount();
+  const release = useLatestRelease();
+
+  return (
+    <section className="relative overflow-hidden px-5 pb-20 pt-10 md:px-10 md:pb-28 md:pt-16">
+      <div className="grain absolute inset-x-0 top-0 h-[560px]" />
+      <div className="relative mx-auto flex max-w-4xl flex-col items-center text-center">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+          <Eyebrow>{t('hero.badge')}</Eyebrow>
+        </motion.div>
+
+        <motion.h1
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.05 }}
+          className="font-[family-name:var(--font-display)] text-[2.4rem] font-bold leading-[1.08] tracking-tight sm:text-5xl md:text-6xl"
+        >
+          {t('hero.title.1')}
+          <br />
+          <span className="text-spectrum">{t('hero.title.2')}</span>
+        </motion.h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.12 }}
+          className="mt-6 max-w-xl text-balance text-base leading-relaxed sm:text-lg"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          {t('hero.subtitle')}
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.18 }}
+          className="mt-9 flex flex-wrap items-center justify-center gap-3"
+        >
+          <a
+            href="#descargar"
+            className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.98]"
+            style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+          >
+            <Download className="h-4 w-4" />
+            {t('hero.cta.download')}
+          </a>
+          <a
+            href="https://github.com/Litdemonick/Prism_Hub"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-full border px-6 py-3.5 text-sm font-semibold transition-transform hover:scale-[1.03] active:scale-[0.98]"
+            style={{ borderColor: 'var(--border-strong)' }}
+          >
+            <GitFork className="h-4 w-4" />
+            {t('hero.cta.source')}
+          </a>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="mt-14 grid w-full max-w-lg grid-cols-3 gap-4 border-t pt-8"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          <div>
+            <div className="font-[family-name:var(--font-display)] text-2xl font-bold">
+              {extensionCount ?? '20+'}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>{t('hero.stat.extensions')}</div>
+          </div>
+          <div>
+            <div className="font-[family-name:var(--font-display)] text-2xl font-bold">3</div>
+            <div className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>{t('hero.stat.platforms')}</div>
+          </div>
+          <div>
+            <div className="font-[family-name:var(--font-display)] text-2xl font-bold">{release?.tag ?? APP_VERSION}</div>
+            <div className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>AGPL-3.0</div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
 }
 
-// Vite solo reescribe rutas que él procesa (imports, index.html) — un string
-// crudo como '/screenshots/x.png' escrito en JSX NO se ajusta al `base` del
-// build, así que en GitHub Pages (servido en /Prism_Hub/, no en la raíz)
-// apuntaba al dominio raíz y las imágenes daban 404 — confirmado en vivo.
-const SHOT_BASE = `${import.meta.env.BASE_URL}screenshots/`;
-
-const screenshots = {
-  desktop: [
-    { src: `${SHOT_BASE}desktop-home.png`, alt: 'Inicio de PrismHub en Windows: continuar viendo, favoritos y catálogo destacado' },
-    { src: `${SHOT_BASE}desktop-search.png`, alt: 'Búsqueda unificada en PrismHub: resultados de todas tus extensiones agrupados por fuente' },
-    { src: `${SHOT_BASE}desktop-extension.png`, alt: 'Filtro de género dentro de una extensión (Olympus) en PrismHub' },
-  ],
-  mobile: [
-    { src: `${SHOT_BASE}mobile-home.jpeg`, alt: 'Inicio de PrismHub en Android' },
-    { src: `${SHOT_BASE}mobile-search.jpeg`, alt: 'Búsqueda de PrismHub en Android, agrupada por extensión' },
-  ],
-};
-
-type Platform = {
-  name: string;
-  Icon: () => ReactElement;
-  color: string;
-  shell: string;
-  command: string;
-  desc: string;
-  route?: string;
-  assetKey: 'windows' | 'linux' | 'android';
-};
-
-const platforms: Platform[] = [
-  {
-    name: 'Windows', Icon: WinIcon, color: '#0ea5e9',
-    shell: 'PowerShell',
-    command: 'irm https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.ps1 | iex',
-    desc: 'Instalador .exe de un clic. Windows 10 / 11 (64 bits).',
-    route: '/windows',
-    assetKey: 'windows',
-  },
-  {
-    name: 'Linux', Icon: LinuxIcon, color: '#f97316',
-    shell: 'Bash',
-    command: 'curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash',
-    desc: 'Script universal. También disponible PKGBUILD para Arch.',
-    route: '/linux',
-    assetKey: 'linux',
-  },
-  {
-    name: 'Android', Icon: DroidIcon, color: '#22c55e',
-    shell: 'APK directo',
-    command: 'Descarga el APK firmado e instálalo (activa "Fuentes desconocidas").',
-    desc: 'APK firmado. Android 5.0+. Activa "Fuentes desconocidas".',
-    route: '/android',
-    assetKey: 'android',
-  },
-];
-
-/* ── Syntax-highlighted code (hardcoded, safe for dangerouslySetInnerHTML) ─ */
-const codeHtml = `<span style="color:#6366f1">// ==PrismHubExtension==</span>
-<span style="color:#94a3b8">// @name</span>    <span style="color:#a78bfa">MiExtension</span>
-<span style="color:#94a3b8">// @version</span> <span style="color:#67e8f9">1.0.0</span>
-<span style="color:#94a3b8">// @author</span>  <span style="color:#67e8f9">TuNombre</span>
-<span style="color:#94a3b8">// @lang</span>    <span style="color:#f472b6">es</span>
-<span style="color:#94a3b8">// @type</span>    <span style="color:#f472b6">bangumi</span>
-<span style="color:#94a3b8">// @webSite</span> <span style="color:#67e8f9">https://sitio.com</span>
-<span style="color:#6366f1">// ==/PrismHubExtension==</span>
-
-<span style="color:#818cf8">export default class</span> <span style="color:#a78bfa">extends</span> Extension {
-  <span style="color:#818cf8">async</span> <span style="color:#67e8f9">latest</span>(page) {
-    <span style="color:#4b5563">/* → [{title, url, cover}] */</span>
-  }
-  <span style="color:#818cf8">async</span> <span style="color:#67e8f9">search</span>(kw, page) {
-    <span style="color:#4b5563">/* → [{title, url, cover}] */</span>
-  }
-  <span style="color:#818cf8">async</span> <span style="color:#67e8f9">detail</span>(url) {
-    <span style="color:#4b5563">/* → {title, episodes:[...]} */</span>
-  }
-  <span style="color:#818cf8">async</span> <span style="color:#67e8f9">watch</span>(url) {
-    <span style="color:#4b5563">/* → {type:'hls'|'mp4', url} */</span>
-  }
-}`;
-
-/* ── Animation preset ────────────────────────────────────── */
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 40 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, margin: '-80px' } as const,
-  transition: { duration: 0.7, delay },
-});
-
-/* ── Home ────────────────────────────────────────────────── */
-export default function Home() {
-  const navigate = useNavigate();
-  const releases = useReleases(2);
-  const extensionCount = useExtensionCount();
-  const [shotView, setShotView] = useState<'desktop' | 'mobile'>('desktop');
-  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
-  const stats = [
-    { value: extensionCount != null ? String(extensionCount) : '4', label: 'Extensiones' },
-    ...baseStats,
+function Showcase() {
+  const { t } = useLang();
+  const base = import.meta.env.BASE_URL;
+  const shots = [
+    { src: `${base}screenshots/desktop-home.png`, label: 'Windows / Linux' },
+    { src: `${base}screenshots/mobile-home.jpeg`, label: 'Android' },
+    { src: `${base}screenshots/desktop-search.png`, label: 'Búsqueda' },
   ];
 
   return (
-    <div className="overflow-x-hidden">
-      {/* Fondo persistente detrás de TODA la página (no solo el hero) —
-          antes cada sección abajo del hero era un negro plano sin ningún
-          brillo, se sentía "cortado" apenas terminaba el hero. */}
-      <div className="page-glow" />
+    <section className="px-5 py-16 md:px-10 md:py-24">
+      <div className="mx-auto max-w-6xl">
+        <motion.div {...fadeUp} className="mb-12 max-w-xl">
+          <Eyebrow>{t('showcase.eyebrow')}</Eyebrow>
+          <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight sm:text-3xl">
+            {t('showcase.title')}
+          </h2>
+          <p className="mt-3 text-sm leading-relaxed sm:text-base" style={{ color: 'var(--text-muted)' }}>
+            {t('showcase.desc')}
+          </p>
+        </motion.div>
 
-      {/* ───── HERO ───── */}
-      <Hero />
-
-      {/* ───── STATS BAR ───── */}
-      <motion.section {...fadeUp()} className="border-y border-white/[0.05] py-12">
-        <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-          {stats.map((s) => (
-            <div key={s.label}>
-              <div className="text-3xl md:text-4xl font-light prism-text mb-1">{s.value}</div>
-              <div className="text-[11px] text-white/30 tracking-widest uppercase">{s.label}</div>
-            </div>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {shots.map((s, i) => (
+            <motion.div
+              key={s.src}
+              {...fadeUp}
+              transition={{ ...fadeUp.transition, delay: i * 0.08 }}
+              className="device-frame group overflow-hidden rounded-2xl"
+            >
+              <img
+                src={s.src}
+                alt={s.label}
+                loading="lazy"
+                className="aspect-[16/10] w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.04]"
+              />
+              <div className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
+            </motion.div>
           ))}
         </div>
-      </motion.section>
+      </div>
+    </section>
+  );
+}
 
-      {/* ───── SCREENSHOTS (arriba de todo, junto con instalación — la
-          prueba visual antes de pedir que instalen) ───── */}
-      <section className="relative py-24 px-6">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-950/6 to-transparent pointer-events-none" />
-        <div className="max-w-7xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-10">
-            <span className="section-badge">▣  Capturas</span>
-            <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5 mb-5">
-              Así se ve <span className="prism-text">PrismHub</span>
-            </h2>
-            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
-              La misma app, nativa en escritorio y en tu celular — tocá una captura para verla en grande.
-            </p>
-          </motion.div>
+function Features() {
+  const { t } = useLang();
+  const items = [
+    { title: t('features.f1.title'), desc: t('features.f1.desc'), big: true },
+    { title: t('features.f2.title'), desc: t('features.f2.desc') },
+    { title: t('features.f3.title'), desc: t('features.f3.desc') },
+    { title: t('features.f4.title'), desc: t('features.f4.desc') },
+    { title: t('features.f5.title'), desc: t('features.f5.desc') },
+    { title: t('features.f6.title'), desc: t('features.f6.desc'), big: true },
+  ];
 
-          <motion.div {...fadeUp(0.1)} className="flex items-center justify-center gap-2 mb-10">
-            {(['desktop', 'mobile'] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setShotView(v)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm transition-all ${
-                  shotView === v
-                    ? 'bg-violet-500/15 border border-violet-500/40 text-white'
-                    : 'border border-white/10 text-white/40 hover:text-white/70'
-                }`}
-              >
-                {v === 'desktop' ? <Monitor className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
-                {v === 'desktop' ? 'Escritorio' : 'Celular'}
-              </button>
-            ))}
-          </motion.div>
+  return (
+    <section className="px-5 py-16 md:px-10 md:py-24" style={{ background: 'var(--bg-soft)' }}>
+      <div className="mx-auto max-w-6xl">
+        <motion.div {...fadeUp} className="mb-12 max-w-xl">
+          <Eyebrow>{t('features.eyebrow')}</Eyebrow>
+          <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight sm:text-3xl">
+            {t('features.title')}
+          </h2>
+        </motion.div>
 
-          <AnimatePresence mode="wait">
-            {shotView === 'desktop' ? (
-              <motion.div
-                key="desktop"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.35 }}
-                className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-              >
-                {screenshots.desktop.map((s) => (
-                  <button
-                    key={s.src}
-                    onClick={() => setLightbox(s)}
-                    className="card-glow rounded-2xl overflow-hidden group cursor-zoom-in text-left"
-                  >
-                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
-                  </button>
-                ))}
-              </motion.div>
-            ) : (
-              <motion.div
-                key="mobile"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.35 }}
-                className="flex flex-wrap items-start justify-center gap-8"
-              >
-                {screenshots.mobile.map((s) => (
-                  <button
-                    key={s.src}
-                    onClick={() => setLightbox(s)}
-                    className="card-glow rounded-[2rem] overflow-hidden group cursor-zoom-in w-full max-w-[340px] border-4 border-white/10"
-                  >
-                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((f, i) => (
+            <motion.div
+              key={f.title}
+              {...fadeUp}
+              transition={{ ...fadeUp.transition, delay: i * 0.06 }}
+              className={`surface rounded-2xl p-6 ${f.big ? 'lg:col-span-2' : ''}`}
+            >
+              <div className="spectrum-bar mb-4 w-8" />
+              <h3 className="mb-2 font-[family-name:var(--font-display)] text-base font-semibold">{f.title}</h3>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>{f.desc}</p>
+            </motion.div>
+          ))}
         </div>
+      </div>
+    </section>
+  );
+}
 
-        {/* Lightbox — click afuera o en la X para cerrar */}
-        <AnimatePresence>
-          {lightbox && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setLightbox(null)}
-              className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+function Requirements() {
+  const { t, lang } = useLang();
+  const r = requirements[lang];
+  const rows: { label: string; key: keyof typeof r.min }[] = [
+    { label: t('requirements.os'), key: 'os' },
+    { label: t('requirements.ram'), key: 'ram' },
+    { label: t('requirements.cpu'), key: 'cpu' },
+    { label: t('requirements.storage'), key: 'storage' },
+  ];
+
+  return (
+    <section className="px-5 py-16 md:px-10 md:py-24">
+      <div className="mx-auto max-w-4xl">
+        <motion.div {...fadeUp} className="mb-10 text-center">
+          <Eyebrow>{t('requirements.eyebrow')}</Eyebrow>
+          <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight sm:text-3xl">
+            {t('requirements.title')}
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+            {t('requirements.desc')}
+          </p>
+        </motion.div>
+
+        <motion.div {...fadeUp} className="surface overflow-hidden rounded-2xl">
+          <div className="grid grid-cols-3 text-sm">
+            <div className="p-4" />
+            <div className="border-b border-l p-4 text-center font-semibold" style={{ borderColor: 'var(--border)' }}>
+              {t('requirements.min')}
+            </div>
+            <div
+              className="border-b border-l p-4 text-center font-semibold"
+              style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
             >
-              <motion.img
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                src={lightbox.src}
-                alt={lightbox.alt}
-                onClick={(e) => e.stopPropagation()}
-                className="max-w-full max-h-full rounded-xl border border-white/10 object-contain"
-              />
-              <button
-                onClick={() => setLightbox(null)}
-                className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-              >
-                ✕
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </section>
-
-      {/* ───── PLATFORMS (instalación arriba de todo — antes quedaba
-          enterrada más abajo de la página y nadie llegaba a verla) ───── */}
-      <section className="relative py-32 px-6">
-        <div className="max-w-6xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-20">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.85 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-              className="relative w-20 h-20 mx-auto mb-6"
-            >
-              <div className="absolute inset-0 rounded-3xl bg-violet-600/30 blur-2xl" />
-              <img
-                src={`${import.meta.env.BASE_URL}brand/logo.png`}
-                alt="PrismHub"
-                className="relative w-20 h-20 rounded-3xl border border-violet-500/30"
-              />
-            </motion.div>
-            <span className="section-badge">↓  Instalación</span>
-            <h2 className="text-4xl md:text-5xl lg:text-[58px] font-light text-white leading-tight mt-5 mb-5">
-              Un solo comando<br/>
-              <span className="prism-text">en todas las plataformas</span>
-            </h2>
-            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
-              Scripts de instalación automáticos para Windows y Linux. APK directo para Android.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {platforms.map((p, i) => (
-              <motion.div
-                key={p.name}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 0.6, delay: i * 0.12 }}
-                whileHover={{ y: -8, transition: { duration: 0.25 } }}
-                className="card-glow rounded-3xl p-7 flex flex-col gap-5"
-              >
-                {/* Header */}
-                <div className="flex items-center gap-4">
-                  <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
-                    style={{ background: `${p.color}18`, border: `1px solid ${p.color}35` }}
-                  >
-                    <p.Icon />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-white text-lg font-light">{p.name}</span>
-                      {(() => {
-                        const rel = releases?.[0];
-                        const isNew = rel?.publishedAt
-                          && Date.now() - new Date(rel.publishedAt).getTime() < 7 * 24 * 60 * 60 * 1000;
-                        return (
-                          <>
-                            {rel?.tag && (
-                              <span className="text-[11px] text-white/25 font-mono leading-none mt-0.5">{rel.tag}</span>
-                            )}
-                            {isNew && (
-                              <span className="text-[9px] font-medium text-amber-300 bg-amber-400/10 border border-amber-400/25 px-1.5 py-0.5 rounded-full leading-none">NUEVO</span>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                    <div className="text-white/30 text-xs mt-0.5 leading-snug">{p.desc}</div>
-                  </div>
+              {t('requirements.rec')}
+            </div>
+            {rows.map((row) => (
+              <>
+                <div key={`${row.key}-label`} className="border-t p-4 font-medium" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                  {row.label}
                 </div>
-
-                {/* Command */}
-                <div className="code-block p-4 flex-1">
-                  <div className="text-white/20 text-[10px] font-mono mb-2 tracking-wider uppercase">{p.shell}</div>
-                  <p
-                    className="text-[11.5px] font-mono leading-relaxed break-all"
-                    style={{ color: `${p.color}cc` }}
-                  >
-                    {p.command}
-                  </p>
+                <div key={`${row.key}-min`} className="border-t border-l p-4 text-center" style={{ borderColor: 'var(--border)' }}>
+                  {r.min[row.key]}
                 </div>
-
-                {/* Sin botón de descarga acá a propósito — ya está arriba
-                    en el hero (colorido, lo primero que se ve) y abajo en
-                    Versiones (con el changelog de esa versión puntual).
-                    Repetirlo una tercera vez acá era redundante. */}
-                {p.route && (
-                  <button
-                    onClick={() => navigate(p.route!)}
-                    className="text-white/30 hover:text-white/60 text-xs text-center transition-colors -mt-2"
-                  >
-                    {p.assetKey === 'android' ? 'ver guía de instalación →' : 'o instalar con un comando →'}
-                  </button>
-                )}
-              </motion.div>
+                <div key={`${row.key}-rec`} className="border-t border-l p-4 text-center font-medium" style={{ borderColor: 'var(--border)' }}>
+                  {r.rec[row.key]}
+                </div>
+              </>
             ))}
           </div>
-        </div>
-      </section>
+        </motion.div>
+        <p className="mx-auto mt-5 max-w-2xl text-center text-xs leading-relaxed" style={{ color: 'var(--text-faint)' }}>
+          {t('requirements.note')}
+        </p>
+      </div>
+    </section>
+  );
+}
 
-      {/* ───── DIVIDER ───── */}
-      <div className="glow-line max-w-4xl mx-6 md:mx-auto" />
+function DownloadSection() {
+  const { t } = useLang();
+  const release = useLatestRelease();
 
-      {/* ───── QUÉ ES ───── */}
-      <section className="relative py-24 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div {...fadeUp()}>
-            <span className="section-badge">◆  Qué es</span>
-            <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5 mb-6">
-              Un reproductor y lector,<br/>
-              <span className="prism-text">no un catálogo cerrado</span>
-            </h2>
-            <p className="text-white/45 max-w-2xl mx-auto text-base leading-relaxed">
-              PrismHub no aloja ni distribuye contenido — es la app que lo organiza. Cada fuente
-              (anime, manga, novelas, películas o series) es una <span className="text-white/70">extensión</span> que
-              vos instalás; PrismHub le pone encima un reproductor con failover de servidores,
-              historial, favoritos y tracking, todo guardado localmente en tu equipo.
-            </p>
-          </motion.div>
+  const platforms: { key: DownloadPlatform; label: string; Icon: typeof WindowsIcon; href?: string }[] = [
+    { key: 'windows', label: t('platforms.windows'), Icon: WindowsIcon, href: '/windows' },
+    { key: 'linux', label: t('platforms.linux'), Icon: LinuxIcon, href: '/linux' },
+    { key: 'android', label: t('platforms.android'), Icon: AndroidIcon, href: '/android' },
+    { key: 'androidTv', label: t('platforms.androidTv'), Icon: AndroidTvIcon },
+  ];
 
-          <motion.div
-            {...fadeUp(0.15)}
-            className="flex flex-wrap justify-center gap-3 mt-10"
+  return (
+    <section id="descargar" className="px-5 py-16 md:px-10 md:py-24" style={{ background: 'var(--bg-soft)' }}>
+      <div className="mx-auto max-w-5xl">
+        <motion.div {...fadeUp} className="mb-12 text-center">
+          <Eyebrow>{t('download.eyebrow')}</Eyebrow>
+          <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight sm:text-3xl">
+            {t('download.title')}
+          </h2>
+        </motion.div>
+
+        <motion.div {...fadeUp} className="mb-6 flex items-center gap-3">
+          <span
+            className="rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide"
+            style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
           >
-            {techStack.map((t) => (
-              <div
-                key={t.label}
-                className="group relative"
-              >
-                <span className="flex items-center px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] text-white/60 text-[13px] cursor-default hover:border-violet-500/30 hover:text-white/85 transition-colors">
-                  {t.label}
-                </span>
-                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <div className="card-glow rounded-lg px-3 py-2 text-[11px] text-white/50 leading-relaxed text-center">
-                    {t.desc}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
+            {t('download.betaZone')}
+          </span>
+          <span className="text-xs" style={{ color: 'var(--text-faint)' }}>{t('download.betaZoneDesc')}</span>
+        </motion.div>
 
-      {/* ───── VERSIONES ───── */}
-      <section className="relative py-24 px-6">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-violet-950/8 to-transparent pointer-events-none" />
-        <div className="max-w-5xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-14">
-            <span className="section-badge inline-flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3" /> Historial
-            </span>
-            <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5">
-              Qué trae cada <span className="prism-text">versión</span>
-            </h2>
-            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed mt-4">
-              Directo del historial de releases del repo — siempre al día.
-            </p>
-          </motion.div>
-
-          {releases === null ? (
-            <div className="text-center text-white/25 text-sm">Cargando versiones…</div>
-          ) : releases.length === 0 ? (
-            <div className="text-center text-white/25 text-sm">
-              No se pudo cargar el historial ahora — <a
-                href={`https://github.com/${REPO}/releases`}
-                target="_blank" rel="noopener noreferrer"
-                className="text-violet-300 underline underline-offset-2"
-              >verlo en GitHub</a>.
-            </div>
-          ) : (
-            <div className="flex flex-col gap-5">
-              {releases.map((r, i) => (
-                <motion.div
-                  key={r.tag}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-60px' }}
-                  transition={{ duration: 0.5, delay: i * 0.1 }}
-                  className="card-glow rounded-2xl p-7"
-                >
-                  <div className="flex flex-wrap items-center gap-3 mb-1">
-                    <span className="text-white text-lg font-normal">{r.tag}</span>
-                    {i === 0 && (
-                      <span className="text-[10px] px-2.5 py-1 rounded-full bg-violet-500/12 border border-violet-500/25 text-violet-300">
-                        Más reciente
-                      </span>
-                    )}
-                    <span className="text-white/25 text-xs ml-auto">{formatDate(r.publishedAt)}</span>
-                  </div>
-
-                  <div className="mt-4 mb-5">
-                    <Changelog body={r.body} />
-                  </div>
-
-                  <div className="flex flex-wrap gap-2.5">
-                    {(['windows', 'linux', 'android'] as const).map((key) => {
-                      const asset = r[key];
-                      if (!asset) return null;
-                      const meta = platformMeta[key];
-                      return (
-                        <a
-                          key={key}
-                          href={asset.browser_download_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs transition-all btn-glow [&>svg]:w-4 [&>svg]:h-4"
-                          style={{ background: `${meta.color}12`, border: `1px solid ${meta.color}30`, color: meta.color }}
-                        >
-                          <meta.Icon />
-                          {meta.label}
-                          {asset.size ? ` · ${formatSize(asset.size)}` : ''}
-                        </a>
-                      );
-                    })}
-                    <a
-                      href={r.htmlUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs text-white/35 hover:text-white/60 border border-white/10 transition-colors"
-                    >
-                      Ver en GitHub <ArrowUpRight className="w-3 h-3" />
-                    </a>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ───── FEATURES ───── */}
-      <section className="relative py-32 px-6">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-violet-950/8 to-transparent pointer-events-none" />
-        <div className="max-w-6xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-20">
-            <span className="section-badge">✦  Características</span>
-            <h2 className="text-4xl md:text-5xl lg:text-[58px] font-light text-white leading-tight mt-5 mb-5">
-              Todo lo que necesitas<br/>
-              <span className="prism-text">sin compromisos</span>
-            </h2>
-            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
-              Motor de extensiones JS, reproducción robusta y tracking integrado. Todo nativo, todo local.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {features.map((f, i) => (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {platforms.map(({ key, label, Icon, href }, i) => {
+            const asset = release?.[key];
+            const downloadHref = getDirectDownloadHref(release, key);
+            return (
               <motion.div
-                key={f.title}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 0.5, delay: i * 0.08 }}
-                whileHover={{ y: -5, transition: { duration: 0.2 } }}
-                className="card-glow rounded-2xl p-7 group cursor-default"
+                key={key}
+                {...fadeUp}
+                transition={{ ...fadeUp.transition, delay: i * 0.06 }}
+                className="surface flex flex-col justify-between rounded-2xl p-6"
               >
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
-                  style={{ background: f.bg, border: `1px solid ${f.border}` }}
-                >
-                  <f.Icon className="w-5 h-5 text-violet-200" />
-                </div>
-                <h3 className="text-white text-[15px] font-normal mb-2">{f.title}</h3>
-                <p className="text-white/40 text-[13px] leading-relaxed">{f.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ───── DIVIDER ───── */}
-      <div className="glow-line max-w-4xl mx-6 md:mx-auto" />
-
-      {/* ───── EXTENSIONS ───── */}
-      <section className="relative py-32 px-6">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-950/8 to-transparent pointer-events-none" />
-        <div className="max-w-6xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-20">
-            <span className="section-badge">⬡  Extensiones</span>
-            <h2 className="text-4xl md:text-5xl lg:text-[58px] font-light text-white leading-tight mt-5 mb-5">
-              Motor de<br/>
-              <span className="prism-text">extensiones JS</span>
-            </h2>
-            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
-              Repositorio oficial prism+ listo para usar — cada fuente corre aislada en su propio sandbox.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-
-            {/* Code preview */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.7 }}
-              className="card-glow rounded-2xl overflow-hidden"
-            >
-              <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.05] bg-white/[0.015]">
-                <div className="w-3 h-3 rounded-full bg-red-500/40" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500/40" />
-                <div className="w-3 h-3 rounded-full bg-green-500/40" />
-                <span className="text-white/20 text-xs ml-3 font-mono">miExtension.js</span>
-              </div>
-              <pre
-                className="p-6 text-[12.5px] leading-[1.85] font-mono overflow-x-auto scrollbar-thin m-0 bg-transparent"
-                dangerouslySetInnerHTML={{ __html: codeHtml }}
-              />
-            </motion.div>
-
-            {/* Repos + dev CTA */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.7, delay: 0.1 }}
-              className="flex flex-col gap-4"
-            >
-              {/* prism+ */}
-              <div className="card-glow rounded-2xl p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-violet-500/12 border border-violet-500/20 flex items-center justify-center">
-                    <Shield className="w-4 h-4 text-violet-400" />
+                <div>
+                  <div
+                    className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl"
+                    style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}
+                  >
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white text-sm">prism+ · Oficial</div>
-                    <div className="text-white/30 text-xs">
-                      {extensionCount != null ? `${extensionCount} extensiones` : 'AnimeYT, JKAnime, ManhwaWeb, Olympus'}
-                    </div>
-                  </div>
-                  <span className="shrink-0 text-[10px] px-2.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300">
-                    Preinstalado
-                  </span>
-                </div>
-                <p className="text-white/35 text-xs leading-relaxed mb-3">
-                  Extensiones creadas por el equipo PrismHub. Enfocadas en español. Vienen activas por defecto en la app —
-                  en crecimiento constante.
-                </p>
-                <div className="code-block px-3 py-2 text-[10px] font-mono text-violet-300/55 break-all mb-3">
-                  raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json
-                </div>
-                <a
-                  href="https://github.com/Litdemonick/prism-plus"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-violet-400 hover:text-violet-300 text-xs transition-colors w-fit"
-                >
-                  Ver repositorio prism+ <ArrowUpRight className="w-3 h-3" />
-                </a>
-              </div>
-
-              {/* Dev CTA */}
-              <motion.button
-                whileHover={{ y: -3, transition: { duration: 0.2 } }}
-                onClick={() => navigate('/developers')}
-                className="card-glow rounded-2xl p-5 flex items-center justify-between w-full group btn-glow"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                    <Code2 className="w-4 h-4 text-violet-300" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-white text-sm">Crea tu extensión</div>
-                    <div className="text-white/30 text-xs">Guía completa · API disponible</div>
+                  <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold">{label}</h3>
+                  <div className="mt-1 flex items-center gap-3 font-mono text-xs" style={{ color: 'var(--text-faint)' }}>
+                    <span>{release?.tag ?? APP_VERSION}</span>
+                    {asset?.size ? <span>· {formatSize(asset.size)}</span> : null}
                   </div>
                 </div>
-                <ArrowUpRight className="w-4 h-4 text-white/20 group-hover:text-violet-400 transition-colors" />
-              </motion.button>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* ───── CTA ───── */}
-      <section className="py-32 px-6">
-        <div className="max-w-3xl mx-auto">
-          <motion.div {...fadeUp()}>
-            <div className="card-glow rounded-3xl p-10 md:p-16 relative overflow-hidden text-center">
-              <div className="absolute -top-32 -left-32 w-80 h-80 rounded-full bg-violet-600/10 blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-cyan-600/8 blur-3xl pointer-events-none" />
-              <div className="relative z-10">
-                <span className="section-badge mb-6 inline-flex">★  Descarga gratuita</span>
-                <h2 className="text-4xl md:text-5xl font-light text-white mb-4 leading-tight">
-                  Empieza ahora.<br/>
-                  <span className="prism-text">Es gratis para siempre.</span>
-                </h2>
-                <p className="text-white/40 mb-10 text-base max-w-sm mx-auto leading-relaxed">
-                  Open source bajo AGPL-3.0. Sin suscripciones, sin anuncios, sin servidores propios.
-                </p>
-                <div className="flex items-center justify-center gap-4 flex-wrap">
-                  <motion.a
-                    href="https://github.com/Litdemonick/Prism_Hub"
+                <div className="mt-6 flex items-center gap-2">
+                  <a
+                    href={downloadHref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-2 px-8 py-3.5 rounded-full bg-white text-[#08080f] text-sm hover:bg-violet-100 transition-colors btn-glow"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                    style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
                   >
-                    <ArrowUpRight className="w-4 h-4" />
-                    Ver en GitHub
-                  </motion.a>
-                  <motion.button
-                    onClick={() => navigate('/docs')}
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-2 px-8 py-3.5 rounded-full border border-white/10 text-white/60 hover:text-white hover:border-violet-500/30 text-sm transition-all"
-                  >
-                    <Terminal className="w-4 h-4" />
-                    Documentación
-                  </motion.button>
+                    <Download className="h-4 w-4" />
+                    {t('platforms.install')}
+                  </a>
+                  {href && (
+                    <a
+                      href={href}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border transition-colors hover:opacity-80"
+                      style={{ borderColor: 'var(--border)' }}
+                      aria-label={label}
+                    >
+                      <ArrowUpRight className="h-4 w-4" />
+                    </a>
+                  )}
                 </div>
-              </div>
-            </div>
-          </motion.div>
+              </motion.div>
+            );
+          })}
         </div>
-      </section>
 
-      <Footer />
+        <motion.div {...fadeUp} className="mt-12 border-t pt-10" style={{ borderColor: 'var(--border)' }}>
+          <div className="mb-4 flex items-center gap-3">
+            <span
+              className="rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide"
+              style={{ borderColor: 'var(--border-strong)', color: 'var(--text-muted)' }}
+            >
+              {t('download.stableZone')}
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-faint)' }}>{t('download.stableZoneDesc')}</span>
+          </div>
+          <div
+            className="surface-2 flex flex-col items-center gap-1 rounded-2xl border-2 border-dashed px-6 py-10 text-center"
+            style={{ borderColor: 'var(--border-strong)' }}
+          >
+            <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>{t('download.stableEmpty')}</p>
+          </div>
+        </motion.div>
 
-    </div>
+        <motion.div {...fadeUp} className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-center text-sm">
+          {release?.htmlUrl && (
+            <a
+              href={release.htmlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-semibold transition-colors"
+              style={{ color: 'var(--accent)' }}
+            >
+              <Check className="h-4 w-4" />
+              {t('download.notes')}
+            </a>
+          )}
+          <a
+            href="https://github.com/Litdemonick/Prism_Hub/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--text-faint)' }}
+            className="transition-colors hover:opacity-80"
+          >
+            {t('download.releases')}
+          </a>
+        </motion.div>
+
+        <div className="mt-10">
+          <DeveloperNote />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function Home() {
+  return (
+    <Layout>
+      <Hero />
+      <Showcase />
+      <Features />
+      <Requirements />
+      <DownloadSection />
+    </Layout>
   );
 }
