@@ -82,7 +82,7 @@ export const dict = {
       'Por debajo de los mínimos la app sigue andando: baja la calidad de vídeo, decodifica imágenes más chicas y suelta lo que no se está usando con más agresividad. No hay un piso que la deje afuera.',
     'requirements.tipTitle': 'Para que ande lo más fluido posible',
     'requirements.tip':
-      'Cumplir los recomendados no alcanza si la conexión a internet es inestable: todo se transmite en vivo desde cada sitio, no hay descargas, así que un corte o una red lenta se nota como lag aunque el aparato sobre. Ayuda también tener la app actualizada a la última versión (cada una trae mejoras de rendimiento reales, no solo funciones nuevas) y no tener demasiados programas pesados abiertos al mismo tiempo compitiendo por la misma memoria.',
+      'Cumplir los recomendados no alcanza si la conexión a internet es inestable: todo se transmite en vivo desde cada sitio, no hay descargas, así que un corte o una red lenta se nota como lag aunque el aparato sobre. El resto es trabajo nuestro: la app tiene que andar fluida y estable así el aparato esté con otras cosas abiertas al mismo tiempo, jugando o lo que sea — por eso cada versión trae mejoras de rendimiento reales, no solo funciones nuevas.',
 
     'download.beforeTitle': 'Antes de instalar',
     'download.eyebrow': 'Descargar',
@@ -177,7 +177,7 @@ export const dict = {
       "Below the minimum the app still runs: it lowers video quality, decodes smaller images and releases what's not in use more aggressively. There's no floor that locks you out.",
     'requirements.tipTitle': 'For the smoothest experience',
     'requirements.tip':
-      "Meeting the recommended specs isn't enough if the internet connection is unstable: everything streams live from each site, there are no downloads, so a drop or a slow network shows up as lag even on a device that's more than capable. It also helps to keep the app updated to the latest version (every release ships real performance improvements, not just new features) and to avoid running too many heavy programs at once competing for the same memory.",
+      "Meeting the recommended specs isn't enough if the internet connection is unstable: everything streams live from each site, there are no downloads, so a drop or a slow network shows up as lag even on a device that's more than capable. The rest is on us: the app has to stay smooth and stable even with other heavy things running at the same time, gaming or whatever else — that's why every release ships real performance improvements, not just new features.",
 
     'download.beforeTitle': 'Before installing',
     'download.eyebrow': 'Download',
