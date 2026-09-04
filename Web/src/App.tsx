@@ -9,12 +9,14 @@ import Developers from './pages/Developers';
 import License from './pages/License';
 import { ThemeProvider } from './lib/theme';
 import { LangProvider } from './lib/i18n';
+import ScrollToTop from './components/ScrollToTop';
 
 function App() {
   return (
     <ThemeProvider>
       <LangProvider>
         <HashRouter>
+          <ScrollToTop />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/linux" element={<Linux />} />

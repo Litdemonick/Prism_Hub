@@ -5,6 +5,24 @@
   --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* ── Escala de tamaños, un poco más grande que la de Tailwind ──────────
+   * Reportado en vivo: "letras chicas no se ven bien" — la mayoría del
+   * texto del sitio (descripciones, listas, el aviso del desarrollador)
+   * usa text-xs/text-sm, y en un monitor de PC visto a distancia normal
+   * quedaba incómodo de leer. Se sube la escala ACÁ, una sola vez: como
+   * son las variables que Tailwind usa para las clases text-*, todo el
+   * sitio crece parejo sin tocar cada archivo, y la jerarquía entre
+   * insignias chicas y texto de lectura se mantiene igual de distinguible.
+   */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.15rem;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.4rem;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.6rem;
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.7rem;
 }
 
 /* ── Tokens ─────────────────────────────────────────────────────────────

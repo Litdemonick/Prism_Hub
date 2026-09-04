@@ -11,7 +11,6 @@ import {
   APP_VERSION,
   detectPlatform,
   formatSize,
-  getDirectDownloadHref,
   useExtensionCount,
   useLatestRelease,
   type DownloadPlatform,
@@ -156,11 +155,44 @@ function Hero() {
   );
 }
 
+type Shot = { src: string; label: string };
+
+function ShotCard({ shot, index, onOpen }: { shot: Shot; index: number; onOpen: (s: Shot) => void }) {
+  return (
+    <motion.button
+      type="button"
+      {...fadeUp}
+      transition={{ ...fadeUp.transition, delay: index * 0.08 }}
+      onClick={() => onOpen(shot)}
+      className="device-frame group block w-full cursor-zoom-in overflow-hidden rounded-2xl text-left"
+    >
+      {/* Sin caja de proporción forzada: cada imagen mide lo que le
+          corresponde según su propio ancho/alto real (w-full h-auto). Entra
+          ENTERA, sin recortar y sin relleno vacío alrededor. */}
+      <img
+        src={shot.src}
+        alt={shot.label}
+        loading="lazy"
+        className="block h-auto w-full transition-transform duration-500 group-hover:scale-[1.03]"
+      />
+      <div className="flex items-center justify-between px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+        {shot.label}
+        <ZoomIn className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-60" />
+      </div>
+    </motion.button>
+  );
+}
+
 function Showcase() {
   const { t } = useLang();
   const base = import.meta.env.BASE_URL;
-  const shots = [
-    { src: `${base}screenshots/desktop-home.png`, label: 'Windows / Linux' },
+  // Panorámica (PC) y verticales (celular) NUNCA quedan parejas en una
+  // misma fila con caja fija: una u otra siempre termina con relleno vacío
+  // o recortada. Reportado en vivo con foto. Se separan en dos filas —una
+  // por forma— así cada captura usa la proporción que le corresponde, y
+  // las dos verticales, que SÍ comparten forma, quedan iguales entre sí.
+  const desktopShot = { src: `${base}screenshots/desktop-home.png`, label: 'Windows / Linux' };
+  const phoneShots = [
     { src: `${base}screenshots/mobile-home.jpeg`, label: 'Android' },
     { src: `${base}screenshots/mobile-search.jpeg`, label: 'Búsqueda' },
   ];
@@ -188,32 +220,16 @@ function Showcase() {
           </p>
         </motion.div>
 
-        <div className="grid items-start gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {shots.map((s, i) => (
-            <motion.button
-              type="button"
-              key={s.src}
-              {...fadeUp}
-              transition={{ ...fadeUp.transition, delay: i * 0.08 }}
-              onClick={() => setOpen(s)}
-              className="device-frame group block w-full cursor-zoom-in overflow-hidden rounded-2xl text-left"
-            >
-              {/* Sin caja de proporción fija: forzar un aspecto (16/10, 3/4)
-                  que no coincide con el de la captura real dejaba franjas
-                  vacías arriba/abajo o a los costados —letterboxing feo—.
-                  Cada imagen define su propio alto (w-full h-auto), así se
-                  ve ENTERA y sin relleno de sobra alrededor. */}
-              <img
-                src={s.src}
-                alt={s.label}
-                loading="lazy"
-                className="block h-auto w-full transition-transform duration-500 group-hover:scale-[1.03]"
-              />
-              <div className="flex items-center justify-between px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                {s.label}
-                <ZoomIn className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-60" />
-              </div>
-            </motion.button>
+        {/* Fila 1: la panorámica de escritorio, sola y a lo ancho — a su
+            propia proporción no le compite nada al lado. */}
+        <ShotCard shot={desktopShot} index={0} onOpen={setOpen} />
+
+        {/* Fila 2: las dos verticales de celular, lado a lado — comparten
+            forma, así que a la misma proporción quedan de la misma altura
+            entre sí, sin necesidad de forzar una caja. */}
+        <div className="mt-5 grid grid-cols-2 gap-5">
+          {phoneShots.map((s, i) => (
+            <ShotCard key={s.src} shot={s} index={i + 1} onOpen={setOpen} />
           ))}
         </div>
       </div>
@@ -310,7 +326,7 @@ function DownloadSection() {
     { key: 'windows', label: t('platforms.windows'), Icon: WindowsIcon, href: '/windows' },
     { key: 'linux', label: t('platforms.linux'), Icon: LinuxIcon, href: '/linux' },
     { key: 'android', label: t('platforms.android'), Icon: AndroidIcon, href: '/android' },
-    { key: 'androidTv', label: t('platforms.androidTv'), Icon: AndroidTvIcon },
+    { key: 'androidTv', label: t('platforms.androidTv'), Icon: AndroidTvIcon, href: '/android' },
   ];
 
   return (
@@ -336,7 +352,6 @@ function DownloadSection() {
         <div className="grid gap-4 sm:grid-cols-2">
           {platforms.map(({ key, label, Icon, href }, i) => {
             const asset = release?.[key];
-            const downloadHref = getDirectDownloadHref(release, key);
             const isNew =
               !!release?.publishedAt &&
               PAGE_LOAD_TIME - new Date(release.publishedAt).getTime() <
@@ -372,16 +387,19 @@ function DownloadSection() {
                   </div>
                 </div>
                 <div className="mt-6 flex items-center gap-2">
-                  <a
-                    href={downloadHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  {/* A la página de instrucciones, NO directo al archivo:
+                      pedido explícito, para que se lea el aviso de
+                      seguridad antes de bajar algo. Esa página ya tiene el
+                      método real de instalación (comando de consola, o el
+                      botón del APK en Android). */}
+                  <Link
+                    to={href ?? '#descargar'}
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02] active:scale-[0.98]"
                     style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
                   >
                     <Download className="h-4 w-4" />
                     {t('platforms.install')}
-                  </a>
+                  </Link>
                   {href && (
                     // Link, no <a href>: el sitio enruta con HashRouter — un
                     // <a href="/windows"> normal navega el NAVEGADOR a esa
