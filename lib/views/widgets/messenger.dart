@@ -15,23 +15,48 @@ showPlatformSnackbar({
   fluent.InfoBarSeverity severity = fluent.InfoBarSeverity.info,
 }) {
   if (Platform.isAndroid) {
-    final messenger = material.ScaffoldMessenger.of(context);
-    // Los SnackBar de Material se ENCOLAN: cada uno espera a que termine el
-    // anterior. Instalar o actualizar varias extensiones disparaba un mensaje
-    // por cada una y había que esperar la cola completa —cuatro segundos por
-    // mensaje— viendo avisos de algo que ya había pasado. Se descarta lo que
-    // esté en pantalla para que siempre se vea el ÚLTIMO, que es el que
-    // importa.
-    messenger.removeCurrentSnackBar();
-    return messenger.showSnackBar(
-      material.SnackBar(
-        content: Text("$title $content".trim()),
+    // ── Blindado: si no hay ScaffoldMessenger, no se pierde el aviso ──────
+    //
+    // `ScaffoldMessenger.of(context)` exige un ancestro en el árbol —
+    // normalmente lo pone GetMaterialApp/MaterialApp, pero una pantalla
+    // montada por su cuenta (una ruta empujada con su propio Navigator, un
+    // diálogo con un contexto particular) puede quedar sin uno. Sin este
+    // try/catch, esa excepción no llegaba a verse en una build de release:
+    // el botón que la disparaba quedaba "mudo" — se apretaba y no pasaba
+    // nada, sin ningún error visible que explicara por qué. Reportado en
+    // vivo: «al darle ya actualicé no hace nada».
+    //
+    // El aviso de escritorio (`_avisoDeEscritorio`, más abajo) sirve de red:
+    // solo necesita un `Overlay`, que existe desde que hay CUALQUIER
+    // Navigator montado — muchísimo más difícil de no tener que un
+    // ScaffoldMessenger.
+    try {
+      final messenger = material.ScaffoldMessenger.of(context);
+      // Los SnackBar de Material se ENCOLAN: cada uno espera a que termine
+      // el anterior. Instalar o actualizar varias extensiones disparaba un
+      // mensaje por cada una y había que esperar la cola completa —cuatro
+      // segundos por mensaje— viendo avisos de algo que ya había pasado. Se
+      // descarta lo que esté en pantalla para que siempre se vea el
+      // ÚLTIMO, que es el que importa.
+      messenger.removeCurrentSnackBar();
+      return messenger.showSnackBar(
+        material.SnackBar(
+          content: Text("$title $content".trim()),
+          action: action,
+          // 4s por mensaje era mucho para un aviso de "listo".
+          duration: const Duration(milliseconds: 2200),
+          behavior: material.SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      return _avisoDeEscritorio(
+        context: context,
+        title: title,
+        content: content,
         action: action,
-        // 4s por mensaje era mucho para un aviso de "listo".
-        duration: const Duration(milliseconds: 2200),
-        behavior: material.SnackBarBehavior.floating,
-      ),
-    );
+        severity: severity,
+      );
+    }
   }
   return _avisoDeEscritorio(
     context: context,
