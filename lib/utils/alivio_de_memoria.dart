@@ -176,6 +176,61 @@ class AlivioDeMemoria with WidgetsBindingObserver {
     );
   }
 
+  /// Se suelta lo que no se está usando cuando la app ENTERA pasa a segundo
+  /// plano — minimizar en PC, ir al escritorio o cambiar de app en Android.
+  ///
+  /// ── La brecha que esto tapa ──────────────────────────────────────────
+  ///
+  /// El resto de esta clase reacciona a que el SISTEMA avise que anda corto
+  /// de memoria (`didHaveMemoryPressure`) — pero eso es reactivo, y en un
+  /// aparato con memoria de sobra (`NivelDeAparato.alto`, que es donde caen
+  /// un PC y prácticamente cualquier celular de los últimos años) ese aviso
+  /// puede no llegar nunca en una sesión normal. El resultado: en un aparato
+  /// "capaz" nada se suelta nunca por sí solo si el usuario no vuelve a la
+  /// app — los motores de las extensiones que se usaron quedan vivos, con
+  /// su pila y su JavaScript ya analizado, aunque hayan pasado horas.
+  ///
+  /// En un PC con la ventana minimizada eso es una app fantasma gastando
+  /// RAM que nadie está mirando. En un teléfono es peor: un motor vivo no
+  /// hace nada por sí mismo, pero la RAM que ocupa es RAM que Android puede
+  /// tener que recuperar matando el proceso — y ESE es el mecanismo real
+  /// detrás de "se pierde la posición al volver a entrar": no es que la app
+  /// pierda el dato, es que el sistema operativo mató el proceso mientras
+  /// estaba afuera y lo que se ve al volver es un arranque nuevo.
+  ///
+  /// Que la app entera se vaya a segundo plano es una señal mucho más fuerte
+  /// y mucho menos frecuente que cambiar de zona adentro de ella —por eso acá
+  /// no hace falta el mismo cuidado que en `soltarAlDejarLaPantalla` (que sí
+  /// se guarda para los aparatos flojos, porque ese se dispara todo el
+  /// rato)—: soltarlo todo cuesta, como mucho, volver a decodificar alguna
+  /// portada al regresar.
+  ///
+  /// No corre en Android TV: ya tiene su propio mecanismo por zona
+  /// (`_AlivioDeZonasTv`, en `home_page_tv.dart`), y ahí "pasar a segundo
+  /// plano" casi no ocurre — el usuario se queda adentro de la app.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.paused &&
+        state != AppLifecycleState.hidden) {
+      return;
+    }
+    if (PlatformTv.esTelevisionSync) return;
+    final cache = PaintingBinding.instance.imageCache;
+    final vivas = cache.liveImageCount;
+    cache.clear();
+    cache.clearLiveImages();
+    // Mismo camino que ya prueba el aviso de memoria del sistema: solo
+    // suelta lo que ya cumplió su plazo de inactividad (`_graciaAntesDeSoltar`
+    // por aparato) — nunca uno con una consulta en curso.
+    final motores = ExtensionUtils.soltarMotoresQuePueda();
+    if (vivas == 0 && motores == 0) return;
+    logger.info(
+      'La app pasó a segundo plano: se soltaron $vivas imágenes en uso'
+      '${motores > 0 ? ' y $motores motores de extensión' : ''}'
+      ' · perfil ${PerfilDeAparato.nivel.name}',
+    );
+  }
+
   static void soltarAntesDeReproducir() {
     if (!PrismHubMas.estaAjustando) return;
     final antes = PaintingBinding.instance.imageCache.currentSizeBytes;
