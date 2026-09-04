@@ -73,6 +73,19 @@ export default function RequirementsTable({ compact = false }: { compact?: boole
       <p className="mx-auto mt-4 max-w-2xl text-center text-xs leading-relaxed" style={{ color: 'var(--text-faint)' }}>
         {t('requirements.note')}
       </p>
+
+      <motion.div
+        {...fadeUp}
+        className="surface mx-auto mt-4 max-w-2xl rounded-2xl px-5 py-4"
+        style={{ borderColor: 'color-mix(in srgb, var(--accent) 30%, var(--border))' }}
+      >
+        <p className="mb-1.5 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--accent)' }}>
+          {t('requirements.tipTitle')}
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          {t('requirements.tip')}
+        </p>
+      </motion.div>
     </div>
   );
 }

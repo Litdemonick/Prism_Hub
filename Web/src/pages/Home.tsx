@@ -146,7 +146,15 @@ function Hero() {
             <div className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>{t('hero.stat.platforms')}</div>
           </div>
           <div>
-            <div className="font-[family-name:var(--font-display)] text-2xl font-bold">{release?.tag ?? APP_VERSION}</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-[family-name:var(--font-display)] text-2xl font-bold">{release?.tag ?? APP_VERSION}</span>
+              <span
+                className="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
+              >
+                beta
+              </span>
+            </div>
             <div className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>AGPL-3.0</div>
           </div>
         </motion.div>
