@@ -1254,6 +1254,17 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       // DESCARGA incluso más lejos.
                       minCacheExtent: 3000,
                       itemBuilder: (context, index) {
+                        // El último ítem no es una página: es el pie con las
+                        // flechas de capítulo (ver _PieDeCapituloCascada). Va
+                        // ACÁ, dentro de la misma lista, y no aparte debajo de
+                        // ella, para que aparezca justo al terminar de
+                        // scrollear el capítulo — pedido explícito: «cuando
+                        // está scrolleando y llega hasta abajo, que aparezcan
+                        // esas flechas también, para ir al siguiente o
+                        // anterior».
+                        if (index == images.length) {
+                          return _PieDeCapituloCascada(controlador: _c);
+                        }
                         // Al construir una página se piden también las que
                         // vienen: cubre el arranque del capítulo, cuando
                         // todavía no hubo ningún scroll que lo dispare.
@@ -1268,7 +1279,12 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                           headers: _c.watchData.value?.headers,
                         );
                       },
-                      itemCount: images.length,
+                      // +1: el pie de las flechas de capítulo. El contador de
+                      // página (ComicController.onInit, itemPositionsListener)
+                      // ya se cuida de no confundirlo con una página real —
+                      // descarta cualquier índice que se pase de
+                      // `watchData.urls.length - 1`.
+                      itemCount: images.length + 1,
                     ),
                   );
 
@@ -1437,6 +1453,72 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
 // izquierda SIEMPRE es "anterior" y la derecha "siguiente", aunque en modo
 // derecha→izquierda el deslizamiento vaya al revés — si no, el mismo botón
 // haría cosas distintas según el modo y sería confuso.
+/// El pie de la cascada: las flechas de capítulo, después de la última
+/// página.
+///
+/// ── Por qué acá y no como un botón flotante ────────────────────────────
+///
+/// Pedido explícito: que aparezcan «cuando está scrolleando y llega hasta
+/// abajo», o sea como parte natural del final del capítulo, no como algo
+/// que tapa la lectura mientras tanto. Viviendo como el último ítem de la
+/// MISMA `ScrollablePositionedList` (ver `itemCount: images.length + 1` en
+/// el `build` de más arriba), aparece solo cuando de verdad se llegó al
+/// final — sin un `NotificationListener` aparte para adivinarlo.
+class _PieDeCapituloCascada extends StatelessWidget {
+  const _PieDeCapituloCascada({required this.controlador});
+
+  final ComicController controlador;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final hayAnterior = controlador.index.value > 0;
+      final haySiguiente =
+          controlador.index.value < controlador.playList.length - 1;
+      // Ni un capítulo antes ni uno después: no hay nada que ofrecer acá
+      // abajo — pasa con una obra de un solo capítulo.
+      if (!hayAnterior && !haySiguiente) return const SizedBox.shrink();
+      Widget boton({required bool habilitado, required bool esSiguiente}) {
+        return Expanded(
+          child: Opacity(
+            opacity: habilitado ? 1 : 0.35,
+            child: OutlinedButton.icon(
+              onPressed: habilitado
+                  ? () => controlador.index.value += esSiguiente ? 1 : -1
+                  : null,
+              icon: Icon(
+                esSiguiente
+                    ? Icons.skip_next_rounded
+                    : Icons.skip_previous_rounded,
+              ),
+              label: Text(
+                esSiguiente ? 'Capítulo siguiente' : 'Capítulo anterior',
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: HomeTheme.textPrimary,
+                side: BorderSide(color: HomeTheme.border),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        );
+      }
+
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 28, 16, 40),
+        child: Row(
+          children: [
+            boton(habilitado: hayAnterior, esSiguiente: false),
+            const SizedBox(width: 12),
+            boton(habilitado: haySiguiente, esSiguiente: true),
+          ],
+        ),
+      );
+    });
+  }
+}
+
 class _PageArrow extends StatelessWidget {
   const _PageArrow({
     required this.left,

@@ -29,6 +29,22 @@ class ControlPanelHeader<T extends ReaderController> extends StatefulWidget {
 class _ControlPanelHeaderState<T extends ReaderController>
     extends State<ControlPanelHeader> {
   late final _c = Get.find<T>(tag: widget.tag);
+
+  /// Si hay un capítulo antes/después del que se está leyendo.
+  ///
+  /// Antes la ÚNICA forma de cambiar de capítulo era abrir la lista entera y
+  /// elegir a mano — cómodo para saltar lejos, pero de más para el caso más
+  /// común: seguir con el que sigue. Pedido explícito: agregar dos flechas
+  /// para ir directo al anterior o al siguiente, acá arriba junto a
+  /// ajustes/detalle/episodios.
+  bool get _hayAnterior => _c.index.value > 0;
+  bool get _haySiguiente => _c.index.value < _c.playList.length - 1;
+
+  void _irACapitulo(int delta) {
+    final destino = _c.index.value + delta;
+    if (destino < 0 || destino >= _c.playList.length) return;
+    _c.index.value = destino;
+  }
   final fluent.FlyoutController _playListFlayoutcontroller =
       fluent.FlyoutController();
   final fluent.FlyoutController _settingFlayoutcontroller =
@@ -101,6 +117,23 @@ class _ControlPanelHeaderState<T extends ReaderController>
             foregroundColor: HomeTheme.textPrimary,
             title: Text(_c.title),
             actions: [
+              // Las dos flechas van PRIMERO en la fila de acciones: son el
+              // atajo más usado (seguir leyendo), así que quedan más a la
+              // izquierda que ajustes/detalle/episodios.
+              Obx(
+                () => IconButton(
+                  onPressed: _hayAnterior ? () => _irACapitulo(-1) : null,
+                  tooltip: 'Capítulo anterior',
+                  icon: const Icon(Icons.skip_previous_rounded),
+                ),
+              ),
+              Obx(
+                () => IconButton(
+                  onPressed: _haySiguiente ? () => _irACapitulo(1) : null,
+                  tooltip: 'Capítulo siguiente',
+                  icon: const Icon(Icons.skip_next_rounded),
+                ),
+              ),
               if (widget.buildSettings != null)
                 IconButton(
                   onPressed: () {
@@ -232,6 +265,28 @@ class _ControlPanelHeaderState<T extends ReaderController>
                   ),
                 ),
               ),
+              // Mismo criterio que en Android: el atajo más usado va primero,
+              // antes de ajustes/detalle/episodios.
+              Obx(
+                () => fluent.Tooltip(
+                  message: 'Capítulo anterior',
+                  child: fluent.IconButton(
+                    icon: const Icon(fluent.FluentIcons.previous),
+                    onPressed: _hayAnterior ? () => _irACapitulo(-1) : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Obx(
+                () => fluent.Tooltip(
+                  message: 'Capítulo siguiente',
+                  child: fluent.IconButton(
+                    icon: const Icon(fluent.FluentIcons.next),
+                    onPressed: _haySiguiente ? () => _irACapitulo(1) : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               if (widget.buildSettings != null) ...[
                 fluent.FlyoutTarget(
                   controller: _settingFlayoutcontroller,
