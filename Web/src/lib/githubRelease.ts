@@ -145,9 +145,17 @@ export function getAndroidAsset(
   release?: ReleaseInfo | null,
   variant: AndroidVariant = 'auto',
 ) {
-  const resolved = variant === 'auto' ? detectAndroidVariant() : variant;
-  if (resolved === 'x86_64') return release?.androidX64 || release?.androidArm64 || release?.android;
-  if (resolved === 'armeabi-v7a') return release?.androidArmv7 || release?.androidArm64 || release?.android;
+  // 'auto' es el botón PRINCIPAL — el que recomendamos sin que nadie tenga
+  // que saber qué procesador tiene. Ahí siempre gana el universal: es el
+  // único que anda en cualquier arquitectura Y en Android TV sin adivinar
+  // nada. Los específicos (arm64-v8a/armeabi-v7a/x86_64) solo se ofrecen
+  // como "otras arquitecturas" más abajo, para quien prefiere el archivo
+  // más chico y ya sabe cuál le corresponde.
+  if (variant === 'auto') {
+    return release?.androidUniversal || release?.androidArm64 || release?.android;
+  }
+  if (variant === 'x86_64') return release?.androidX64 || release?.androidArm64 || release?.android;
+  if (variant === 'armeabi-v7a') return release?.androidArmv7 || release?.androidArm64 || release?.android;
   return release?.androidArm64 || release?.android;
 }
 
@@ -155,11 +163,16 @@ export function getAndroidDownloadHref(
   release?: ReleaseInfo | null,
   variant: AndroidVariant = 'auto',
 ) {
-  const resolved = variant === 'auto' ? detectAndroidVariant() : variant;
-  const asset = getAndroidAsset(release, resolved);
+  // OJO: se le pasa `variant` TAL CUAL a getAndroidAsset, sin resolver
+  // 'auto' acá antes — esa resolución temprana era el bug: convertía
+  // 'auto' en un arco concreto ("arm64-v8a") ANTES de que getAndroidAsset
+  // pudiera ver que era el caso "auto" y ofrecer el universal primero. El
+  // universal terminaba sin usarse nunca, aunque estuviera disponible.
+  const asset = getAndroidAsset(release, variant);
   if (asset?.browser_download_url) return asset.browser_download_url;
-  if (resolved === 'x86_64') return fallbackDownloads.androidX64;
-  if (resolved === 'armeabi-v7a') return fallbackDownloads.androidArmv7;
+  if (variant === 'auto') return fallbackDownloads.androidUniversal;
+  if (variant === 'x86_64') return fallbackDownloads.androidX64;
+  if (variant === 'armeabi-v7a') return fallbackDownloads.androidArmv7;
   return fallbackDownloads.androidArm64;
 }
 
@@ -221,4 +234,24 @@ export function useExtensionCount() {
     };
   }, []);
   return count;
+}
+
+/** Estrellas del repo en GitHub — mismo criterio que useExtensionCount: se
+ * lee en cada carga, no un número escrito a mano que se queda viejo. */
+export function useGithubStars() {
+  const [stars, setStars] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`https://api.github.com/repos/${REPO}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: { stargazers_count?: number }) => {
+        if (cancelled) return;
+        if (typeof data.stargazers_count === 'number') setStars(data.stargazers_count);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return stars;
 }

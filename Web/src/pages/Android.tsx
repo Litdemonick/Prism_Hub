@@ -7,7 +7,6 @@ import { useLang } from '../lib/i18n';
 import {
   useLatestRelease,
   formatSize,
-  detectAndroidVariant,
   getAndroidDownloadHref,
   getAndroidAsset,
   type AndroidVariant,
@@ -22,6 +21,9 @@ const allVariants: { label: string; key: AndroidVariant }[] = [
 const copy = {
   es: {
     title: 'Instalar en Android',
+    beforeTitle: 'Antes de instalar',
+    installTitle: 'Instalar',
+    mainLabel: 'Universal (todos los aparatos)',
     androidVersion: 'Android 7.0 o superior · sin Google Play',
     otherArch: 'Otras arquitecturas:',
     tvTitle: '¿Vas a instalarlo en un televisor?',
@@ -57,6 +59,7 @@ const copy = {
   },
   en: {
     title: 'Install on Android',
+    mainLabel: 'Universal (any device)',
     androidVersion: 'Android 7.0 or later · no Google Play',
     otherArch: 'Other architectures:',
     tvTitle: 'Installing on a TV?',
@@ -96,11 +99,15 @@ export default function Android() {
   const { lang } = useLang();
   const c = copy[lang];
   const release = useLatestRelease();
-  const detectedVariant = detectAndroidVariant();
+  // El botón principal siempre ofrece el Universal: un solo archivo que
+  // anda en cualquier arquitectura y que la propia app reconoce sola si el
+  // aparato es un celular, una tablet o un televisor — no hay nada que la
+  // página tenga que adivinar. Las arquitecturas sueltas (más livianas)
+  // quedan aparte, para quien ya sabe cuál le corresponde.
   const mainHref = getAndroidDownloadHref(release);
   const mainAsset = getAndroidAsset(release);
-  const mainLabel = allVariants.find((v) => v.key === detectedVariant)?.label || detectedVariant;
-  const otherVariants = allVariants.filter((v) => v.key !== detectedVariant);
+  const mainLabel = c.mainLabel;
+  const otherVariants = allVariants;
 
   return (
     <Layout>

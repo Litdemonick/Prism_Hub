@@ -90,7 +90,7 @@ export const dict = {
     'download.betaZoneDesc': 'Lo único que existe por ahora — probado, pero todavía en pulido activo.',
     'download.stableZone': 'Versión estable · oficial',
     'download.stableZoneDesc': 'La primera versión 1.0 llega cuando la beta esté lo bastante probada.',
-    'download.stableEmpty': 'Todavía no hay nada acá — por ahora, toda la app vive en Beta.',
+    'download.stableEmpty': 'Todavía no hay nada acá: la primera versión estable va a ser la 1.1.0, cuando la beta esté lo bastante probada.',
     'download.releases': 'Todas las versiones en GitHub Releases →',
 
     'footer.tagline': 'Anime, manga, novelas, series y películas — sin límites. Open source, nativo, sin anuncios.',

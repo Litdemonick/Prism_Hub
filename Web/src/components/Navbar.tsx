@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowUpRight, Moon, Sun, Menu, X, Languages } from 'lucide-react';
+import { ArrowUpRight, Moon, Sun, Menu, X, Languages, Star } from 'lucide-react';
 import { useTheme } from '../lib/theme';
 import { useLang, type DictKey } from '../lib/i18n';
+import { useGithubStars } from '../lib/githubRelease';
 
 const items: { key: DictKey; to: string }[] = [
   { key: 'nav.home', to: '/' },
@@ -15,6 +16,7 @@ const items: { key: DictKey; to: string }[] = [
 export default function Navbar() {
   const { theme, toggle } = useTheme();
   const { lang, setLang, t } = useLang();
+  const stars = useGithubStars();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
 
@@ -77,6 +79,12 @@ export default function Navbar() {
           style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
         >
           {t('nav.github')}
+          {stars != null && (
+            <span className="flex items-center gap-1" style={{ color: 'var(--accent)' }}>
+              <Star className="h-3 w-3 fill-current" />
+              {stars}
+            </span>
+          )}
           <span className="flex h-5 w-5 items-center justify-center rounded-full" style={{ background: 'var(--surface-2)' }}>
             <ArrowUpRight className="h-3 w-3" />
           </span>

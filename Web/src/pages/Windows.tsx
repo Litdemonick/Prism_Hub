@@ -12,6 +12,8 @@ const installCommand =
 const copy = {
   es: {
     title: 'Instalar en Windows',
+    beforeTitle: 'Antes de instalar',
+    installTitle: 'Instalar',
     hint: 'Pegá esto en PowerShell (no hace falta administrador)',
     releasesLink: 'O descargá el instalador .exe desde Releases →',
     menuTitle: 'Un solo comando, tres cosas',
@@ -36,6 +38,8 @@ const copy = {
   },
   en: {
     title: 'Install on Windows',
+    beforeTitle: 'Before installing',
+    installTitle: 'Install',
     hint: 'Paste this into PowerShell (administrator not required)',
     releasesLink: 'Or download the .exe installer from Releases →',
     menuTitle: 'One command, three things',
@@ -74,6 +78,24 @@ export default function Windows() {
               </span>
               <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight">{c.title}</h1>
             </div>
+
+            {/* ── Primero el aviso, después cómo instalar ──────────────────
+                Pedido explícito: que la gente LEA esto antes de llegar al
+                botón/comando que de verdad instala algo. */}
+            <p
+              className="mb-3 text-center text-xs font-bold uppercase tracking-wide"
+              style={{ color: 'var(--accent)' }}
+            >
+              {c.beforeTitle}
+            </p>
+            <DeveloperNote />
+
+            <p
+              className="mb-3 mt-10 text-center text-xs font-bold uppercase tracking-wide"
+              style={{ color: 'var(--accent)' }}
+            >
+              {c.installTitle}
+            </p>
 
             <ConsoleCommand command={installCommand} hint={c.hint} />
 
@@ -138,10 +160,6 @@ export default function Windows() {
               >
                 {c.vcLink}
               </a>
-            </div>
-
-            <div className="mt-4">
-              <DeveloperNote />
             </div>
           </motion.div>
         </div>

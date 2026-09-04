@@ -159,10 +159,10 @@ function Hero() {
 function Showcase() {
   const { t } = useLang();
   const base = import.meta.env.BASE_URL;
-  const shots: { src: string; label: string; portrait?: boolean }[] = [
+  const shots = [
     { src: `${base}screenshots/desktop-home.png`, label: 'Windows / Linux' },
-    { src: `${base}screenshots/mobile-home.jpeg`, label: 'Android', portrait: true },
-    { src: `${base}screenshots/desktop-search.png`, label: 'Búsqueda' },
+    { src: `${base}screenshots/mobile-home.jpeg`, label: 'Android' },
+    { src: `${base}screenshots/mobile-search.jpeg`, label: 'Búsqueda' },
   ];
   const [open, setOpen] = useState<{ src: string; label: string } | null>(null);
 
@@ -198,21 +198,17 @@ function Showcase() {
               onClick={() => setOpen(s)}
               className="device-frame group block w-full cursor-zoom-in overflow-hidden rounded-2xl text-left"
             >
-              {/* object-contain, no object-cover: una captura de celular es
-                  vertical, y recortarla a la fuerza en un marco horizontal
-                  (lo que hacía antes) mostraba solo una tira. Cada foto
-                  entra ENTERA, con la proporción que le corresponde. */}
-              <div
-                className={`flex items-center justify-center ${s.portrait ? 'aspect-[3/4]' : 'aspect-[16/10]'}`}
-                style={{ background: 'var(--surface-2)' }}
-              >
-                <img
-                  src={s.src}
-                  alt={s.label}
-                  loading="lazy"
-                  className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]"
-                />
-              </div>
+              {/* Sin caja de proporción fija: forzar un aspecto (16/10, 3/4)
+                  que no coincide con el de la captura real dejaba franjas
+                  vacías arriba/abajo o a los costados —letterboxing feo—.
+                  Cada imagen define su propio alto (w-full h-auto), así se
+                  ve ENTERA y sin relleno de sobra alrededor. */}
+              <img
+                src={s.src}
+                alt={s.label}
+                loading="lazy"
+                className="block h-auto w-full transition-transform duration-500 group-hover:scale-[1.03]"
+              />
               <div className="flex items-center justify-between px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
                 {s.label}
                 <ZoomIn className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-60" />
@@ -252,13 +248,17 @@ function Showcase() {
 
 function Features() {
   const { t } = useLang();
+  // Seis tarjetas, todas del mismo tamaño: con dos "grandes" (col-span-2) la
+  // última fila de un grid de 3 columnas quedaba con una sola tarjeta ancha
+  // y un hueco vacío al lado — se veía asimétrico. Parejas, 6 entran justo
+  // en dos filas de 3, sin sobrar nada.
   const items = [
-    { title: t('features.f1.title'), desc: t('features.f1.desc'), big: true },
+    { title: t('features.f1.title'), desc: t('features.f1.desc') },
     { title: t('features.f2.title'), desc: t('features.f2.desc') },
     { title: t('features.f3.title'), desc: t('features.f3.desc') },
     { title: t('features.f4.title'), desc: t('features.f4.desc') },
     { title: t('features.f5.title'), desc: t('features.f5.desc') },
-    { title: t('features.f6.title'), desc: t('features.f6.desc'), big: true },
+    { title: t('features.f6.title'), desc: t('features.f6.desc') },
   ];
 
   return (
@@ -277,7 +277,7 @@ function Features() {
               key={f.title}
               {...fadeUp}
               transition={{ ...fadeUp.transition, delay: i * 0.06 }}
-              className={`surface rounded-2xl p-6 ${f.big ? 'lg:col-span-2' : ''}`}
+              className="surface rounded-2xl p-6"
             >
               <div className="spectrum-bar mb-4 w-8" />
               <h3 className="mb-2 font-[family-name:var(--font-display)] text-base font-semibold">{f.title}</h3>
@@ -383,14 +383,20 @@ function DownloadSection() {
                     {t('platforms.install')}
                   </a>
                   {href && (
-                    <a
-                      href={href}
+                    // Link, no <a href>: el sitio enruta con HashRouter — un
+                    // <a href="/windows"> normal navega el NAVEGADOR a esa
+                    // ruta absoluta, que en GitHub Pages no existe (falta el
+                    // "#" que HashRouter necesita) y da una pantalla en
+                    // blanco. Mismo bug que ya se corrigió en el CTA del
+                    // Hero, acá se había colado de nuevo.
+                    <Link
+                      to={href}
                       className="flex h-10 w-10 items-center justify-center rounded-xl border transition-colors hover:opacity-80"
                       style={{ borderColor: 'var(--border)' }}
                       aria-label={label}
                     >
                       <ArrowUpRight className="h-4 w-4" />
-                    </a>
+                    </Link>
                   )}
                 </div>
               </motion.div>

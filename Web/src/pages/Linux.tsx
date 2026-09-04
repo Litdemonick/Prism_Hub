@@ -12,6 +12,8 @@ const archCommand = 'cd install && makepkg -si';
 const copy = {
   es: {
     title: 'Instalar en Linux',
+    beforeTitle: 'Antes de instalar',
+    installTitle: 'Instalar',
     hint: 'Pegá esto en tu terminal',
     menuTitle: 'Un solo comando, tres cosas',
     menuDesc:
@@ -22,6 +24,8 @@ const copy = {
   },
   en: {
     title: 'Install on Linux',
+    beforeTitle: 'Before installing',
+    installTitle: 'Install',
     hint: 'Paste this into your terminal',
     menuTitle: 'One command, three things',
     menuDesc:
@@ -48,6 +52,21 @@ export default function Linux() {
               <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight">{c.title}</h1>
             </div>
 
+            <p
+              className="mb-3 text-center text-xs font-bold uppercase tracking-wide"
+              style={{ color: 'var(--accent)' }}
+            >
+              {c.beforeTitle}
+            </p>
+            <DeveloperNote />
+
+            <p
+              className="mb-3 mt-10 text-center text-xs font-bold uppercase tracking-wide"
+              style={{ color: 'var(--accent)' }}
+            >
+              {c.installTitle}
+            </p>
+
             <ConsoleCommand command={installCommand} hint={c.hint} />
 
             <div className="surface mt-8 rounded-2xl px-6 py-5">
@@ -72,10 +91,6 @@ export default function Linux() {
               <h2 className="mb-2 font-[family-name:var(--font-display)] text-sm font-semibold">{c.archTitle}</h2>
               <p className="mb-3 text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{c.archDesc}</p>
               <ConsoleCommand command={archCommand} />
-            </div>
-
-            <div className="mt-4">
-              <DeveloperNote />
             </div>
           </motion.div>
         </div>
