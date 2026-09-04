@@ -73,9 +73,32 @@ class FocoConTopes extends DirectionalFocusAction {
     final despues = primaryFocus;
     if (antes == null || despues == null || identical(antes, despues)) return;
     final hasta = _rectDe(despues);
+    // ── Sin poder medir el destino, en horizontal se frena ──────────────
+    //
+    // Acá había un agujero por el que se colaba justo el caso que este tope
+    // existe para cortar. Al llegar al final de una fila, Flutter engancha
+    // un nodo de otra parte —la fila de arriba, normalmente— que la lista
+    // acaba de construir por adelantado y que TODAVÍA NO tiene tamaño. Sin
+    // medida, esta guarda se rendía y lo dejaba pasar. Reportado en vivo:
+    // «al presionar a la derecha pasa todas las cards y luego sube a las de
+    // arriba, no hay topes en la fila que estoy».
+    //
+    // Un destino que no se puede medir en un movimiento horizontal no es un
+    // vecino de la fila: los vecinos de verdad ya están puestos y medidos,
+    // porque se están viendo. Así que se deshace, que es exactamente lo que
+    // tiene que pasar al final de una fila.
+    //
+    // En vertical no se aplica lo mismo: ahí el destino legítimo SÍ suele
+    // ser algo recién construido —la fila de abajo que entra en pantalla— y
+    // frenar por no poder medirla sería trabar el scroll.
+    if (horizontal && hasta == null && antes.context != null) {
+      antes.requestFocus();
+      return;
+    }
     if (desde == null || hasta == null) return;
-    final seFue =
-        horizontal ? !_mismaFranja(desde, hasta) : _escapoALaIzquierda(desde, hasta);
+    final seFue = horizontal
+        ? !_mismaFranja(desde, hasta)
+        : _escapoALaIzquierda(desde, hasta, despues.context);
     if (!seFue) return;
     // Se fue de fila (u ocurrió el escape a la columna de categorías): se lo
     // devuelve donde estaba.
@@ -99,13 +122,56 @@ class FocoConTopes extends DirectionalFocusAction {
     }
   }
 
-  /// El destino terminó COMPLETAMENTE a la izquierda de donde estaba — no
-  /// «una columna más a la izquierda dentro de la misma grilla» (eso
-  /// siempre se solapa con el ancho de la tarjeta de origen), sino en una
-  /// franja de la pantalla que no comparte nada de ancho con ella. Eso es
-  /// la columna de categorías, angosta y pegada al borde.
-  static bool _escapoALaIzquierda(Rect desde, Rect hasta) =>
-      hasta.right <= desde.left;
+  /// El destino es la columna de categorías, y no una fila más abajo.
+  ///
+  /// ── Por qué no alcanza con «terminó a la izquierda» ──────────────────
+  ///
+  /// Esa era la regla anterior, y funcionaba cuando las zonas eran una
+  /// grilla: ahí las columnas quedaban alineadas, así que la tarjeta de
+  /// abajo siempre compartía algo de ancho con la de arriba y el único
+  /// destino que caía «del todo a la izquierda» era el rail.
+  ///
+  /// Con las filas por extensión eso dejó de ser cierto. Cada fila se
+  /// desplaza por su cuenta, así que estando en la séptima tarjeta de una
+  /// fila, la de abajo puede estar entera más a la izquierda —es otra fila,
+  /// con otro desplazamiento— y la regla la confundía con el rail: la flecha
+  /// abajo se deshacía sola y la zona quedaba trabada. Reportado en vivo:
+  /// «en las zonas no me deja hacer scroll hacia abajo, se bloquea».
+  ///
+  /// ── La regla que sí distingue las dos cosas ──────────────────────────
+  ///
+  /// El rail no es «algo que está a la izquierda»: es una franja angosta
+  /// PEGADA AL BORDE de la pantalla. Una tarjeta de otra fila, por muy a la
+  /// izquierda que esté, empieza después del rail — nunca dentro de él.
+  ///
+  /// Así que además de irse del todo hacia la izquierda, el destino tiene
+  /// que terminar dentro de esa franja del borde para contar como escape.
+  /// Un salto normal entre filas no la toca, y el del rail cae de lleno.
+  static bool _escapoALaIzquierda(Rect desde, Rect hasta, BuildContext? ctx) {
+    if (hasta.right > desde.left) return false;
+    final ancho = _anchoDePantalla(ctx);
+    // Sin poder medir la pantalla se deja pasar: perder un salto legítimo
+    // entre filas —que traba la zona entera— es mucho peor que dejar escapar
+    // uno al rail, que se resuelve apretando derecha.
+    if (ancho == null) return false;
+    return hasta.right <= ancho * _franjaDelRail;
+  }
+
+  /// Qué parte del ancho de la pantalla ocupa el rail de categorías.
+  ///
+  /// Contraído mide entre 48 y 58 puntos (ver `_anchoSidebarContraidoTv`) y
+  /// expandido llega a bastante más, pero el foco solo puede caer en él
+  /// desde el contenido cuando está contraído. En el televisor más angosto
+  /// que soportamos eso es menos de un doceavo del ancho; el 15 % deja
+  /// margen de sobra sin llegar nunca a la primera tarjeta de una fila, que
+  /// empieza recién pasado el rail más su aire.
+  static const _franjaDelRail = 0.15;
+
+  static double? _anchoDePantalla(BuildContext? ctx) {
+    if (ctx == null || !ctx.mounted) return null;
+    final ancho = MediaQuery.maybeSizeOf(ctx)?.width;
+    return (ancho != null && ancho > 0) ? ancho : null;
+  }
 
   static bool _mismaFranja(Rect a, Rect b) {
     final desde = a.top > b.top ? a.top : b.top;
