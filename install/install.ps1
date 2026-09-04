@@ -81,6 +81,11 @@ $I18N_ES = @{
     no_asset          = "No se encontró el archivo de descarga para tu sistema."
     extract_fail      = "No se encontró el ejecutable tras la extracción."
     download_fail     = "La descarga falló tras varios intentos."
+    checking_vcredist = "Verificando el Visual C++ Redistributable..."
+    vcredist_missing  = "No está instalado. Es necesario para que PrismHub arranque — se instala solo, no hace falta reiniciar."
+    vcredist_ok       = "Ya está instalado."
+    vcredist_installed = "Visual C++ Redistributable instalado correctamente."
+    vcredist_fail     = "No se pudo instalar automáticamente. Si PrismHub no abre (error de MSVCP140.dll o VCRUNTIME140.dll), instalalo a mano desde https://aka.ms/vs/17/release/vc_redist.x64.exe"
 }
 
 $I18N_EN = @{
@@ -114,6 +119,11 @@ $I18N_EN = @{
     no_asset          = "No download asset found for your system."
     extract_fail      = "Executable not found after extraction."
     download_fail     = "Download failed after several attempts."
+    checking_vcredist = "Checking the Visual C++ Redistributable..."
+    vcredist_missing  = "Not installed. PrismHub needs it to start — it installs on its own, no restart needed."
+    vcredist_ok       = "Already installed."
+    vcredist_installed = "Visual C++ Redistributable installed successfully."
+    vcredist_fail     = "Couldn't install it automatically. If PrismHub won't open (MSVCP140.dll or VCRUNTIME140.dll error), install it by hand from https://aka.ms/vs/17/release/vc_redist.x64.exe"
 }
 
 function T($key) {
@@ -219,6 +229,61 @@ function Test-Internet {
         Invoke-WebRequest -Uri "https://api.github.com" -Method Head -TimeoutSec 8 -UseBasicParsing | Out-Null
     } catch {
         Die (T 'no_internet')
+    }
+}
+
+# ─── Visual C++ Redistributable ────────────────────────────────────────────
+#
+# PrismHub es una app de Flutter, y el motor de Flutter para Windows necesita
+# el runtime de Visual C++ (msvcp140.dll / vcruntime140.dll) para arrancar.
+# Windows NO lo trae de fábrica en una instalación limpia hecha desde el ISO
+# oficial de Microsoft — solo llega preinstalado en equipos con software de
+# fabricante encima. Confirmado en vivo: alguien formateó su PC, instaló
+# PrismHub, y el ejecutable tiraba "no se encontró MSVCP140.dll" /
+# "no se encontró VCRUNTIME140.dll" al abrir — el propio Windows dice
+# "reinstalando el programa" en ese cartel, que no arregla nada porque el
+# problema no es el programa, es esta pieza que le falta al sistema.
+#
+# Se verifica ANTES de instalar y se instala solo si hace falta: es la marca
+# que deja el propio instalador oficial de Microsoft en el registro.
+function Test-VCRedistInstalled {
+    $regPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\X64"
+    )
+    foreach ($regPath in $regPaths) {
+        if (Test-Path $regPath) {
+            $installed = (Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue).Installed
+            if ($installed -eq 1) { return $true }
+        }
+    }
+    return $false
+}
+
+function Install-VCRedistIfNeeded {
+    Write-Host "  $(T 'checking_vcredist')" -NoNewline
+    if (Test-VCRedistInstalled) {
+        Write-Host " ${Green}$(T 'vcredist_ok')${Reset}"
+        return
+    }
+    Write-Host " ${Yellow}$(T 'vcredist_missing')${Reset}"
+    try {
+        $vcTmp = Join-Path $env:TEMP "vc_redist_x64_$(Get-Random).exe"
+        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" `
+            -OutFile $vcTmp -UseBasicParsing -TimeoutSec 60
+        # /install /quiet /norestart: el instalador oficial de Microsoft no
+        # muestra ninguna ventana y no reinicia nada — solo dice si funcionó
+        # con el código de salida (0 = instalado, 3010 = instalado pero pide
+        # reiniciar más tarde, ninguno de los dos frena la instalación).
+        $proc = Start-Process -FilePath $vcTmp -ArgumentList "/install", "/quiet", "/norestart" -Wait -PassThru
+        Remove-Item $vcTmp -Force -ErrorAction SilentlyContinue
+        if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 3010) {
+            Ok (T 'vcredist_installed')
+        } else {
+            Warn "$(T 'vcredist_fail') (código $($proc.ExitCode))"
+        }
+    } catch {
+        Warn (T 'vcredist_fail')
     }
 }
 
@@ -405,6 +470,9 @@ function Invoke-Install {
 
     # Limpiar temporales
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+
+    # 6.5. Runtime que PrismHub necesita para arrancar (ver Install-VCRedistIfNeeded)
+    Install-VCRedistIfNeeded
 
     # 7. Verificar ejecutable
     $exe = Get-ChildItem $InstallDir -Filter "*.exe" | Where-Object {
