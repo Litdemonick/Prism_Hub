@@ -10,6 +10,7 @@ import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/titulo_expandible.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -115,7 +116,7 @@ class _ControlPanelHeaderState<T extends ReaderController>
             backgroundColor: HomeTheme.cardSurface,
             // Pinta el título, la flecha de volver y los tres iconos de una.
             foregroundColor: HomeTheme.textPrimary,
-            title: Text(_c.title),
+            title: TituloExpandible(_c.title),
             actions: [
               // Las dos flechas van PRIMERO en la fila de acciones: son el
               // atajo más usado (seguir leyendo), así que quedan más a la
@@ -255,38 +256,15 @@ class _ControlPanelHeaderState<T extends ReaderController>
               // so clicking them never accidentally drags the window.
               Expanded(
                 child: DragToMoveArea(
-                  child: Text(
+                  child: TituloExpandible(
                     // Con separador: era `_c.title + episodio`, pegados sin nada
                     // en el medio, así que se leía «Una Carta De Amor Del
                     // FuturoCap. 2: …» como si fuera una sola palabra.
                     episodio.isEmpty ? _c.title : '${_c.title} · $episodio',
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: HomeTheme.textPrimary),
                   ),
                 ),
               ),
-              // Mismo criterio que en Android: el atajo más usado va primero,
-              // antes de ajustes/detalle/episodios.
-              Obx(
-                () => fluent.Tooltip(
-                  message: 'Capítulo anterior',
-                  child: fluent.IconButton(
-                    icon: const Icon(fluent.FluentIcons.previous),
-                    onPressed: _hayAnterior ? () => _irACapitulo(-1) : null,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Obx(
-                () => fluent.Tooltip(
-                  message: 'Capítulo siguiente',
-                  child: fluent.IconButton(
-                    icon: const Icon(fluent.FluentIcons.next),
-                    onPressed: _haySiguiente ? () => _irACapitulo(1) : null,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
               if (widget.buildSettings != null) ...[
                 fluent.FlyoutTarget(
                   controller: _settingFlayoutcontroller,
@@ -312,6 +290,44 @@ class _ControlPanelHeaderState<T extends ReaderController>
                 ),
                 const SizedBox(width: 8),
               ],
+              // Antes iban sueltos, pegados al título y confundidos con el
+              // resto de los íconos. Pedido explícito: al medio del grupo de
+              // opciones (entre ajustes y detalle/episodios) y con una
+              // identidad visual propia — una cápsula con borde, no dos
+              // íconos más en la fila.
+              Obx(
+                () => Container(
+                  height: 32,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: HomeTheme.border),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      fluent.Tooltip(
+                        message: 'Capítulo anterior',
+                        child: fluent.IconButton(
+                          icon: const Icon(fluent.FluentIcons.previous,
+                              size: 14),
+                          onPressed:
+                              _hayAnterior ? () => _irACapitulo(-1) : null,
+                        ),
+                      ),
+                      Container(width: 1, height: 18, color: HomeTheme.border),
+                      fluent.Tooltip(
+                        message: 'Capítulo siguiente',
+                        child: fluent.IconButton(
+                          icon: const Icon(fluent.FluentIcons.next, size: 14),
+                          onPressed:
+                              _haySiguiente ? () => _irACapitulo(1) : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               fluent.Tooltip(
                 message: 'Ver detalle',
                 child: fluent.IconButton(
