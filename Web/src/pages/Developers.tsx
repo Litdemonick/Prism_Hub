@@ -65,7 +65,7 @@ const copy = {
   es: {
     title: 'Cómo funcionan',
     titleAccent: 'las extensiones',
-    subtitle: 'Documentación técnica de prism+, el repositorio oficial que arma y mantiene el catálogo de PrismHub — no algo que el usuario instale por su cuenta.',
+    subtitle: 'Documentación técnica de prism+, el repositorio oficial que arma y mantiene el catálogo de PrismHub. Instalar una extensión de ese catálogo es una acción normal dentro de la app; escribir una propia por fuera de prism+ no lo es.',
     repoNote: 'Todo el contenido que ves en PrismHub sale de acá:',
     repoLink: 'github.com/Litdemonick/prism-plus →',
     templateTitle: 'Plantilla base',
@@ -84,7 +84,7 @@ const copy = {
   en: {
     title: 'How',
     titleAccent: 'extensions work',
-    subtitle: "Technical documentation for prism+, the official repository that builds and maintains PrismHub's catalog — not something a user installs on their own.",
+    subtitle: "Technical documentation for prism+, the official repository that builds and maintains PrismHub's catalog. Installing an extension from that catalog is a normal in-app action; writing your own outside of prism+ isn't.",
     repoNote: 'Every piece of content you see in PrismHub comes from here:',
     repoLink: 'github.com/Litdemonick/prism-plus →',
     templateTitle: 'Base template',
