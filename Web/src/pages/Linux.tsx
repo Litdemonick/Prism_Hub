@@ -1,9 +1,11 @@
 import { motion } from 'motion/react';
+import { Download } from 'lucide-react';
 import Layout from '../components/Layout';
 import ConsoleCommand from '../components/ConsoleCommand';
 import DeveloperNote from '../components/DeveloperNote';
 import { LinuxIcon } from '../components/PlatformIcons';
 import { useLang } from '../lib/i18n';
+import { APP_VERSION, formatSize, getDirectDownloadHref, useLatestRelease } from '../lib/githubRelease';
 
 const installCommand =
   'curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash';
@@ -14,6 +16,8 @@ const copy = {
     title: 'Instalar en Linux',
     beforeTitle: 'Antes de instalar',
     installTitle: 'Instalar',
+    tarButton: 'Descargar el paquete .tar.gz',
+    orConsole: 'O instalá (y después actualizá o desinstalá) por consola:',
     hint: 'Pegá esto en tu terminal',
     menuTitle: 'Un solo comando, tres cosas',
     menuDesc:
@@ -26,6 +30,8 @@ const copy = {
     title: 'Install on Linux',
     beforeTitle: 'Before installing',
     installTitle: 'Install',
+    tarButton: 'Download the .tar.gz package',
+    orConsole: 'Or install (and later update or uninstall) via console:',
     hint: 'Paste this into your terminal',
     menuTitle: 'One command, three things',
     menuDesc:
@@ -39,6 +45,9 @@ const copy = {
 export default function Linux() {
   const { lang } = useLang();
   const c = copy[lang];
+  const release = useLatestRelease();
+  const tarHref = getDirectDownloadHref(release, 'linux');
+  const tarAsset = release?.linux;
 
   return (
     <Layout>
@@ -66,6 +75,20 @@ export default function Linux() {
             >
               {c.installTitle}
             </p>
+
+            <a
+              href={tarHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+            >
+              <Download className="h-4 w-4" />
+              {c.tarButton} · {release?.tag ?? APP_VERSION}
+              {tarAsset?.size ? ` · ${formatSize(tarAsset.size)}` : ''}
+            </a>
+
+            <p className="mb-3 mt-6 text-center text-xs" style={{ color: 'var(--text-faint)' }}>{c.orConsole}</p>
 
             <ConsoleCommand command={installCommand} hint={c.hint} />
 

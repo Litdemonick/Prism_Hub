@@ -1,10 +1,11 @@
 import { motion } from 'motion/react';
-import { ShieldAlert, AlertTriangle } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, Download } from 'lucide-react';
 import Layout from '../components/Layout';
 import ConsoleCommand from '../components/ConsoleCommand';
 import DeveloperNote from '../components/DeveloperNote';
 import { WindowsIcon } from '../components/PlatformIcons';
 import { useLang } from '../lib/i18n';
+import { APP_VERSION, formatSize, getDirectDownloadHref, useLatestRelease } from '../lib/githubRelease';
 
 const installCommand =
   'irm https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.ps1 | iex';
@@ -15,7 +16,9 @@ const copy = {
     beforeTitle: 'Antes de instalar',
     installTitle: 'Instalar',
     hint: 'Pegá esto en PowerShell (no hace falta administrador)',
-    releasesLink: 'O descargá el instalador .exe desde Releases →',
+    exeButton: 'Descargar el instalador .exe',
+    orConsole: 'O instalá (y después actualizá o desinstalá) por consola:',
+    releasesLink: 'Ver todas las versiones en Releases →',
     menuTitle: 'Un solo comando, tres cosas',
     menuDesc:
       'El script abre un menú: la misma línea sirve para instalar la primera vez, actualizar a la última versión o desinstalar — no hay tres comandos distintos que recordar.',
@@ -41,7 +44,9 @@ const copy = {
     beforeTitle: 'Before installing',
     installTitle: 'Install',
     hint: 'Paste this into PowerShell (administrator not required)',
-    releasesLink: 'Or download the .exe installer from Releases →',
+    exeButton: 'Download the .exe installer',
+    orConsole: 'Or install (and later update or uninstall) via console:',
+    releasesLink: 'See all versions on Releases →',
     menuTitle: 'One command, three things',
     menuDesc:
       'The script opens a menu: the same line installs it the first time, updates to the latest version, or uninstalls — no three separate commands to remember.',
@@ -66,6 +71,9 @@ const copy = {
 export default function Windows() {
   const { lang } = useLang();
   const c = copy[lang];
+  const release = useLatestRelease();
+  const exeHref = getDirectDownloadHref(release, 'windows');
+  const exeAsset = release?.windows;
 
   return (
     <Layout>
@@ -96,6 +104,20 @@ export default function Windows() {
             >
               {c.installTitle}
             </p>
+
+            <a
+              href={exeHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+            >
+              <Download className="h-4 w-4" />
+              {c.exeButton} · {release?.tag ?? APP_VERSION}
+              {exeAsset?.size ? ` · ${formatSize(exeAsset.size)}` : ''}
+            </a>
+
+            <p className="mb-3 mt-6 text-center text-xs" style={{ color: 'var(--text-faint)' }}>{c.orConsole}</p>
 
             <ConsoleCommand command={installCommand} hint={c.hint} />
 
