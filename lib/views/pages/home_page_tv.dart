@@ -780,47 +780,10 @@ class _SidebarTVState extends State<_SidebarTV> {
       // Eso se lee mejor que un panel entero oscurecido, y de paso el
       // resplandor de la primera tarjeta de cada fila ya no choca contra un
       // borde recto.
-      //
-      // ── Vuelve un fondo, pero SOLO desplegado ────────────────────────
-      //
-      // Lo de arriba resuelve el halo cortado y el rectángulo negro — los
-      // dos pasaban con el panel CONTRAÍDO, que es donde vive casi
-      // siempre. Desplegado es otra situación: ahí el panel se pone bastante
-      // más ancho que el margen que el contenido ya tiene reservado
-      // (`_anchoSidebarContraidoTv`), así que pasa a pintarse ENCIMA de lo
-      // que haya a esa altura — y si eso es el TÍTULO de una fila, las dos
-      // letras quedan una sobre la otra, ilegibles. Reportado con foto:
-      // "Biblioteca" de acá y "AnimeAV1" de la fila, mezcladas en la misma
-      // línea.
-      //
-      // Un botón opaco no alcanza para tapar el texto de ATRÁS del hueco
-      // entre un botón y el siguiente — y ahí es justo donde se colaba el
-      // título. Sólido en todo el panel, mientras está desplegado, es la
-      // única forma de que no se filtre nada. No es lo mismo que el
-      // degradado que se sacó: acá es opaco de punta a punta (nada que se
-      // funda mal) y con la esquina redondeada como el resto de las
-      // superficies de la app, para que se lea como un panel de menú y no
-      // como un rectángulo perdido.
       child: AnimatedContainer(
         width: anchoObjetivo,
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
-        decoration: _expandido
-            ? BoxDecoration(
-                color: HomeTheme.bg,
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(18),
-                  bottomRight: Radius.circular(18),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    blurRadius: 24,
-                    offset: const Offset(8, 0),
-                  ),
-                ],
-              )
-            : null,
         child: Focus(
           canRequestFocus: false,
           skipTraversal: true,
