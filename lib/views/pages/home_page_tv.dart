@@ -1195,15 +1195,29 @@ class _FilaMedianasTv extends StatelessWidget {
     if (cuantas == 0) return const SizedBox.shrink();
     return SizedBox(
       height: alto,
-      child: Row(
-        children: [
-          for (var i = 0; i < cuantas; i++) ...[
-            if (i > 0) const SizedBox(width: _huecoGrandeTv),
-            Expanded(
-              child: _MedianaTv(package: items[i].$1, item: items[i].$2),
-            ),
+      // ── Aire contra el rail, antes de la primera tarjeta ────────────────
+      //
+      // Las filas de pósters reservan margen propio (`_margenDeFilaTv`) más
+      // el aire del recorte de la fila (`aireLateral: 24`) antes de la
+      // primera tarjeta. Esta fila no tenía ninguno de los dos: la primera
+      // "mediana" arrancaba pegada al filo del rail. Con tarjetas angostas
+      // eso pasaba casi desapercibido, pero una mediana es bastante más
+      // ancha, así que el marco de foco (que crece hacia afuera al
+      // seleccionarla) tenía casi nada de aire antes de chocar contra el
+      // rail — reportado con foto: "las cards se cortan y se ven mal al
+      // estar seleccionadas cerca del panel izquierdo".
+      child: Padding(
+        padding: const EdgeInsets.only(left: 10),
+        child: Row(
+          children: [
+            for (var i = 0; i < cuantas; i++) ...[
+              if (i > 0) const SizedBox(width: _huecoGrandeTv),
+              Expanded(
+                child: _MedianaTv(package: items[i].$1, item: items[i].$2),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
