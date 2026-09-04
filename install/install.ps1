@@ -25,6 +25,17 @@ if ($PSVersionTable.PSVersion.Major -lt 6) {
     } catch { <# ignorar si falla #> }
 }
 
+# ─── Consola en UTF-8, para que los símbolos (✔ ✖ ⚠ ℹ) se vean bien ────────
+#
+# Sin esto, una consola clásica (cmd/PowerShell 5.1 con la página de códigos
+# de fábrica) puede mostrar esos símbolos como "?" o basura — el mismo
+# problema que si nunca se activa el modo ANSI de arriba. Se prueba y, si
+# falla, sigue con la página de códigos que ya tenía: preferible un símbolo
+# raro a que el script se corte acá.
+try {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+} catch { <# ignorar si falla #> }
+
 # ─── Configuración ─────────────────────────────────────────────────────────
 $RepoOwner    = "Litdemonick"
 $RepoName     = "Prism_Hub"
@@ -138,10 +149,10 @@ function Write-Log($msg) {
     "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $msg" | Out-File $LogFile -Append -Encoding UTF8
 }
 
-function Info($m)  { Write-Host "  ${Blue}i${Reset}  $m"; Write-Log "INFO: $m" }
-function Ok($m)    { Write-Host "  ${Green}OK${Reset} $m"; Write-Log "OK: $m" }
-function Warn($m)  { Write-Host "  ${Yellow}!!${Reset} $m"; Write-Log "WARN: $m" }
-function Err($m)   { Write-Host "  ${Red}ERR${Reset} $m"; Write-Log "ERR: $m" }
+function Info($m)  { Write-Host "  ${Blue}$([char]0x2139)${Reset}  $m"; Write-Log "INFO: $m" }
+function Ok($m)    { Write-Host "  ${Green}$([char]0x2714)${Reset}  $m"; Write-Log "OK: $m" }
+function Warn($m)  { Write-Host "  ${Yellow}$([char]0x26A0)${Reset}  $m"; Write-Log "WARN: $m" }
+function Err($m)   { Write-Host "  ${Red}$([char]0x2716)${Reset}  $m"; Write-Log "ERR: $m" }
 function Die($m)   { Err $m; Read-Host "`n  $(T 'press_enter')"; exit 1 }
 
 function Show-Banner {
