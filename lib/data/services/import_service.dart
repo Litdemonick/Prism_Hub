@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -213,7 +212,10 @@ class ImportService {
     Future<ExtensionDetail?> fetchSafe(String targetUrl) async {
       try {
         final d = await extService.detail(targetUrl);
-        if (d == null || (d.title?.isEmpty ?? true) || d.title == targetUrl || d.title == url) {
+        // `title` es obligatorio en `ExtensionDetail`, así que no hace falta
+        // preguntar por null: lo que sí pasa es que una extensión devuelva la
+        // propia URL como título cuando no encontró la ficha.
+        if (d.title.isEmpty || d.title == targetUrl || d.title == url) {
           return null;
         }
         return d;
@@ -283,12 +285,17 @@ class ImportService {
     }
 
     // 4. Validar que sea contenido de lectura
+    // El tipo por-obra solo lo mandan las extensiones mixtas; el resto cae al
+    // que declara la extensión, que siempre está. O sea que acá nunca hay un
+    // tipo desconocido —el comentario anterior contemplaba ese caso, que no
+    // puede darse— y la regla es simple: si no sirve para leer y encima es de
+    // vídeo, este enlace no va.
+    //
+    // Una mixta pasa igual, porque cuenta como las dos cosas.
     final detailType = detail.type ?? extension.type;
-    if (!ExtensionUtils.readingTypes.contains(detailType) && detailType != null) {
-       // Si es null lo dejamos pasar, pero si está explícitamente en videoTypes, no.
-       if (ExtensionUtils.videoTypes.contains(detailType)) {
-          throw Exception('Este link es de contenido de vídeo, no de lectura');
-       }
+    if (!ExtensionUtils.readingTypes.contains(detailType) &&
+        ExtensionUtils.videoTypes.contains(detailType)) {
+      throw Exception('Este link es de contenido de vídeo, no de lectura');
     }
 
     // 5. Detectar NSFW
@@ -316,8 +323,8 @@ class ImportService {
     final favorite = Favorite()
       ..package = extension.package
       ..url = workingUrl
-      ..type = detailType ?? extension.type
-      ..title = detail.title ?? ''
+      ..type = detailType
+      ..title = detail.title
       ..cover = detail.cover
       ..isNsfw = isNsfw;
     await DatabaseService.putFavoriteRaw(favorite);
@@ -364,8 +371,8 @@ class ImportService {
       final history = History()
         ..package = extension.package
         ..url = workingUrl
-        ..title = detail.title ?? ''
-        ..type = detailType ?? extension.type
+        ..title = detail.title
+        ..type = detailType
         ..cover = detail.cover
         ..episodeTitle = episodeTitle ?? ''
         ..progress = ''
@@ -384,10 +391,34 @@ class ImportService {
     String cleanHost(String h) => h.startsWith('www.') ? h.substring(4) : h;
     final targetHost = cleanHost(host);
 
+    // ── Sin dominio no se busca nada ──────────────────────────────────────
+    //
+    // `Uri.tryParse` no falla con un enlace sin esquema: "olympus.com/manga/1"
+    // le parece una RUTA, así que devuelve un Uri valido con el host VACÍO. Y
+    // más abajo se compara ese host contra el de cada extensión, que también
+    // puede venir vacío —el manifiesto que se sintetiza al instalar desde el
+    // catálogo pone `webSite` en blanco cuando el índice no lo trae—.
+    //
+    // Vacío contra vacío da igual, así que un enlace pegado sin el https://
+    // enganchaba la PRIMERA extensión sin sitio declarado y trataba de
+    // importar desde ella. Cortando acá, el usuario recibe el mensaje que
+    // corresponde en vez de un error raro de otra extensión.
+    if (targetHost.isEmpty) {
+      return _ValidationResult.error(
+        'Ese enlace no tiene un sitio reconocible. Copiá la dirección '
+        'completa, con https:// adelante.',
+      );
+    }
+
     // Buscar en instaladas y activadas primero
     for (final entry in ExtensionUtils.enabledRuntimes.entries) {
       final ext = entry.value.extension;
-      final extHost = ext.webSite != null ? cleanHost(Uri.tryParse(ext.webSite!)?.host ?? '') : '';
+      // `isNotEmpty` y no `!= null`: `webSite` es obligatorio en el modelo, así
+      // que nunca es nulo — pero sí puede venir en blanco, que es el caso que
+      // esta guarda tenía que cubrir.
+      final extHost = ext.webSite.isNotEmpty
+          ? cleanHost(Uri.tryParse(ext.webSite)?.host ?? '')
+          : '';
       if (extHost == targetHost) {
         // Verificar si es de lectura
         if (!ExtensionUtils.readingTypes.contains(ext.type)) {
@@ -403,7 +434,12 @@ class ImportService {
     // Buscar en instaladas pero desactivadas
     for (final entry in ExtensionUtils.runtimes.entries) {
       final ext = entry.value.extension;
-      final extHost = ext.webSite != null ? cleanHost(Uri.tryParse(ext.webSite!)?.host ?? '') : '';
+      // `isNotEmpty` y no `!= null`: `webSite` es obligatorio en el modelo, así
+      // que nunca es nulo — pero sí puede venir en blanco, que es el caso que
+      // esta guarda tenía que cubrir.
+      final extHost = ext.webSite.isNotEmpty
+          ? cleanHost(Uri.tryParse(ext.webSite)?.host ?? '')
+          : '';
       if (extHost == targetHost) {
         return _ValidationResult.error('Tenés ${ext.name} pero está desactivada. Activala en Extensiones instaladas.');
       }
@@ -413,7 +449,9 @@ class ImportService {
     for (final raw in repoIndex) {
       if (raw is Map) {
         final webSite = raw['webSite']?.toString();
-        final extHost = webSite != null ? cleanHost(Uri.tryParse(webSite)?.host ?? '') : '';
+        final extHost = (webSite != null && webSite.isNotEmpty)
+            ? cleanHost(Uri.tryParse(webSite)?.host ?? '')
+            : '';
         if (extHost == targetHost) {
           final name = raw['name']?.toString() ?? 'la extensión';
           return _ValidationResult.error('Necesitás instalar $name desde el Repositorio para importar links de $host.');
