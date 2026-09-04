@@ -12,12 +12,6 @@ import {
   type AndroidVariant,
 } from '../lib/githubRelease';
 
-const allVariants: { label: string; key: AndroidVariant }[] = [
-  { label: 'ARM64 (arm64-v8a)', key: 'arm64-v8a' },
-  { label: 'ARM32 (armeabi-v7a)', key: 'armeabi-v7a' },
-  { label: 'x86_64', key: 'x86_64' },
-];
-
 const copy = {
   es: {
     title: 'Instalar en Android',
@@ -25,7 +19,12 @@ const copy = {
     installTitle: 'Instalar',
     mainLabel: 'Universal (todos los aparatos)',
     androidVersion: 'Android 7.0 o superior · sin Google Play',
-    otherArch: 'Otras arquitecturas:',
+    otherArch: 'Otras arquitecturas — para instalar el archivo más liviano y específico de tu aparato:',
+    variants: [
+      { label: 'ARM64 (arm64-v8a)', hint: 'celulares y tablets nuevos, desde 2017 en adelante', key: 'arm64-v8a' as AndroidVariant },
+      { label: 'ARM32 (armeabi-v7a)', hint: 'celulares viejos, de antes de 2017', key: 'armeabi-v7a' as AndroidVariant },
+      { label: 'x86_64', hint: 'PCs con Android, tablets Intel/AMD o emuladores (BlueStacks, etc.)', key: 'x86_64' as AndroidVariant },
+    ],
     tvTitle: '¿Vas a instalarlo en un televisor?',
     tvDesc:
       'Es el mismo APK de arriba — la app detecta sola que corre en Android TV y cambia a su propia interfaz para control remoto. Un televisor no tiene el mismo navegador que un celular, así que el APK tiene que llegar por alguna de estas tres formas:',
@@ -63,7 +62,12 @@ const copy = {
     installTitle: 'Install',
     mainLabel: 'Universal (any device)',
     androidVersion: 'Android 7.0 or later · no Google Play',
-    otherArch: 'Other architectures:',
+    otherArch: 'Other architectures — for the lightest file matching your specific device:',
+    variants: [
+      { label: 'ARM64 (arm64-v8a)', hint: 'new phones and tablets, from 2017 onward', key: 'arm64-v8a' as AndroidVariant },
+      { label: 'ARM32 (armeabi-v7a)', hint: 'older phones, from before 2017', key: 'armeabi-v7a' as AndroidVariant },
+      { label: 'x86_64', hint: 'Android PCs, Intel/AMD tablets, or emulators (BlueStacks, etc.)', key: 'x86_64' as AndroidVariant },
+    ],
     tvTitle: 'Installing on a TV?',
     tvDesc:
       "It's the same APK from above — the app detects on its own that it's running on Android TV and switches to its own remote-friendly interface. A TV doesn't have the same browser a phone does, so the APK needs to get there one of these three ways:",
@@ -109,7 +113,7 @@ export default function Android() {
   const mainHref = getAndroidDownloadHref(release);
   const mainAsset = getAndroidAsset(release);
   const mainLabel = c.mainLabel;
-  const otherVariants = allVariants;
+  const otherVariants = c.variants;
 
   return (
     <Layout>
@@ -170,10 +174,13 @@ export default function Android() {
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="surface flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs transition-opacity hover:opacity-80"
+                        className="surface flex flex-col items-center gap-1 rounded-xl px-4 py-2.5 text-center text-xs transition-opacity hover:opacity-80"
                       >
-                        <Download className="h-3 w-3 shrink-0" />
-                        {asset?.size ? `${v.label} · ${formatSize(asset.size)}` : v.label}
+                        <span className="flex items-center gap-1.5">
+                          <Download className="h-3 w-3 shrink-0" />
+                          {asset?.size ? `${v.label} · ${formatSize(asset.size)}` : v.label}
+                        </span>
+                        <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{v.hint}</span>
                       </a>
                     );
                   })}
