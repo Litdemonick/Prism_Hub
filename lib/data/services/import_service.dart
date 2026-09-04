@@ -291,11 +291,24 @@ class ImportService {
         }
       }
 
-      // Muchas extensiones modernas esperan SOLAMENTE el slug (la última parte de la ruta).
+      // Muchas extensiones modernas esperan SOLAMENTE el slug (la última
+      // parte de la ruta) — confirmado, por ejemplo, contra el código real
+      // de Ikigai Mangas: su detail() arma `/series/${slug}/` a partir del
+      // slug solo.
+      //
+      // `Uri.pathSegments` con una barra al FINAL agrega un segmento vacío
+      // extra ("/series/algo/" → ['series', 'algo', '']) — `.last` daba
+      // ese vacío, `toTest.isEmpty` lo descartaba más abajo sin haber
+      // probado nunca el slug real. Un link con "/" al final es lo más
+      // común de copiar (así lo muestra el navegador), así que esto se
+      // colaba en cualquier sitio que dependiera de este camino, no solo
+      // en uno.
       final uriChopped = Uri.tryParse(choppedRel);
-      if (uriChopped != null && uriChopped.pathSegments.isNotEmpty) {
-        toTest.add(uriChopped.pathSegments.last); // El puro slug
-        toTest.add('/${uriChopped.pathSegments.last}');
+      final segmentos =
+          uriChopped?.pathSegments.where((s) => s.isNotEmpty).toList();
+      if (segmentos != null && segmentos.isNotEmpty) {
+        toTest.add(segmentos.last); // El puro slug
+        toTest.add('/${segmentos.last}');
       }
 
       // Probar cada una de las opciones generadas
