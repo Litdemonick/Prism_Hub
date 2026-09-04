@@ -35,27 +35,35 @@ export default function RequirementsTable({ compact = false }: { compact?: boole
         </motion.div>
       )}
 
-      <motion.div {...fadeUp} className="surface overflow-hidden rounded-2xl">
+      {/* overflow-x-auto de red: si algún texto todavía no entrara en una
+          pantalla angosta, se puede deslizar en vez de reventar el margen
+          de la página. min-w-0 en cada celda es lo que de verdad lo
+          arregla —una celda de grid, por defecto, no se achica por debajo
+          del ancho de su contenido, así que un texto largo ("Windows 11 ·
+          Android 10+...") empujaba la columna entera afuera del margen en
+          celular. Con min-w-0 la celda SÍ puede achicarse y el texto
+          envuelve en vez de desbordar. */}
+      <motion.div {...fadeUp} className="surface overflow-x-auto rounded-2xl">
         <div className="grid grid-cols-3 text-sm">
-          <div className="p-4" />
-          <div className="border-b border-l p-4 text-center font-semibold" style={{ borderColor: 'var(--border)' }}>
+          <div className="min-w-0 p-4" />
+          <div className="min-w-0 border-b border-l p-4 text-center font-semibold" style={{ borderColor: 'var(--border)' }}>
             {t('requirements.min')}
           </div>
           <div
-            className="border-b border-l p-4 text-center font-semibold"
+            className="min-w-0 border-b border-l p-4 text-center font-semibold"
             style={{ borderColor: 'var(--border)', color: 'var(--accent)' }}
           >
             {t('requirements.rec')}
           </div>
           {rows.map((row) => (
             <div key={row.key} className="contents">
-              <div className="border-t p-4 font-medium" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+              <div className="min-w-0 border-t p-4 font-medium" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
                 {row.label}
               </div>
-              <div className="border-t border-l p-4 text-center" style={{ borderColor: 'var(--border)' }}>
+              <div className="min-w-0 border-t border-l p-4 text-center" style={{ borderColor: 'var(--border)' }}>
                 {r.min[row.key]}
               </div>
-              <div className="border-t border-l p-4 text-center font-medium" style={{ borderColor: 'var(--border)' }}>
+              <div className="min-w-0 border-t border-l p-4 text-center font-medium" style={{ borderColor: 'var(--border)' }}>
                 {r.rec[row.key]}
               </div>
             </div>

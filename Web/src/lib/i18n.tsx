@@ -50,9 +50,9 @@ export const dict = {
     'features.f2.title': 'Nativo de verdad',
     'features.f2.desc':
       'Flutter compilado a binario en cada plataforma — no es una página web empaquetada. Arranca rápido y usa la memoria que el aparato realmente tiene.',
-    'features.f3.title': 'Failover de servidor automático',
+    'features.f3.title': 'Varios servidores por episodio',
     'features.f3.desc':
-      'Si el servidor principal de un episodio se cae, el reproductor prueba el siguiente que la extensión declaró, sin que tengas que hacer nada.',
+      'Si uno falla, cambiar al siguiente es un solo toque: el reproductor ya trae la lista completa que declaró la extensión, no hay que salir a buscarla.',
     'features.f4.title': 'Pensado también para el televisor',
     'features.f4.desc':
       'El mismo APK de Android funciona en Android TV, con una interfaz propia para control remoto: filas densas, foco visible, sin gestos de dedo.',
@@ -81,6 +81,7 @@ export const dict = {
     'requirements.note':
       'Por debajo de los mínimos la app sigue andando: baja la calidad de vídeo, decodifica imágenes más chicas y suelta lo que no se está usando con más agresividad. No hay un piso que la deje afuera.',
 
+    'download.beforeTitle': 'Antes de instalar',
     'download.eyebrow': 'Descargar',
     'download.title': 'Elegí tu plataforma',
     'download.version': 'Versión',
@@ -141,9 +142,9 @@ export const dict = {
     'features.f2.title': 'Actually native',
     'features.f2.desc':
       'Flutter compiled to a binary on every platform — not a packaged web page. Starts fast and uses the memory the device actually has.',
-    'features.f3.title': 'Automatic server failover',
+    'features.f3.title': 'Several servers per episode',
     'features.f3.desc':
-      "If an episode's main server goes down, the player tries the next one the extension declared, with nothing for you to do.",
+      "If one goes down, switching to the next is a single tap: the player already has the full list the extension declared, no need to go looking for it.",
     'features.f4.title': 'Built for the TV too',
     'features.f4.desc':
       "The same Android APK runs on Android TV, with its own remote-friendly interface: dense rows, visible focus, no finger gestures.",
@@ -172,6 +173,7 @@ export const dict = {
     'requirements.note':
       "Below the minimum the app still runs: it lowers video quality, decodes smaller images and releases what's not in use more aggressively. There's no floor that locks you out.",
 
+    'download.beforeTitle': 'Before installing',
     'download.eyebrow': 'Download',
     'download.title': 'Pick your platform',
     'download.version': 'Version',

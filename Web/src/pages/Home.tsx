@@ -197,6 +197,10 @@ function Showcase() {
     { src: `${base}screenshots/mobile-search.jpeg`, label: 'Búsqueda' },
   ];
   const [open, setOpen] = useState<{ src: string; label: string } | null>(null);
+  // El botón de cerrar se ve al abrir y al tocar/mover, y se esconde solo
+  // a los pocos segundos de quietud — pedido explícito, para que no tape
+  // la imagen mientras solo se está mirando.
+  const [showClose, setShowClose] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -204,7 +208,34 @@ function Showcase() {
       if (e.key === 'Escape') setOpen(null);
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Con el lightbox abierto no se puede scrollear lo de atrás — reportado
+    // en vivo: se veía la imagen agrandada y la página de fondo seguía
+    // moviéndose con la rueda/el dedo. Se restaura al cerrar, sea por el
+    // botón, Escape o tocando afuera.
+    const overflowPrevio = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    // setTimeout(fn, 0) y no la llamada directa: el linter de React marca
+    // como impuro cualquier setState síncrono dentro del cuerpo de un
+    // efecto (la preocupación real es evitar renders en cascada). Diferido
+    // un instante, corre como reacción a un timer —el patrón que el propio
+    // linter espera— y no cambia nada para quien lo usa: sigue mostrándose
+    // apenas se abre la imagen.
+    setTimeout(() => setShowClose(true), 0);
+    let idle: ReturnType<typeof setTimeout> = setTimeout(() => setShowClose(false), 2400);
+    const despertar = () => {
+      setShowClose(true);
+      clearTimeout(idle);
+      idle = setTimeout(() => setShowClose(false), 2400);
+    };
+    window.addEventListener('mousemove', despertar);
+    window.addEventListener('touchstart', despertar);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousemove', despertar);
+      window.removeEventListener('touchstart', despertar);
+      clearTimeout(idle);
+      document.body.style.overflow = overflowPrevio;
+    };
   }, [open]);
 
   return (
@@ -246,14 +277,15 @@ function Showcase() {
             type="button"
             onClick={() => setOpen(null)}
             aria-label="Cerrar"
-            className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-opacity duration-300 hover:bg-white/20"
+            style={{ opacity: showClose ? 1 : 0, pointerEvents: showClose ? 'auto' : 'none' }}
           >
             <X className="h-5 w-5" />
           </button>
           <img
             src={open.src}
             alt={open.label}
-            className="max-h-[90vh] max-w-[92vw] rounded-xl object-contain"
+            className="max-h-[85vh] max-w-[88vw] rounded-2xl border border-white/10 object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
@@ -332,6 +364,19 @@ function DownloadSection() {
   return (
     <section id="descargar" className="px-5 py-16 md:px-10 md:py-24" style={{ background: 'var(--bg-soft)' }}>
       <div className="mx-auto max-w-5xl">
+        {/* El aviso va PRIMERO, antes de elegir plataforma — pedido
+            explícito: que se lea antes de llegar a los botones de
+            instalar, no después. */}
+        <motion.div {...fadeUp} className="mx-auto mb-16 max-w-3xl">
+          <p
+            className="mb-4 text-center text-xs font-bold uppercase tracking-wide"
+            style={{ color: 'var(--accent)' }}
+          >
+            {t('download.beforeTitle')}
+          </p>
+          <DeveloperNote />
+        </motion.div>
+
         <motion.div {...fadeUp} className="mb-12 text-center">
           <Eyebrow>{t('download.eyebrow')}</Eyebrow>
           <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight sm:text-3xl">
@@ -463,10 +508,6 @@ function DownloadSection() {
             {t('download.releases')}
           </a>
         </motion.div>
-
-        <div className="mt-10">
-          <DeveloperNote />
-        </div>
       </div>
     </section>
   );

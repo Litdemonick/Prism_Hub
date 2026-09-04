@@ -59,6 +59,8 @@ const copy = {
   },
   en: {
     title: 'Install on Android',
+    beforeTitle: 'Before installing',
+    installTitle: 'Install',
     mainLabel: 'Universal (any device)',
     androidVersion: 'Android 7.0 or later · no Google Play',
     otherArch: 'Other architectures:',
@@ -120,6 +122,23 @@ export default function Android() {
               </span>
               <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight">{c.title}</h1>
             </div>
+
+            {/* Primero el aviso, después cómo instalar — mismo orden que
+                Windows y Linux. Se había quedado a medio mover acá. */}
+            <p
+              className="mb-3 text-center text-xs font-bold uppercase tracking-wide"
+              style={{ color: 'var(--accent)' }}
+            >
+              {c.beforeTitle}
+            </p>
+            <DeveloperNote />
+
+            <p
+              className="mb-3 mt-10 text-center text-xs font-bold uppercase tracking-wide"
+              style={{ color: 'var(--accent)' }}
+            >
+              {c.installTitle}
+            </p>
 
             <a
               href={mainHref}

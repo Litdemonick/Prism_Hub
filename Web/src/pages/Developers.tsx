@@ -71,8 +71,8 @@ const copy = {
     templateTitle: 'Plantilla base',
     typesTitle: 'Tipos de extensión (@type)',
     typeLabels: { bangumi: 'Anime / Series', manga: 'Manga / Cómic', fikushon: 'Novela' } as Record<string, string>,
-    failoverTitle: 'Multi-servidor con failover automático',
-    failoverDesc: 'Si el servidor principal falla, el reproductor lee X-Servers y cambia automáticamente.',
+    failoverTitle: 'Varios servidores por episodio',
+    failoverDesc: 'El reproductor lee X-Servers y arma la lista sola — cambiar de uno a otro es un toque del usuario, nunca algo que la app decida por su cuenta.',
     contributeTitle: 'Cómo contribuir',
     contribute: [
       { icon: Bug, title: 'Reportar bugs', desc: 'Abrí un issue en GitHub con los pasos para reproducir el problema.', href: 'https://github.com/Litdemonick/Prism_Hub/issues' },
@@ -90,8 +90,8 @@ const copy = {
     templateTitle: 'Base template',
     typesTitle: 'Extension types (@type)',
     typeLabels: { bangumi: 'Anime / Series', manga: 'Manga / Comic', fikushon: 'Novel' } as Record<string, string>,
-    failoverTitle: 'Multi-server with automatic failover',
-    failoverDesc: 'If the main server fails, the player reads X-Servers and switches on its own.',
+    failoverTitle: 'Several servers per episode',
+    failoverDesc: 'The player reads X-Servers and builds the list on its own — switching from one to another is a tap from the user, never something the app decides by itself.',
     contributeTitle: 'How to contribute',
     contribute: [
       { icon: Bug, title: 'Report bugs', desc: 'Open a GitHub issue with steps to reproduce the problem.', href: 'https://github.com/Litdemonick/Prism_Hub/issues' },
