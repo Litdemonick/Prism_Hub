@@ -7,6 +7,7 @@ import 'package:prismhub/models/history.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -74,6 +75,14 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
 
   @override
   void onInit() {
+    // Antes que nada: mismo camino que ya usa el reproductor de vídeo al
+    // entrar (ver VideoPlayerController.onInit) — soltar lo que no se está
+    // usando (motores de extensión ociosos, y en un aparato flojo también
+    // la caché de portadas) para dejarle la memoria y la CPU al lector, que
+    // está por bajar y decodificar página tras página. No hace nada en un
+    // aparato con memoria de sobra más que soltar motores ociosos, que no
+    // cuesta nada.
+    AlivioDeMemoria.soltarAntesDeReproducir();
     WidgetsBinding.instance.addObserver(this);
     getContent();
     addWorker(ever(index, (callback) => getContent()));

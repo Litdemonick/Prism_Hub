@@ -231,16 +231,50 @@ class AlivioDeMemoria with WidgetsBindingObserver {
     );
   }
 
+  /// Se llama al ENTRAR al reproductor de vídeo o al lector — los dos sitios
+  /// donde la app tiene que concentrarse en una sola cosa.
+  ///
+  /// ── Por qué también motores, y no solo imágenes ─────────────────────
+  ///
+  /// Hasta ahora esto solo vaciaba la caché de imágenes, y encima solo en
+  /// aparatos flojos (`estaAjustando`). Pero mirar Inicio y pasear por un
+  /// par de zonas antes de tocar play deja motores de JavaScript vivos —de
+  /// extensiones que ya no se están usando— ocupando su pila mientras el
+  /// usuario ahora quiere toda la CPU y la memoria para decodificar vídeo o
+  /// para bajar páginas de manga. Pedido explícito: «cuando el usuario
+  /// entra al lector o al reproductor, todos los procesos secundarios
+  /// deben apagarse para concentrar todo en lo que se está viendo».
+  ///
+  /// `ExtensionUtils.soltarMotoresQuePueda()` es el mismo camino que ya
+  /// prueban el aviso de memoria del sistema y el barrido periódico: nunca
+  /// suelta uno con una consulta en curso, y a diferencia del vaciado de
+  /// imágenes no tiene costo en un aparato capaz —soltar un motor ocioso no
+  /// cuesta nada, se vuelve a levantar solo si hace falta—, así que va
+  /// SIEMPRE, sin el `estaAjustando` de la parte de imágenes.
   static void soltarAntesDeReproducir() {
-    if (!PrismHubMas.estaAjustando) return;
+    final motores = ExtensionUtils.soltarMotoresQuePueda();
+    if (!PrismHubMas.estaAjustando) {
+      if (motores > 0) {
+        logger.info('Antes de reproducir se soltaron $motores motores de '
+            'extensión que no se estaban usando');
+      }
+      return;
+    }
     final antes = PaintingBinding.instance.imageCache.currentSizeBytes;
-    if (antes == 0) return;
+    if (antes == 0) {
+      if (motores > 0) {
+        logger.info('Antes de reproducir se soltaron $motores motores de '
+            'extensión que no se estaban usando');
+      }
+      return;
+    }
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
     logger.info(
       'Antes de reproducir se soltaron '
-      '${(antes / (1024 * 1024)).toStringAsFixed(1)} MB de imágenes '
-      '(perfil ${PerfilDeAparato.nivel.name})',
+      '${(antes / (1024 * 1024)).toStringAsFixed(1)} MB de imágenes'
+      '${motores > 0 ? ' y $motores motores de extensión' : ''}'
+      ' (perfil ${PerfilDeAparato.nivel.name})',
     );
   }
 
