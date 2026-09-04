@@ -374,31 +374,38 @@ class _ControlPanelHeaderState<T extends ReaderController>
               // más en la fila.
               Obx(
                 () => Container(
-                  height: 32,
+                  height: 38,
                   decoration: BoxDecoration(
                     border: Border.all(color: HomeTheme.border),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                     color: HomeTheme.cardSurface,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      fluent.Tooltip(
-                        message: 'Capítulo anterior',
-                        child: fluent.IconButton(
-                          icon: const Icon(fluent.FluentIcons.previous,
-                              size: 14),
-                          onPressed:
-                              _hayAnterior ? () => _irACapitulo(-1) : null,
+                      SizedBox(
+                        width: 44,
+                        child: fluent.Tooltip(
+                          message: 'Capítulo anterior',
+                          child: fluent.IconButton(
+                            icon: const Icon(fluent.FluentIcons.previous,
+                                size: 16),
+                            onPressed:
+                                _hayAnterior ? () => _irACapitulo(-1) : null,
+                          ),
                         ),
                       ),
-                      Container(width: 1, height: 18, color: HomeTheme.border),
-                      fluent.Tooltip(
-                        message: 'Capítulo siguiente',
-                        child: fluent.IconButton(
-                          icon: const Icon(fluent.FluentIcons.next, size: 14),
-                          onPressed:
-                              _haySiguiente ? () => _irACapitulo(1) : null,
+                      Container(width: 1, height: 22, color: HomeTheme.border),
+                      SizedBox(
+                        width: 44,
+                        child: fluent.Tooltip(
+                          message: 'Capítulo siguiente',
+                          child: fluent.IconButton(
+                            icon:
+                                const Icon(fluent.FluentIcons.next, size: 16),
+                            onPressed:
+                                _haySiguiente ? () => _irACapitulo(1) : null,
+                          ),
                         ),
                       ),
                     ],

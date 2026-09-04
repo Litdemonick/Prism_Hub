@@ -1515,7 +1515,14 @@ class _PieDeCapituloCascada extends StatelessWidget {
       }
 
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 28, 16, 40),
+        // El pie de 40 de antes se pensó sin la fila de burbujas de
+        // "Continuar leyendo" (BurbujasContinuarLeyendo, en ReaderView) —
+        // esa flota FIJA sobre el final de la cascada, así que al llegar
+        // hasta acá scrolleando tapaba estos mismos botones. 130 deja aire
+        // de sobra para la fila completa (círculo + flechita + márgenes)
+        // en los dos tamaños, PC y Android, así los botones de capítulo
+        // siempre quedan libres arriba de donde caería la burbuja.
+        padding: const EdgeInsets.fromLTRB(16, 28, 16, 130),
         child: Row(
           children: [
             boton(habilitado: hayAnterior, esSiguiente: false),

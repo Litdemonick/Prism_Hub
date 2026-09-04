@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/controllers/watch/comic_controller.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/boton_llenar_pantalla.dart';
 
@@ -171,6 +172,42 @@ class ComicReaderSettings extends StatelessWidget {
                 onSelect: c.setStripAlign,
               ),
             ],
+          ),
+        ),
+        Divider(height: 24, color: HomeTheme.border),
+        // Mismo interruptor que Ajustes → Reproducción, disponible también
+        // acá adentro: para prender/apagar la fila de burbujas de
+        // "Continuar leyendo" no hace falta salir del lector a buscarlo.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+          child: StatefulBuilder(
+            builder: (context, setLocal) {
+              final activo = PrismHubStorage.getSetting(
+                      SettingKey.burbujasContinuarEnLector) ==
+                  true;
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'settings.reader-continue-bubbles'.i18n,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: HomeTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Switch(
+                    value: activo,
+                    onChanged: (v) {
+                      PrismHubStorage.setSetting(
+                          SettingKey.burbujasContinuarEnLector, v);
+                      setLocal(() {});
+                    },
+                  ),
+                ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 8),

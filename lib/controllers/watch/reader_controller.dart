@@ -67,6 +67,19 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
   late Rx<T?> watchData = Rx(null);
   final error = ''.obs;
   final isShowControlPanel = false.obs;
+
+  /// Si la fila de burbujas de "Continuar leyendo" está colapsada.
+  ///
+  /// Vive acá y no como estado propio de `BurbujasContinuarLeyendo` porque
+  /// ese widget se desmonta y se vuelve a montar cada vez que
+  /// `isShowControlPanel` cambia (`ReaderView` lo dibuja adentro de un
+  /// `if`, no con opacidad) — un `State` ahí se reinicia en cada ciclo de
+  /// ocultar/mostrar. El controller, en cambio, vive toda la sesión de
+  /// lectura: colapsarla una vez la deja colapsada hasta que se abra de
+  /// nuevo a mano, sin importar cuántas veces se oculte y muestre el resto
+  /// de la interfaz. Reportado en vivo: "la flechita de ocultar... no debe
+  /// otra vez salir la burbuja, debe estar oculta hasta que le dé otra vez".
+  final burbujasColapsadas = false.obs;
   late final index = playIndex.obs;
   get cuurentPlayUrl => playList[index.value].url;
   Timer? _timer;

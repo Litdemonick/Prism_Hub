@@ -129,6 +129,9 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
                     packageActual: c.runtime.extension.package,
                     urlActual: c.detailUrl,
                     isNsfw: c.isNsfw,
+                    colapsado: c.burbujasColapsadas.value,
+                    onToggleColapsado: () => c.burbujasColapsadas.value =
+                        !c.burbujasColapsadas.value,
                   ),
                   buildFooter != null
                       ? buildFooter!(context)
