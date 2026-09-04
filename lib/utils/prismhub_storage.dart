@@ -322,6 +322,10 @@ class PrismHubStorage {
     await _initSetting(SettingKey.autoTracking, true);
     await _initSetting(SettingKey.modoClaro, false);
     await _initSetting(SettingKey.checkNewEpisodes, true);
+    // Apagado por defecto: pedido explicito, que aparezca solo si el
+    // usuario lo activa a mano, no que le aparezcan burbujas nuevas sin
+    // haberlo pedido.
+    await _initSetting(SettingKey.burbujasContinuarEnLector, false);
     await _initSetting(SettingKey.windowSize, "1280,720");
     await _initSetting(SettingKey.androidWebviewUA, _defaultAndroidUA);
     await _initSetting(SettingKey.windowsWebviewUA, _defaultDesktopUA);
@@ -497,6 +501,9 @@ class SettingKey {
   // Comprobar si salieron capítulos/episodios nuevos de lo que ya terminaste.
   // Hace red por obra, así que se puede apagar.
   static const checkNewEpisodes = 'CheckNewEpisodes';
+  // Fila de burbujas en el lector para saltar a otra obra de "Continuar
+  // leyendo" sin salir del lector actual. Apagado por defecto.
+  static const burbujasContinuarEnLector = 'BurbujasContinuarEnLector';
   // Cuándo el usuario declaró ser mayor de edad al activar el +18. Se guarda
   // la fecha de la DECLARACIÓN, no la de nacimiento: para el app alcanza con
   // saber que declaró y cuándo, y el otro dato es personal y no hace falta.

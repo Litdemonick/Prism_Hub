@@ -1079,6 +1079,21 @@ class _SettingsPageState extends State<SettingsPage> {
                 PrismHubStorage.setSetting(SettingKey.checkNewEpisodes, value);
               },
             ),
+            // Apagado por defecto: pedido explicito, que la fila de
+            // burbujas no le aparezca a nadie que no la haya pedido.
+            SettingsSwitchTile(
+              title: 'settings.reader-continue-bubbles'.i18n,
+              buildSubtitle: () =>
+                  'settings.reader-continue-bubbles-subtitle'.i18n,
+              buildValue: () =>
+                  PrismHubStorage.getSetting(
+                      SettingKey.burbujasContinuarEnLector) ==
+                  true,
+              onChanged: (value) {
+                PrismHubStorage.setSetting(
+                    SettingKey.burbujasContinuarEnLector, value);
+              },
+            ),
             // Apagado por defecto (== true, no != false): que el reproductor
             // siga solo es algo que se pide, no algo que deba pasar sin avisar.
             // Apagado por defecto: arranca alrededor de 1080p. No es un tope

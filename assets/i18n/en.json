@@ -501,6 +501,8 @@
         "autoplay-next-subtitle": "When an episode ends the next one starts. Off, it stops at the end.",
         "check-new-episodes": "Notify about new chapters",
         "check-new-episodes-subtitle": "Checks every 12 hours whether anything new came out for what you already finished, and brings it back to Continue showing which one it is. It queries extensions in the background; turn it off to save data.",
+        "reader-continue-bubbles": "\"Continue reading\" bubbles in the reader",
+        "reader-continue-bubbles-subtitle": "While you're reading something, shows the other titles you have in progress at the bottom, so you can jump to any of them without going back to Home. Only shows up if you have more than one in Continue.",
         "auto-check-update-off-title": "Turn off automatic updates?",
         "auto-check-update-off-body": "PrismHub will stop telling you when a new version is out.\n\nImportant fixes will not reach you, and extensions may stop working when sites change, with no explanation. You will have to check by hand from here.\n\nYou can turn it back on whenever you want.",
         "auto-check-update-off-confirm": "Turn it off anyway",

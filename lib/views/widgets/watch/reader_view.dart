@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/views/widgets/watch/burbujas_continuar_leyendo.dart';
 import 'package:prismhub/views/widgets/watch/control_panel_footer.dart';
 import 'package:prismhub/views/widgets/watch/control_panel_header.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
@@ -109,13 +110,31 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
               ),
             ),
             // 底部控制
+            //
+            // Las burbujas van ARRIBA del footer, las dos dentro del MISMO
+            // Positioned/Column — puestas cada una en su propio Positioned
+            // pegado a bottom:0 se dibujan una ENCIMA de la otra, ya que
+            // ninguna sabe cuánto mide la de al lado. En una Column, la
+            // fila de burbujas (que puede no mostrar nada, ver
+            // BurbujasContinuarLeyendo) empuja al footer hacia arriba solo
+            // cuando de verdad ocupa espacio.
             Positioned(
               right: 0,
               left: 0,
               bottom: 0,
-              child: buildFooter != null
-                  ? buildFooter!(context)
-                  : ControlPanelFooter<T>(tag),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  BurbujasContinuarLeyendo(
+                    packageActual: c.runtime.extension.package,
+                    urlActual: c.detailUrl,
+                    isNsfw: c.isNsfw,
+                  ),
+                  buildFooter != null
+                      ? buildFooter!(context)
+                      : ControlPanelFooter<T>(tag),
+                ],
+              ),
             ),
           ]
         ],
