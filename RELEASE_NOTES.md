@@ -1,37 +1,39 @@
-## PrismHub v1.0.90 — Marcar como visto, y el lector más cómodo en PC
+## PrismHub v1.0.91 — El mando va a donde uno lo manda
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### ✅ "Marcar como visto" en Continuar
+### 📺 Android TV — la navegación con el mando
 
-Nueva opción en el menú de tres puntos de las tarjetas de **Continuar viendo**
-y **Continuar leyendo**, en PC y en Android.
+Estaban pasando tres cosas distintas a la vez, y por eso los intentos
+anteriores no terminaban de arreglarlo.
 
-- Da por visto el episodio o capítulo actual y deja la tarjeta apuntando al
-  **siguiente**, sin abrirlo. Sirve para ponerse al día de a uno con lo que ya
-  viste o leíste en otro lado.
-- Cuando el actual era el último, la obra **sale de Continuar y queda en el
-  Historial como completada**, igual que si la hubieras terminado ahí mismo.
-- Si la extensión no responde, no se toca nada de lo guardado: te avisa y
-  queda todo como estaba.
+- **Ir a la derecha ya no baja la lista.** Cada flecha mueve únicamente su
+  eje: recorrer una fila de costado deja la pantalla exactamente donde
+  estaba.
+- **La cámara solo se mueve cuando hace falta.** Antes reposicionaba la lista
+  en cada paso, incluso sobre una tarjeta que ya se veía entera — eso era el
+  salto. Ahora, si lo que enfocás ya está a la vista, no se mueve nada; y
+  cuando sí hace falta, avanza una tarjeta por vez dejando asomar la
+  siguiente.
+- **Se acabó el rebote al bajar.** Bajar y que la selección se volviera para
+  arriba sola era una pulsación que provocaba dos movimientos de foco, y el
+  segundo perdía la dirección por el camino.
 
-### 🖥️ El lector en PC
+### 🧭 Android TV — cada zona con sus límites
 
-- **Toda la barra de arriba mueve la ventana.** Antes solo se podía arrastrar
-  desde una tira fina alrededor del título, así que mover la ventana era
-  cuestión de acertarle. Ahora sirve cualquier hueco entre los botones — y el
-  doble clic para maximizar y restaurar también funciona en toda la barra.
-- **La lista de capítulos se abre centrada en la pantalla**, en vez de colgar
-  del botón pegada al techo y corrida a un costado.
-- **Y aprovecha el alto de la pantalla**: con una obra larga se desplaza por
-  dentro en lugar de pasarse de la ventana, y va un poco más ancha para que
-  los nombres se lean cómodos.
+- **Estando en el panel de categorías, bajar se queda en el panel.** Ya no se
+  escapa al contenido.
+- **Estando en una zona, bajar se queda en la zona.** Ya no termina metido en
+  el panel de la izquierda.
+- Se cambia de una a otra yendo a los costados, que es un movimiento
+  deliberado. Antes esto se decidía midiendo si el foco caía cerca del borde
+  izquierdo, y esa cuenta solo acertaba con el panel plegado — justo lo
+  contrario de cuando estás dentro de él, que es cuando se despliega.
 
-### 🐛 Otros arreglos
+### 📖 En el lector
 
-- **La barra de desplazamiento del lector ya se ve sobre páginas blancas.**
-  Era blanca semitransparente, así que en la mayoría de los mangas
-  desaparecía del todo y no se sabía por dónde iba la lectura. Ahora usa el
-  color de acento de la app.
+- **La flechita que oculta las burbujas ahora recuerda cómo la dejaste.**
+  Ocultarlas y cambiar de capítulo, saltar a otra obra o salir y volver a
+  entrar las traía de vuelta desplegadas.
