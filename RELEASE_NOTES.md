@@ -1,4 +1,4 @@
-## PrismHub v1.0.99 — El mando ya no navega la pantalla de atrás
+## PrismHub v1.0.100 — El panel izquierdo ya entra y sale sin trabarse
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,25 +12,27 @@
 
 ### 📺 Android TV
 
-- **Al abrir una pantalla nueva, el mando ya no sigue manejando la de
-  atrás.** Pasaba en el repositorio de extensiones y en el historial: se
-  veía la pantalla nueva arriba, pero las flechas seguían moviendo la
-  selección de la que quedó debajo, todavía viva. La causa era el mismo
-  mecanismo que rescata el foco cuando se pierde de verdad —pensado para
-  una tarjeta que se recicla o un panel que se cierra—, que no distinguía
-  ese caso de "pantalla nueva sin nada enfocado todavía" y devolvía el
-  mando al último lugar bueno, que era el de la pantalla anterior. Corregido
-  en la raíz: ahora solo se vuelve ahí si ese último lugar sigue siendo
-  parte de la pantalla que se está viendo. Esto destrababa, entre otras
-  cosas, instalar extensiones nuevas desde el televisor.
+- **Entrar y salir del panel izquierdo con el mando ya no se deshace
+  solo.** Estando pegado del todo a la izquierda del contenido, apretar
+  izquierda no entraba al panel de categorías; y al revés, una vez adentro
+  no se podía volver al contenido — el panel se quedaba desplegado, con el
+  nombre de cada categoría a la vista. La causa: el chequeo que evita que
+  una fila "se escape" a otra parte de la pantalla no distinguía cruzar a
+  propósito hacia el panel de categorías (que no es una fila de tarjetas)
+  de escaparse por error. Ahora ese cruce, en cualquiera de los dos
+  sentidos, se reconoce como lo que es.
 
-- **La Zona +18 ya tiene su botón de Favoritos, separado de Historial.**
-  Antes solo estaba conectado el de Historial; ahora cada uno abre su
-  propia pantalla, con el filtro que corresponde.
+- **El indicador del carrusel ya no se sobrepone al título.** La píldora
+  de puntitos que marca en qué imagen del carrusel se está, centrada y
+  pegada abajo, quedaba a la misma altura que el título — que también vive
+  abajo, pero a la izquierda — y con un título largo terminaba encima de
+  las letras. Se movió a la esquina superior derecha, donde ningún título
+  llega nunca.
 
-- **La pantalla de "escribí algo" del buscador, mejor centrada y con menos
-  texto.** Quedaba pegada arriba en vez de en el medio de la pantalla, y
-  sobraba una segunda línea explicando un mecanismo que no hace falta
-  saber desde el sillón. El ícono también usa el color de la pantalla que
-  lo llama —rosa en el buscador general, rojo en el de la Zona +18—, antes
-  quedaba siempre rosa aunque todo lo demás alrededor fuera rojo.
+- **El marco de foco del hero y las medianas ya no se corta contra el
+  borde.** El secundario de arriba y la última "mediana" llegan hasta el
+  borde de verdad de la pantalla — a propósito, para que las filas que se
+  desplazan dejen asomar la tarjeta siguiente —, pero esos dos bloques son
+  fijos, no filas: el marco rosado, que se dibuja apenas por fuera de la
+  tarjeta al seleccionarla, quedaba mordido contra el filo. Ahora tienen su
+  propio margen, sin tocar el de las filas de pósters.
