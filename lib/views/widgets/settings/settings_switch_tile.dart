@@ -33,9 +33,41 @@ class SettingsSwitchTile extends StatefulWidget {
 }
 
 class _SettingsSwitchTileState extends State<SettingsSwitchTile> {
-  void _alternar() {
-    widget.onChanged(!widget.buildValue());
-    setState(() {});
+  /// Ya hay un cambio en curso: no se acepta otro toque hasta que termine.
+  ///
+  /// Sin esto, con un ajuste que pide confirmación se podían apilar dos
+  /// diálogos tocando dos veces seguido.
+  bool _enCurso = false;
+
+  Future<void> _alternar() async {
+    if (_enCurso) return;
+    _enCurso = true;
+    try {
+      // ── Se ESPERA a que el cambio se guarde, y recién ahí se redibuja ──
+      //
+      // Antes se llamaba a `onChanged` sin esperar nada y se redibujaba en
+      // la línea siguiente. Para un ajuste que se guarda al instante eso
+      // colaba de casualidad; para uno que pregunta antes —«¿seguro que
+      // querés apagar la búsqueda de actualizaciones?»— era directamente
+      // mentira: el redibujado ocurría con el diálogo recién abierto, o
+      // sea con el valor VIEJO todavía guardado, así que el interruptor se
+      // dibujaba como estaba. Y después, cuando el usuario confirmaba y el
+      // valor sí cambiaba, ya no quedaba nadie que volviera a dibujar.
+      //
+      // Resultado: se apagaba de verdad —al salir y volver a entrar
+      // aparecía apagado— pero en pantalla seguía encendido. Reportado en
+      // vivo: «le doy desactivar y igual se queda, no se desactiva».
+      //
+      // `onChanged` está declarado como `Function(bool)`, así que puede
+      // devolver un Future o no devolver nada: se comprueba y se espera
+      // solo si hay algo que esperar. Así vale igual para los ajustes que
+      // se guardan de una y para los que preguntan primero.
+      final resultado = widget.onChanged(!widget.buildValue());
+      if (resultado is Future) await resultado;
+    } finally {
+      _enCurso = false;
+      if (mounted) setState(() {});
+    }
   }
 
   @override
