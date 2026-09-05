@@ -474,10 +474,24 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       width: _cascadeScrollbarWidth,
                       height: thumbHeight,
                       child: Container(
+                        // El acento de la app, sólido. Antes era blanco a
+                        // medias: sobre una página de manga blanca —que son
+                        // la mayoría— desaparecía del todo y no se veía ni
+                        // dónde estaba el pulgar ni por dónde iba la
+                        // lectura. Reportado en vivo. El acento se distingue
+                        // contra blanco y contra negro por igual, y de paso
+                        // la barra queda de la misma familia visual que el
+                        // resto de la app.
                         decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(140),
+                          color: HomeTheme.accentPink,
                           borderRadius:
                               BorderRadius.circular(_cascadeScrollbarWidth / 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.35),
+                              blurRadius: 4,
+                            ),
+                          ],
                         ),
                       ),
                     ),

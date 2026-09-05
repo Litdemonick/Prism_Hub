@@ -297,6 +297,30 @@ class _ControlPanelHeaderState<T extends ReaderController>
           child: Stack(
             alignment: Alignment.center,
             children: [
+              // ── Toda la barra mueve la ventana ────────────────────────
+              //
+              // Antes el arrastre estaba solo alrededor del TÍTULO, y con
+              // eso agarraba en una franja mínima: en una fila centrada
+              // verticalmente, esa zona mide lo que mide la letra (~20 px)
+              // dentro de una barra de 40, y a lo ancho llega solo hasta
+              // donde el título tiene espacio. O sea que había que acertarle
+              // a una tira fina a la izquierda para poder mover la ventana.
+              // Reportado en vivo.
+              //
+              // Esta capa cubre la barra ENTERA y va PRIMERA, o sea la más
+              // de abajo del Stack: todo lo que se dibuja encima (los
+              // botones, la cápsula de capítulos, los botones de ventana)
+              // sigue recibiendo sus clics normalmente, porque se prueba
+              // antes que esto. Lo que queda para acá es exactamente el
+              // hueco entre medio — que es justo lo que tiene que mover la
+              // ventana en cualquier barra de título.
+              //
+              // Y el doble clic para maximizar/restaurar viene incluido en
+              // DragToMoveArea, así que ahora también funciona en toda la
+              // barra en vez de solo sobre el título.
+              const Positioned.fill(
+                child: DragToMoveArea(child: SizedBox.expand()),
+              ),
               Padding(
                 padding: const EdgeInsets.only(left: 16),
                 child: Row(
@@ -307,19 +331,17 @@ class _ControlPanelHeaderState<T extends ReaderController>
                       onPressed: () => RouterUtils.closeReader(context),
                     ),
                     const SizedBox(width: 16),
-                    // DragToMoveArea only on the title text — buttons stay outside
-                    // so clicking them never accidentally drags the window.
+                    // El arrastre ya no va acá: lo cubre la capa de abajo,
+                    // que agarra la barra entera (ver el comentario largo
+                    // arriba). Dejarlo también acá solo agregaba un segundo
+                    // detector de arrastre encima del mismo sitio.
                     Expanded(
-                      child: DragToMoveArea(
-                        child: TituloExpandible(
-                          // Con separador: era `_c.title + episodio`, pegados sin nada
-                          // en el medio, así que se leía «Una Carta De Amor Del
-                          // FuturoCap. 2: …» como si fuera una sola palabra.
-                          episodio.isEmpty
-                              ? _c.title
-                              : '${_c.title} · $episodio',
-                          style: TextStyle(color: HomeTheme.textPrimary),
-                        ),
+                      child: TituloExpandible(
+                        // Con separador: era `_c.title + episodio`, pegados sin nada
+                        // en el medio, así que se leía «Una Carta De Amor Del
+                        // FuturoCap. 2: …» como si fuera una sola palabra.
+                        episodio.isEmpty ? _c.title : '${_c.title} · $episodio',
+                        style: TextStyle(color: HomeTheme.textPrimary),
                       ),
                     ),
                     // Hueco reservado del ancho de la cápsula del medio, para
