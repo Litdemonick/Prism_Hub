@@ -90,12 +90,27 @@ class FocoConTopes extends DirectionalFocusAction {
     // instantáneo (sin animación) y `super.invoke` es síncrono, para
     // cuando se restaura no llegó a dibujarse ni un cuadro: desde afuera,
     // ese eje sencillamente no se movió.
+    // ── Y el orden importa: primero el foco, después el scroll ──────────
+    //
+    // La restauración se hace AL FINAL, cuando el foco ya quedó donde tiene
+    // que quedar. Hacerla antes rompía justo el caso del final de una fila:
+    // el foco estaba de paso en una tarjeta de otra fila, fuera de la vista;
+    // al devolver el scroll a su sitio, la lista reciclaba esa tarjeta y el
+    // foco se quedaba en la nada. Desde afuera, la selección DESAPARECÍA —
+    // y con el foco perdido, la flecha siguiente disparaba el rescate de
+    // `RescateDeFoco`, que busca el primer enfocable que encuentre y
+    // terminaba bajando por las tarjetas de abajo. Reportado en vivo las dos
+    // cosas: «al ir al último card horizontal desaparece la selección» y
+    // «presionando a la derecha sigue scrolleando hacia abajo».
     final ejeDelMovimiento = horizontal ? Axis.horizontal : Axis.vertical;
     final aRestaurar = _scrollsDelOtroEje(antes?.context, ejeDelMovimiento);
     super.invoke(intent);
-    _restaurar(aRestaurar);
     final despues = primaryFocus;
-    if (antes == null || despues == null || identical(antes, despues)) return;
+    if (antes == null || despues == null || identical(antes, despues)) {
+      _restaurar(aRestaurar);
+      _rescatarSiSePerdio(antes);
+      return;
+    }
     final hasta = _rectDe(despues);
     // ── Sin poder medir el destino, en horizontal se frena ──────────────
     //
@@ -117,9 +132,15 @@ class FocoConTopes extends DirectionalFocusAction {
     // frenar por no poder medirla sería trabar el scroll.
     if (horizontal && hasta == null && antes.context != null) {
       antes.requestFocus();
+      _restaurar(aRestaurar);
+      _rescatarSiSePerdio(antes);
       return;
     }
-    if (desde == null || hasta == null) return;
+    if (desde == null || hasta == null) {
+      _restaurar(aRestaurar);
+      _rescatarSiSePerdio(antes);
+      return;
+    }
     // ── La regla que no depende de umbrales ─────────────────────────────
     //
     // `_mismaFranja` y `_escapoALaIzquierda` miden CUÁNTO se solapan dos
@@ -174,7 +195,10 @@ class FocoConTopes extends DirectionalFocusAction {
             ? (!_mismoRenglon(desde, hasta) || !_mismaFranja(desde, hasta))
             : (cambioDeRegion ??
                 _escapoALaIzquierda(desde, hasta, despues.context)));
-    if (!seFue) return;
+    if (!seFue) {
+      _restaurar(aRestaurar);
+      return;
+    }
     // Se fue de fila (u ocurrió el escape a la columna de categorías): se lo
     // devuelve donde estaba.
     //
@@ -182,6 +206,34 @@ class FocoConTopes extends DirectionalFocusAction {
     // IRÍA el foco sin moverlo. Como todo esto pasa dentro del mismo cuadro,
     // el foco intermedio no llega a dibujarse: desde afuera, la flecha
     // simplemente no hizo nada.
+    antes.requestFocus();
+    _restaurar(aRestaurar);
+    _rescatarSiSePerdio(antes);
+  }
+
+  /// Si después de todo esto el foco quedó en la nada, se lo devuelve a
+  /// donde estaba.
+  ///
+  /// ── Por qué puede quedar en la nada ─────────────────────────────────
+  ///
+  /// El foco pasa un instante por una tarjeta que no correspondía, y esa
+  /// tarjeta puede vivir en una parte de la lista que se recicla en cuanto
+  /// el scroll vuelve a su sitio. Si justo pasa eso, `requestFocus` sobre
+  /// ella ya no significa nada y no queda nadie enfocado: con el mando eso
+  /// es lo peor que puede pasar, porque sin foco las flechas no tienen
+  /// desde dónde salir y la pantalla parece congelada.
+  ///
+  /// `RescateDeFoco` cubre ese caso a lo bruto —busca el primer enfocable
+  /// que encuentre—, pero ahí ya se perdió el sitio: terminaba bajando por
+  /// las tarjetas de abajo. Acá todavía se sabe exactamente de dónde venía,
+  /// así que se lo devuelve ahí y no a cualquier lado.
+  static void _rescatarSiSePerdio(FocusNode? antes) {
+    if (antes == null) return;
+    final actual = primaryFocus;
+    if (actual != null && actual is! FocusScopeNode && actual.context != null) {
+      return;
+    }
+    if (antes.context == null || !antes.canRequestFocus) return;
     antes.requestFocus();
   }
 
