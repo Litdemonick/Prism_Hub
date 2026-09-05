@@ -53,6 +53,12 @@ class Nsfw18ZonePageTv extends StatelessWidget {
 
   static const _tabVideo = 1;
 
+  /// El índice de «favoritos · vídeo» en `HistoryPage._tabs` — ver el
+  /// comentario ahí. Con `soloFavoritos`, en TV solo quedan este y "Todo",
+  /// así que hay que nombrarlo explícito para no caer en "Todo" por
+  /// default.
+  static const _tabFavoritoVideo = 3;
+
   // ── Por qué "registrar si no existe" y no un simple `Get.find` ─────────
   //
   // La pantalla de Android/escritorio (`Nsfw18ZonePage`) es la que hasta
@@ -75,6 +81,19 @@ class Nsfw18ZonePageTv extends StatelessWidget {
 
   void _abrirHistorial(BuildContext context) {
     Get.to(const HistoryPage(initialTab: _tabVideo, zone: true));
+  }
+
+  // Faltaba: la de Android/escritorio (`Nsfw18ZonePage`) tiene sus botones
+  // de Historial Y de Favoritos por separado —son dos cosas distintas, cada
+  // una con su propia pantalla—, pero acá solo se había conectado el de
+  // Historial. Reportado en vivo: «no sale el botón de favoritos para ver
+  // los favoritos +18».
+  void _abrirFavoritos(BuildContext context) {
+    Get.to(const HistoryPage(
+      initialTab: _tabFavoritoVideo,
+      zone: true,
+      soloFavoritos: true,
+    ));
   }
 
   void _abrirDetalle(BuildContext context, String url, String package,
@@ -101,6 +120,7 @@ class Nsfw18ZonePageTv extends StatelessWidget {
             children: [
               _CabeceraNsfw18Tv(
                 onBuscar: () => _abrirBuscador(context),
+                onFavoritos: () => _abrirFavoritos(context),
                 onHistorial: () => _abrirHistorial(context),
               ),
               const SizedBox(height: 28),
@@ -187,9 +207,14 @@ class Nsfw18ZonePageTv extends StatelessWidget {
 /// que ya usa `Nsfw18LockPage`, para que toda la Zona +18 se sienta como una
 /// sola pantalla coherente y no como pedazos de distintos diseños.
 class _CabeceraNsfw18Tv extends StatelessWidget {
-  const _CabeceraNsfw18Tv({required this.onBuscar, required this.onHistorial});
+  const _CabeceraNsfw18Tv({
+    required this.onBuscar,
+    required this.onFavoritos,
+    required this.onHistorial,
+  });
 
   final VoidCallback onBuscar;
+  final VoidCallback onFavoritos;
   final VoidCallback onHistorial;
 
   @override
@@ -231,6 +256,12 @@ class _CabeceraNsfw18Tv extends StatelessWidget {
           icono: Icons.search_rounded,
           texto: 'common.search'.i18n,
           onTap: onBuscar,
+        ),
+        const SizedBox(width: 12),
+        _BotonPildoraTv(
+          icono: Icons.favorite_rounded,
+          texto: 'home.favorite'.i18n,
+          onTap: onFavoritos,
         ),
         const SizedBox(width: 12),
         _BotonPildoraTv(
