@@ -1357,6 +1357,50 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                           ),
                         );
                       }),
+                      // ── El indicador de TV: adentro de la tarjeta, no debajo ──
+                      //
+                      // Los puntitos táctiles (más abajo) se saltean en TV porque
+                      // no queda alto libre bajo la tarjeta —acá el carrusel ya
+                      // ocupa toda la altura que le dieron— y porque están
+                      // pensados para TOCAR, algo que un mando no puede hacer.
+                      //
+                      // Pero sin ninguna marca, quien mira desde el sillón no
+                      // tiene forma de saber que hay más imágenes rotando solas
+                      // —el carrusel avanza automáticamente cada tanto— hasta
+                      // que se anima al frente una portada distinta y ya es
+                      // tarde para haberlo entendido. Pedido explícito.
+                      //
+                      // Puramente visual, no un control: `IgnorePointer` porque
+                      // esto no se toca ni con dedo ni con mando —moverse es
+                      // cosa de las flechas (`manejarTecla`)—, y por eso tampoco
+                      // usa `IndicadoresDePagina` (esa sí es interactiva y en TV
+                      // se puede enfocar sola, lo que acá duplicaría el foco del
+                      // propio carrusel). Mismas cuentas que la versión táctil
+                      // para cantidad/posición, mismo criterio de tope
+                      // (`_maxPuntitos`) para no volverse una regla graduada con
+                      // muchas portadas.
+                      if (widget.conFocoTv && tanda.length > 1)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 14,
+                          child: IgnorePointer(
+                            child: Center(
+                              child: _RayasDeCarruselTv(
+                                cantidad: tanda.length < _maxPuntitos
+                                    ? tanda.length
+                                    : _maxPuntitos,
+                                actual: tanda.length <= _maxPuntitos
+                                    ? widget.c.carruselPos
+                                        .clamp(0, tanda.length - 1)
+                                    : (widget.c.carruselPos *
+                                            _maxPuntitos ~/
+                                            tanda.length)
+                                        .clamp(0, _maxPuntitos - 1),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1891,6 +1935,55 @@ _MedidasCarrusel _medirCarrusel(
         .clamp(38.0, ancho),
     alto: alto,
   );
+}
+
+/// El indicador de "esto se está desplazando solo" del carrusel en TV.
+///
+/// A propósito, no es `IndicadoresDePagina`: esa es interactiva (se puede
+/// tocar, y en TV se enfoca sola con el mando) y este overlay no tiene que
+/// ser ninguna de las dos cosas — el carrusel YA es su propio enfocable y ya
+/// se recorre con las flechas (`manejarTecla`); agregarle rayitas
+/// enfocables por separado sería un segundo control compitiendo por el
+/// mismo gesto. Esto es puramente informativo.
+class _RayasDeCarruselTv extends StatelessWidget {
+  const _RayasDeCarruselTv({required this.cantidad, required this.actual});
+
+  final int cantidad;
+  final int actual;
+
+  @override
+  Widget build(BuildContext context) {
+    if (cantidad < 2) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        // Sólido y oscuro, no un tinte: esto flota sobre lo que traiga la
+        // portada de turno —clara, oscura, con mucho detalle— y tiene que
+        // leerse igual sobre cualquiera de las tres.
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < cantidad; i++)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: i == actual ? 22 : 8,
+              height: 6,
+              decoration: BoxDecoration(
+                color: i == actual
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MedidasCarrusel {
