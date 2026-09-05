@@ -1,51 +1,37 @@
-## PrismHub v1.0.89 — El lector: burbujas que se leen, y "Ver detalle" que llega
+## PrismHub v1.0.90 — Marcar como visto, y el lector más cómodo en PC
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 🫧 Burbujas de "Continuar leyendo"
+### ✅ "Marcar como visto" en Continuar
 
-- **Tocar una burbuja va directo a esa obra.** Ya no hay paso intermedio.
-- **Manteniéndola presionada** se agranda en el **centro del lector**, con la
-  portada y el título completos, para mirar antes de decidir: desde ahí,
-  tocarla confirma y tocar en cualquier otro lado cierra sin hacer nada.
-  Mientras esa vista está abierta, el resto de la interfaz se esconde sola.
-- **El título ya se lee.** Antes se achicaba hasta entrar en un renglón, así
-  que cuanto más largo el nombre, más diminuto se veía. Ahora la letra mide
-  siempre lo mismo y lo que sobra se corta con puntos suspensivos.
-- **Y ya no desaparece sobre una página blanca**: va sobre un fondo oscuro
-  sólido, en la fila y en la vista agrandada.
-- **Se van las rayas amarillas debajo del texto.** No eran un corte de texto,
-  como parecía: era el aviso que Flutter le pone al texto que dibuja fuera de
-  cierto contexto. Se veía solo en Android.
-- Las burbujas son **más grandes** en las dos plataformas, y la fila va de
-  punta a punta de la pantalla.
-- **La flechita de ocultarlas** se centra contra todo el lector (antes quedaba
-  corrida hacia un lado) y, como las de correr la fila, ahora tiene fondo
-  sólido: sobre el fondo oscuro del lector eran negro sobre negro.
-- En PC, esas flechitas **ya no quedan encima de la barra de desplazamiento**.
-- **Las portadas dejan de recargarse solas.** La fila se desarmaba entera cada
-  vez que el panel de controles se ocultaba —cosa que pasa con solo
-  desplazarse— y al volver, la portada tenía que pedirse de nuevo. Ahora se
-  queda cargada.
+Nueva opción en el menú de tres puntos de las tarjetas de **Continuar viendo**
+y **Continuar leyendo**, en PC y en Android.
 
-### 🐛 Otros arreglos del lector
+- Da por visto el episodio o capítulo actual y deja la tarjeta apuntando al
+  **siguiente**, sin abrirlo. Sirve para ponerse al día de a uno con lo que ya
+  viste o leíste en otro lado.
+- Cuando el actual era el último, la obra **sale de Continuar y queda en el
+  Historial como completada**, igual que si la hubieras terminado ahí mismo.
+- Si la extensión no responde, no se toca nada de lo guardado: te avisa y
+  queda todo como estaba.
 
-- **"Ver detalle" ya no te deja en la Biblioteca.** Cerraba el lector y, a
-  veces, la ficha nunca llegaba a abrirse. Saltando de una obra a otra desde
-  una burbuja fallaba siempre.
-- **Los botones de capítulo siguiente/anterior** del final de la cascada ya
-  responden. Se apretaban y no pasaba nada, sobre todo con las burbujas
-  desplegadas: la capa invisible que muestra y oculta los controles al tocar
-  el medio de la pantalla se quedaba con el toque antes de que llegara al
-  botón. Ahora esa capa les deja el espacio libre mientras están a la vista.
-  Y el hueco que se les reserva debajo se mide de verdad, en vez de ser un
-  número fijo que se quedaba corto según el aparato o el tamaño de letra.
-- **Los ajustes del lector (la tuerca) se pueden subir hasta arriba.** En
-  horizontal la hoja quedaba cortada a media pantalla y no había forma de
-  llegar a las opciones de abajo.
-- **La lista de capítulos en PC aprovecha el alto de la pantalla** y se frena
-  antes del borde, en vez de pasarse de la ventana con una obra larga. Con
-  muchos capítulos se desplaza por dentro, y va un poco más ancha para que
+### 🖥️ El lector en PC
+
+- **Toda la barra de arriba mueve la ventana.** Antes solo se podía arrastrar
+  desde una tira fina alrededor del título, así que mover la ventana era
+  cuestión de acertarle. Ahora sirve cualquier hueco entre los botones — y el
+  doble clic para maximizar y restaurar también funciona en toda la barra.
+- **La lista de capítulos se abre centrada en la pantalla**, en vez de colgar
+  del botón pegada al techo y corrida a un costado.
+- **Y aprovecha el alto de la pantalla**: con una obra larga se desplaza por
+  dentro en lugar de pasarse de la ventana, y va un poco más ancha para que
   los nombres se lean cómodos.
+
+### 🐛 Otros arreglos
+
+- **La barra de desplazamiento del lector ya se ve sobre páginas blancas.**
+  Era blanca semitransparente, así que en la mayoría de los mangas
+  desaparecía del todo y no se sabía por dónde iba la lectura. Ahora usa el
+  color de acento de la app.
