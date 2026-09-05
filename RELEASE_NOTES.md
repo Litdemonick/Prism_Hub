@@ -1,4 +1,4 @@
-## PrismHub v1.0.101 — Encontrado: por qué la selección se bajaba sola
+## PrismHub v1.0.102 — El panel de categorías se bloqueaba a sí mismo
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,30 +12,31 @@
 
 ### 📺 Android TV
 
-- **La selección ya no se va bajando de fila sola al insistir con la
-  derecha.** Es el fallo que más veces volvió, y hasta ahora se venía
-  arreglando a ciegas: el comportamiento del mando no se podía comprobar
-  sin un televisor delante. Ahora sí se puede, y eso cambió el
-  diagnóstico por completo.
+- **El panel de categorías ya no queda abierto ni bloquea su propia
+  entrada.** Los dos fallos reportados juntos —"queda abierto todo el rato"
+  y "no me deja ni entrar"— resultaron ser el mismo, y se
+  retroalimentaban:
 
-  Los topes de la fila estaban **bien**. El que fallaba era el mecanismo
-  que rescata el foco cuando se pierde: al desplazarse, la lista destruye
-  la tarjeta que tenía la selección, y ahí el rescate buscaba "el
-  siguiente enfocable" — que en orden de lectura es la **primera tarjeta de
-  la fila de abajo**. De ahí que insistir con la derecha fuera bajando fila
-  por fila.
+  Para mover la selección a la izquierda, Flutter exige que el centro del
+  destino quede más a la izquierda que el borde de donde venís. Con el
+  panel desplegado sus botones son anchos, así que su centro cae a la
+  derecha del borde de las tarjetas y deja de contar como destino válido:
+  el panel se vuelve inalcanzable. Y como no se puede entrar, nunca recibe
+  la selección; como nunca la recibe, nunca se entera de que tiene que
+  contraerse; y desplegado sigue siendo inalcanzable.
 
-  Ahora se recuerdan los últimos sitios donde estuvo la selección y se
-  vuelve al más reciente que siga existiendo: la tarjeta de al lado, en la
-  misma fila. Quedan siete casos cubiertos por pruebas automáticas, así
-  que este fallo no puede volver sin que se note antes de publicar.
+  El panel arrancaba desplegado dando por sentado que la selección inicial
+  iba a caer ahí, y eso puede no pasar. Ahora lo comprueba contra la
+  realidad en vez de darlo por hecho. De paso se arregla el otro síntoma:
+  abierto tapaba la primera tarjeta de cada fila, que es el "se corta a la
+  izquierda" de las fotos.
 
-- **Aire alrededor de las tarjetas, para que el marco de foco no se
-  corte.** Reportado en los cuatro lados: la primera tarjeta de cada fila
-  contra el panel de categorías, la última contra el borde derecho, y las
-  de arriba y abajo contra el recorte de la lista. El marco no se dibuja
-  dentro de la tarjeta sino por fuera, con un resplandor todavía más
-  ancho, así que donde el contenido llegaba justo al filo quedaba mordido.
-  Ahora el contenido entero tiene margen propio, en vez de parches por
-  tarjeta que además dejaban el destacado desalineado con las filas de
-  abajo.
+- **Aire propio para el destacado de arriba.** Su borde de selección lo
+  dibuja el carrusel al ras de la tarjeta, sin margen de por medio, así
+  que se cortaba contra el borde de arriba y el de la derecha.
+
+- **Las pruebas de navegación ahora corren en modo televisor.** Estaban
+  corriendo con la detección de TV apagada y con widgets de prueba en vez
+  de las tarjetas reales — o sea, comprobando una versión de la app que no
+  es la que corre en el televisor. Con eso corregido son ocho casos, y son
+  los que encontraron este fallo.
