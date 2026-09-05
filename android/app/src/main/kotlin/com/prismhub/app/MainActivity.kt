@@ -360,7 +360,28 @@ class MainActivity: AudioServiceFragmentActivity() {
                 putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
             }
         )
-        for (intent in intentos) {
+        // ── Primero los que SI tienen quien los atienda ──────────────────
+        //
+        // Antes se disparaban en orden a ciegas, confiando en que el que no
+        // sirviera lanzara ActivityNotFoundException. Y no siempre lo hace:
+        // hay cajas de Android TV donde startActivity con ACTION_VIEW se
+        // acepta sin protestar y no abre absolutamente nada — como no hubo
+        // excepcion, la segunda forma no llegaba a probarse NUNCA y la
+        // actualizacion se quedaba bajada sin instalarse. Reportado en vivo.
+        //
+        // Preguntando antes quien puede atender cada intent, el que no tiene
+        // a nadie se saltea y se prueba el siguiente de verdad. Para que esa
+        // pregunta funcione en Android 11+ hace falta el bloque <queries>
+        // del AndroidManifest — ver el comentario largo alli.
+        val conQuienAtienda = intentos.filter {
+            packageManager.queryIntentActivities(it, 0).isNotEmpty()
+        }
+        // Si la consulta no encuentra a nadie para ninguno, se prueban igual
+        // los dos: puede ser que el aparato oculte esa informacion y el
+        // intent funcione lo mismo. Quedarse sin intentar por una consulta
+        // que dijo "no se" seria peor que el fallo que esto viene a evitar.
+        val aProbar = if (conQuienAtienda.isEmpty()) intentos else conQuienAtienda
+        for (intent in aProbar) {
             try {
                 startActivity(intent)
                 return

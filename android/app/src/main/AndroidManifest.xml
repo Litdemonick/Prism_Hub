@@ -2,6 +2,26 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- Huella/rostro para la Zona +18 (local_auth). -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- ── Poder VER quien instala APKs ──────────────────────────────────
+         Desde Android 11 una app no ve el resto de las apps del aparato
+         salvo que lo declare acá. Sin esto, preguntar "¿hay alguien que
+         sepa abrir un APK?" (resolveActivity) devuelve "no" aunque sí lo
+         haya, así que no se puede elegir entre las dos formas de pedir la
+         instalación (ver installApk en MainActivity.kt): había que
+         dispararlas a ciegas y, si la primera no abría nada pero tampoco
+         fallaba, la segunda no llegaba a probarse nunca. Eso es lo que se
+         reportó en un televisor: baja la actualización y se queda ahí.
+         Declararlo no da ningún permiso nuevo: solo deja consultar. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.INSTALL_PACKAGE" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
     <!-- enableOnBackInvokedCallback: el gesto de atras predictivo de Android
          13+. Sin el, el sistema avisa en cada arranque que no esta habilitado
          y no se ve la animacion de vuelta que el usuario ya espera del resto

@@ -755,6 +755,7 @@ class ApplicationUtils {
                 PlatformTextButton(
                   onPressed: () {
                     RouterUtils.pop();
+                    _recordarComoActualizarDespues(context);
                   },
                   child: Text('upgrade.not-now'.i18n),
                 ),
@@ -796,6 +797,7 @@ class ApplicationUtils {
             PlatformTextButton(
               onPressed: () {
                 RouterUtils.pop();
+                _recordarComoActualizarDespues(context);
               },
               child: Text('upgrade.not-now'.i18n),
             ),
@@ -837,6 +839,22 @@ class ApplicationUtils {
         content: 'upgrade.error'.i18n,
       );
     }
+  }
+
+  /// Al posponer, se recuerda por dónde se actualiza — y por qué conviene.
+  ///
+  /// No se insiste ni se vuelve a abrir el diálogo: si dijo que ahora no, es
+  /// que ahora no. Pero cerrarlo sin más deja a alguien sin saber que puede
+  /// volver cuando quiera, y con la idea de que perdió la oportunidad hasta
+  /// que la app decida avisar de nuevo. Un renglón alcanza para dejar claro
+  /// que la decisión sigue siendo suya y dónde está el botón.
+  static void _recordarComoActualizarDespues(BuildContext context) {
+    if (!context.mounted) return;
+    showPlatformSnackbar(
+      context: context,
+      title: 'upgrade.check-update'.i18n,
+      content: 'upgrade.later-hint'.i18n,
+    );
   }
 
   /// Ancho del diálogo de "hay versión nueva" en escritorio. El valor por

@@ -30,6 +30,68 @@ class PlatformButton extends StatelessWidget {
   }
 }
 
+/// El estilo de un botón de diálogo en el televisor.
+///
+/// ── Por qué hace falta uno propio ────────────────────────────────────────
+///
+/// El resaltado de foco de Material es un velo translúcido por encima del
+/// botón: pensado para ratón, donde el cursor ya dice dónde está uno parado
+/// y el velo es apenas un refuerzo. Con el mando ese velo es la ÚNICA pista,
+/// y acá se perdía por partida doble: el botón principal ya viene relleno
+/// del color de acento, así que un velo del mismo tono encima no cambia
+/// nada; y el secundario, al enfocarse, se pintaba de ESE MISMO acento, con
+/// lo cual los dos terminaban rosas y no se sabía cuál estaba elegido.
+/// Reportado en vivo: «es rosado el botón, el otro sí se ve pero feo».
+///
+/// ── La regla ─────────────────────────────────────────────────────────────
+///
+/// El foco NO se marca con más color: se marca INVIRTIENDO el botón. Lo
+/// enfocado pasa a fondo claro con texto oscuro y un aro alrededor; lo que
+/// no tiene el foco se queda como estaba (relleno de acento el principal,
+/// transparente el secundario). Así los dos estados son opuestos entre sí y
+/// los dos botones nunca se parecen, que es lo que hacía falta desde tres
+/// metros de distancia.
+///
+/// [destacado] distingue al botón principal (relleno de acento en reposo)
+/// del secundario (transparente).
+ButtonStyle estiloDeFocoTv({required bool destacado}) {
+  return ButtonStyle(
+    foregroundColor: WidgetStateProperty.resolveWith((estados) {
+      if (estados.contains(WidgetState.focused)) return HomeTheme.bg;
+      return destacado ? Colors.white : HomeTheme.textPrimary;
+    }),
+    backgroundColor: WidgetStateProperty.resolveWith((estados) {
+      if (estados.contains(WidgetState.focused)) return Colors.white;
+      return destacado ? HomeTheme.accentPink : Colors.transparent;
+    }),
+    // El aro de afuera, además del relleno invertido: el relleno solo ya
+    // alcanza sobre el fondo oscuro del diálogo, pero el aro es lo que hace
+    // que se lea igual de claro si el diálogo alguna vez cambia de color.
+    side: WidgetStateProperty.resolveWith((estados) {
+      if (estados.contains(WidgetState.focused)) {
+        return const BorderSide(color: Colors.white, width: 2);
+      }
+      return destacado
+          ? BorderSide.none
+          : BorderSide(color: HomeTheme.border, width: 1);
+    }),
+    // Sin el velo de siempre: acá el foco ya se marca de otra forma, y
+    // dejarlo solo ensucia el contraste que se acaba de ganar.
+    overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+    // Más grandes que en el teléfono: se miran de lejos y se apuntan con un
+    // mando, no con el dedo.
+    padding: const WidgetStatePropertyAll(
+      EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+    ),
+    textStyle: const WidgetStatePropertyAll(
+      TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+    ),
+    shape: WidgetStateProperty.all(
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
+  );
+}
+
 class PlatformFilledButton extends StatelessWidget {
   const PlatformFilledButton({
     super.key,
@@ -40,7 +102,18 @@ class PlatformFilledButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   Widget _builaAndroidButton(BuildContext context) {
-    return FilledButton(onPressed: onPressed, child: child);
+    if (!PlatformTv.esTelevisionSync) {
+      return FilledButton(onPressed: onPressed, child: child);
+    }
+    // En TV este botón ya viene relleno del color de acento, así que su
+    // resaltado de foco de fábrica —un velo del mismo tono por encima— no se
+    // distingue de su estado normal: con el mando no había forma de saber si
+    // estaba seleccionado. Ver `estiloDeFocoTv`.
+    return FilledButton(
+      onPressed: onPressed,
+      style: estiloDeFocoTv(destacado: true),
+      child: child,
+    );
   }
 
   Widget _builaDesktopButton(BuildContext context) {
@@ -69,40 +142,13 @@ class PlatformTextButton extends StatelessWidget {
     if (!PlatformTv.esTelevisionSync) {
       return TextButton(onPressed: onPressed, child: child);
     }
-    // ── En TV, foco con fondo sólido ─────────────────────────────────────
-    //
-    // El resaltado de foco de un TextButton de Material es un velo MUY
-    // sutil, pensado para mouse —ahí el cursor ya dice dónde está parado el
-    // usuario, y el velo es solo un refuerzo—. Con el mando esa marca es la
-    // ÚNICA pista de dónde se está parado, y contra el texto en
-    // HomeTheme.accentPink (rosa) el velo casi del mismo tono se perdía por
-    // completo. Reportado en vivo, en la pantalla de actualizar: «esos
-    // botones al seleccionar con el control remoto no se ve por el color
-    // rosado».
-    //
-    // Mismo criterio que ya se probó y funciona en el resto de la app (ver
-    // FocusableCard / _ItemSidebarTV): en foco, un fondo OPACO y de
-    // contraste alto, no un tinte translúcido del mismo color que ya hay
-    // alrededor.
+    // El foco NO se marca pintando este botón del color de acento: eso lo
+    // dejaba igual que el botón principal, que ya viene relleno de ese
+    // color, y no se sabía cuál de los dos estaba elegido. Se invierte, como
+    // el otro — ver `estiloDeFocoTv`.
     return TextButton(
       onPressed: onPressed,
-      style: ButtonStyle(
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.focused)) return Colors.white;
-          return HomeTheme.accentPink;
-        }),
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.focused)) return HomeTheme.accentPink;
-          return Colors.transparent;
-        }),
-        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-        padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        ),
-        shape: WidgetStateProperty.all(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
+      style: estiloDeFocoTv(destacado: false),
       child: child,
     );
   }
