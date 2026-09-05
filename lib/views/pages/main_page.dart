@@ -137,7 +137,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
       if (mounted) showBetaNoticeIfNeeded(context);
     });
     if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) == true) {
-      ApplicationUtils.scheduleForcedUpdateCheck(context);
+      ApplicationUtils.scheduleUpdateCheck(context);
       // Y se sigue mirando cada tanto: si el release termina de publicarse con
       // la app ya abierta, el aviso llega igual, sin tener que reiniciarla.
       ApplicationUtils.iniciarChequeoPeriodico(context);
@@ -1000,7 +1000,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       if (mounted) showBetaNoticeIfNeeded(context);
     });
     if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) == true) {
-      ApplicationUtils.scheduleForcedUpdateCheck(context);
+      ApplicationUtils.scheduleUpdateCheck(context);
       // Y se sigue mirando cada tanto: si el release termina de publicarse con
       // la app ya abierta, el aviso llega igual, sin tener que reiniciarla.
       ApplicationUtils.iniciarChequeoPeriodico(context);

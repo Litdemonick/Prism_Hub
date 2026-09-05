@@ -23,13 +23,11 @@ import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
-import 'package:prismhub/views/widgets/tv/desplazable_con_mando.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:window_manager/window_manager.dart';
 
 late PackageInfo packageInfo;
 late AndroidDeviceInfo androidDeviceInfo;
@@ -57,8 +55,6 @@ class ApplicationUtils {
   static String get _platformSuffix =>
       Platform.isWindows ? 'windows-x64.zip' : 'linux-x64.tar.gz';
 
-  static bool _forcedUpdatePageOpen = false;
-
   /// Ya se está descargando/instalando una actualización.
   ///
   /// ── Por qué hace falta ────────────────────────────────────────────────
@@ -81,31 +77,30 @@ class ApplicationUtils {
 
   /// Ya hay un aviso de versión nueva en pantalla.
   ///
-  /// ── El fallo que tapa ─────────────────────────────────────────────────
+  /// ── Por qué es uno solo para todos los caminos que avisan ────────────
   ///
-  /// Reportado en vivo con captura, en PC: salían DOS avisos de la misma
-  /// versión, uno encima del otro.
+  /// Hubo un tiempo en que había DOS mecanismos: uno descartable
+  /// (`checkUpdate`, para "Comprobar" en Ajustes) y otro que tapaba la app
+  /// entera y no se podía posponer, disparado solo al arrancar y en el
+  /// chequeo periódico. Cada uno tenía su propio candado, y nada impedía
+  /// que los dos saltaran a la vez — reportado en vivo con captura, en PC:
+  /// salían DOS avisos de la misma versión, uno encima del otro.
   ///
-  /// La causa es que hay dos caminos distintos que avisan, y ninguno sabía
-  /// del otro:
-  ///
-  ///   checkForcedUpdate   la pantalla que TAPA la app entera. Sale sola al
-  ///                       arrancar y en el chequeo periódico.
-  ///   checkUpdate         el diálogo descartable. Sale al tocar «Comprobar»
-  ///                       en Ajustes y en los reintentos que se programan
-  ///                       cuando el release todavía estaba a medio publicar.
-  ///
-  /// Cada uno tenía sus propios candados —`_forcedUpdatePageOpen`,
-  /// `_forcedUpdateCheckInFlight`— pero eran suyos: nada impedía que el
-  /// reintento del segundo saltara justo cuando el primero ya estaba
-  /// mostrando la pantalla, que es exactamente lo que pasó.
-  ///
-  /// Este es uno solo para los dos. Ninguna app debería mostrar el mismo
-  /// aviso dos veces.
+  /// Y aparte de ese bug puntual, el mecanismo bloqueante en sí mismo iba
+  /// en contra de algo que se pidió explícitamente más de una vez: no
+  /// obligar a nadie a actualizar. Ahora hay un solo camino —el
+  /// descartable— para el botón manual, el arranque y el chequeo
+  /// periódico. Este candado evita que se apilen dos avisos si dos de esos
+  /// disparadores caen juntos.
   static bool _avisoDeVersionEnPantalla = false;
-  static Future<void>? _forcedUpdateCheckInFlight;
 
-  static void scheduleForcedUpdateCheck(BuildContext context) {
+  /// Programa el primer chequeo de la sesión, un instante después de que la
+  /// pantalla principal terminó de armarse.
+  ///
+  /// El delay es a propósito: sin él, el diálogo podía intentar abrirse
+  /// mientras la transición de entrada de la app todavía está corriendo, y
+  /// competía con ella por el mismo frame.
+  static void scheduleUpdateCheck(BuildContext context) {
     if (kIsWeb) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
@@ -113,7 +108,7 @@ class ApplicationUtils {
         const Duration(milliseconds: 250),
         () {
           if (context.mounted) {
-            return checkForcedUpdate(context);
+            return checkUpdate(context);
           }
         },
       ));
@@ -190,11 +185,11 @@ class ApplicationUtils {
 
   /// ¿Este release trae el archivo de la plataforma en la que corre la app?
   ///
-  /// Desde que un release puede publicarse para UNA SOLA plataforma (ver
-  /// `_ultimoReleaseParaEstaPlataforma`), ya no tiene sentido pedir las tres
-  /// juntas acá: un release hecho a propósito solo para Android, por
-  /// ejemplo, nunca va a traer el instalador de Windows, y eso no lo vuelve
-  /// "incompleto" para quien SÍ corre en Android.
+  /// Desde que un release puede publicarse para UNA SOLA plataforma, ya no
+  /// tiene sentido pedir las tres juntas acá: un release hecho a propósito
+  /// solo para Android, por ejemplo, nunca va a traer el instalador de
+  /// Windows, y eso no lo vuelve "incompleto" para quien SÍ corre en
+  /// Android.
   static bool _traeEstaPlataforma(dynamic assets) {
     try {
       final nombres = (assets as List)
@@ -267,10 +262,10 @@ class ApplicationUtils {
   /// Windows/Linux con algo que no les trae nada").
   ///
   /// "Candidato" no es lo mismo que "listo para ofrecer": acá solo se decide
-  /// SI aplica, no si ya está completo. Cada llamador decide qué hacer con
-  /// un candidato que todavía se está publicando o le faltan las notas — el
-  /// chequeo forzado espera en silencio (`_ultimoReleaseParaEstaPlataforma`),
-  /// el manual le explica al usuario qué falta (`checkUpdate`).
+  /// SI aplica, no si ya está completo. `checkUpdate` decide qué hacer con
+  /// un candidato que todavía se está publicando o le faltan las notas —
+  /// avisándole al usuario qué falta si tocó "Comprobar" a mano, o
+  /// callado y reintentando más tarde si el chequeo fue automático.
   ///
   /// Antes esto era un solo `GET releases/latest`: alcanzaba porque un
   /// release siempre traía las tres plataformas juntas. Con releases
@@ -322,36 +317,6 @@ class ApplicationUtils {
       // incluía.
     }
     return null;
-  }
-
-  /// Versión de `_candidatoRelevante` para el chequeo que NO puede molestar
-  /// a nadie si algo todavía está a medias (el forzado/periódico, que
-  /// bloquea la app entera): solo devuelve un release cuando está
-  /// completamente listo para esta plataforma, y deja
-  /// `_esperandoReleaseIncompleto` en el estado que le corresponde para que
-  /// el chequeo periódico sepa si tiene que insistir pronto o no.
-  static Future<Map<String, dynamic>?>
-      _ultimoReleaseParaEstaPlataforma() async {
-    final release = await _candidatoRelevante();
-    if (release == null) {
-      // Nada nuevo de verdad: si venía esperando un release a medio
-      // publicar, ya no hay por qué seguir mirando seguido.
-      _esperandoReleaseIncompleto = false;
-      _rafagasRapidas = 0;
-      return null;
-    }
-    if (_algoTodaviaSubiendo(release['assets']) ||
-        !_traeEstaPlataforma(release['assets']) ||
-        !_notasPublicadas(release['body'])) {
-      // Candidato real, pero todavía no está listo del todo (subiendo, o
-      // completo pero sin notas escritas): se sigue mirando seguido hasta
-      // que lo esté (ver _cadaCuantoEsperando).
-      _esperandoReleaseIncompleto = true;
-      return null;
-    }
-    _esperandoReleaseIncompleto = false;
-    _rafagasRapidas = 0;
-    return release;
   }
 
   /// ¿Las notas de la versión ya están escritas?
@@ -514,122 +479,6 @@ class ApplicationUtils {
     }
   }
 
-  // Chequeo obligatorio de versión: a diferencia de checkUpdate() (dialog
-  // descartable, disparado manualmente o al inicio si autoCheckUpdate está
-  // activado), esta variante bloquea el uso de la app con una página de
-  // pantalla completa sin forma de cerrarla salvo actualizando. Solo tiene
-  // sentido en Android/Windows/Linux — la Web siempre sirve la última
-  // versión desplegada, no hay un "instalable" que forzar.
-  static Future<void> checkForcedUpdate(BuildContext context) async {
-    if (kIsWeb) return;
-    // En una compilación de prueba no se avisa de actualizaciones.
-    //
-    // Esa compilación se rehace todo el tiempo mientras se trabaja, así que
-    // comparar su versión contra la publicada da "hay una nueva" casi siempre
-    // — y este aviso es el que BLOQUEA la app hasta actualizar. Quedaba
-    // tapando la pantalla justo cuando se está probando un cambio.
-    //
-    // Solo se calla el aviso: la comprobación manual desde Ajustes sigue
-    // estando, para poder verificar que el flujo de actualización anda (ver
-    // checkUpdate, que avisa en qué modo está).
-    if (!ModoApp.esRelease) return;
-    if (_forcedUpdatePageOpen) return;
-    // El otro camino ya tiene un aviso en pantalla: no se apila encima. Es la
-    // otra mitad del candado — ver _avisoDeVersionEnPantalla.
-    if (_avisoDeVersionEnPantalla) return;
-    // Ya se está bajando/instalando: no se vuelve a avisar de la misma
-    // versión encima de la descarga que el usuario ya aceptó. Con una
-    // conexión lenta la descarga dura minutos y el chequeo periódico seguía
-    // latiendo — ver _instalacionEnCurso.
-    if (_instalacionEnCurso) return;
-    final activeCheck = _forcedUpdateCheckInFlight;
-    if (activeCheck != null) return activeCheck;
-
-    _forcedUpdateCheckInFlight = _checkForcedUpdate(context);
-    try {
-      await _forcedUpdateCheckInFlight;
-    } finally {
-      _forcedUpdateCheckInFlight = null;
-    }
-  }
-
-  static Future<void> _checkForcedUpdate(BuildContext context) async {
-    try {
-      // Busca el release más nuevo que aplique a esta plataforma — ver
-      // _ultimoReleaseParaEstaPlataforma. Si vuelve null puede ser que no
-      // haya nada más nuevo que lo instalado, o que sí haya pero todavía
-      // esté incompleto: en los dos casos no hay nada para ofrecer todavía,
-      // y la función ya dejó _esperandoReleaseIncompleto en el valor que
-      // corresponde para el chequeo periódico (ver _cadaCuantoEsperando).
-      final release = await _ultimoReleaseParaEstaPlataforma();
-      if (release == null) return;
-      if (!context.mounted) return;
-
-      final tagName = release['tag_name'] as String;
-      final remoteVersion = tagName.replaceFirst('v', '');
-
-      final asset = Platform.isAndroid
-          ? _findAndroidAsset(release['assets'])
-          : _findAsset(release['assets'], tagName);
-      if (asset == null) {
-        _esperandoReleaseIncompleto = true;
-        return;
-      }
-      // Release entero y a punto de avisar: se vuelve al ritmo normal.
-      _esperandoReleaseIncompleto = false;
-      _rafagasRapidas = 0;
-
-      // Se calla lo que se esté reproduciendo ANTES de tapar la pantalla.
-      //
-      // El aviso sale encima de cualquier cosa y bloquea, que es a propósito.
-      // Pero sin esto el vídeo seguía sonando detrás: quedaba el audio de algo
-      // que ya no se ve, y había que adivinar de dónde salía.
-      //
-      // Son dos motores distintos y hay que pedírselo a los dos: el
-      // reproductor nativo maneja su audio con media_kit, y el de WebView lo
-      // maneja la propia página. Pausar uno no toca al otro.
-      //
-      // Pausar y no cerrar: se puede posponer la actualización, y en ese caso
-      // el episodio tiene que seguir donde estaba. Las dos llamadas tienen su
-      // propio tope de tiempo, así que un reproductor colgado no puede impedir
-      // que el aviso aparezca.
-      await VideoPlayerController.pausarLoQueSuene();
-      await WebViewPlayerPause.pausarLoQueSuene();
-      if (!context.mounted) return;
-
-      _forcedUpdatePageOpen = true;
-      _avisoDeVersionEnPantalla = true;
-      try {
-        await Navigator.of(context, rootNavigator: true).push(
-          PageRouteBuilder(
-            opaque: true,
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                _ForcedUpdatePage(
-              remoteVersion: remoteVersion,
-              changelog: (release['body'] as String?) ?? '',
-              htmlUrl: release['html_url'] as String,
-              asset: asset,
-            ),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) =>
-                    FadeTransition(opacity: animation, child: child),
-          ),
-        );
-      } finally {
-        _forcedUpdatePageOpen = false;
-        _avisoDeVersionEnPantalla = false;
-      }
-    } catch (e) {
-      // Mismo motivo que en checkUpdate: el candado no puede quedarse trabado
-      // por un fallo.
-      _avisoDeVersionEnPantalla = false;
-      // Silencioso: si no se puede chequear (sin internet, GitHub caído), no
-      // hay que bloquear el uso de la app por un error de red — el gate solo
-      // se muestra cuando SÍ se confirma una versión nueva.
-      debugPrint('checkForcedUpdate error: $e');
-    }
-  }
-
   static checkUpdate(BuildContext context, {bool showSnackbar = false}) async {
     // En una compilación de prueba se dice y no se comprueba nada.
     //
@@ -649,7 +498,7 @@ class ApplicationUtils {
     }
     // Ya hay un aviso puesto (la pantalla bloqueante, u otro diálogo): no se
     // apila un segundo. Ver _avisoDeVersionEnPantalla.
-    if (_avisoDeVersionEnPantalla || _forcedUpdatePageOpen) return;
+    if (_avisoDeVersionEnPantalla) return;
     // Y tampoco mientras se está bajando algo: el usuario ya aceptó.
     if (_instalacionEnCurso) return;
     try {
@@ -699,8 +548,7 @@ class ApplicationUtils {
           }
           return;
         }
-        // Ver el comentario largo de _ultimoReleaseParaEstaPlataforma:
-        // mientras el archivo de esta plataforma no esté subido (o el
+        // Mientras el archivo de esta plataforma no esté subido (o el
         // release recién esté empezando a publicarse), no se ofrece nada.
         final completo = !_algoTodaviaSubiendo(release['assets']) &&
             _traeEstaPlataforma(release['assets']);
@@ -735,6 +583,15 @@ class ApplicationUtils {
           return;
         }
         _cancelarReintentos();
+        // Este aviso ahora también puede salir SOLO, sin que nadie tocara
+        // "Comprobar" — al arrancar o cada tanto mientras la app está
+        // abierta. Si en ese momento algo está sonando detrás del diálogo
+        // (el barrier lo tapa pero no lo calla), conviene pausarlo: mismo
+        // criterio que ya tenía la pantalla bloqueante de antes. Son dos
+        // motores distintos y hay que pedírselo a los dos.
+        await VideoPlayerController.pausarLoQueSuene();
+        await WebViewPlayerPause.pausarLoQueSuene();
+        if (!context.mounted) return;
         _avisoDeVersionEnPantalla = true;
         if (Platform.isAndroid) {
           try {
@@ -874,14 +731,11 @@ class ApplicationUtils {
   // en subir lo suyo— no había forma de enterarse hasta cerrarla y volver a
   // abrirla.
   //
-  // El aviso aparece encima de lo que sea que esté en pantalla —reproductor
-  // nativo, WebView, lector o cualquier página— y BLOQUEA hasta actualizar, la
-  // misma pantalla que sale al arrancar. Es a propósito: una version vieja se
-  // queda sin correcciones y sus extensiones empiezan a fallar cuando los
-  // sitios cambian, sin que se entienda por qué.
-  //
-  // La contra, dicha claramente: puede interrumpir a alguien a mitad de un
-  // episodio. Se acepta a cambio de que nadie se quede atras sin enterarse.
+  // El aviso descartable de siempre — sale mientras se usa la app, se puede
+  // posponer con "Ahora no", y desde ahí queda el recordatorio de que se
+  // puede volver a comprobar desde Ajustes cuando uno quiera. Ya no hay una
+  // variante que bloquee: se sacó a propósito, ver el comentario largo de
+  // `_avisoDeVersionEnPantalla`.
   static Timer? _chequeoPeriodico;
 
   // Cada cuánto se pregunta si hay versión nueva.
@@ -896,76 +750,34 @@ class ApplicationUtils {
   // de avisar justo cuando hay algo que avisar.
   //
   // Cinco minutos deja el cupo en doce llamadas por hora, con lugar de sobra.
+  //
+  // ── Por qué ya no hay un ritmo acelerado aparte ──────────────────────
+  //
+  // Antes este temporizador tenía su PROPIA lógica para "mirar seguido"
+  // mientras un release estaba a medio publicar. Ahora es innecesaria:
+  // `checkUpdate` (a quien esto llama) ya programa sus propios reintentos
+  // cada 6 minutos cuando encuentra un release incompleto (ver
+  // `_programarReintento`) — tener las dos cosas a la vez solo iba a
+  // terminar en dos consultas casi juntas por el mismo motivo.
   static const _cadaCuanto = Duration(minutes: 5);
-
-  // Y cuando ya se sabe que hay algo por salir, se mira seguido.
-  //
-  // Un release se publica por partes: cada plataforma sube su archivo al
-  // terminar de compilar, y las notas pueden escribirse después. En esa ventana
-  // la comprobación ve la versión nueva pero no avisa, porque avisar a medias
-  // manda a una descarga que no existe o deja al usuario eligiendo sin saber
-  // qué trae.
-  //
-  // Ahí es cuando conviene mirar seguido: falta poco y ya se sabe. Se pasa a un
-  // minuto hasta que el release esté entero, y recién ahí sale el aviso — que
-  // es exactamente el momento pedido: "cuando la release completa todo, ahí
-  // sale". Es una ráfaga corta y acotada, no el ritmo permanente.
-  static const _cadaCuantoEsperando = Duration(minutes: 1);
-
-  /// Hay una versión más nueva pero el release todavía no está entero.
-  static bool _esperandoReleaseIncompleto = false;
-
-  /// Cuántas comprobaciones rápidas seguidas se llevan hechas.
-  ///
-  /// La ráfaga tiene techo a propósito. Un release puede quedar publicado y las
-  /// notas no escribirse nunca, o un job del CI fallar y ese archivo no llegar
-  /// jamás: ahí la espera no termina sola. Sin límite, la app se quedaría
-  /// mirando cada minuto para siempre — sesenta llamadas por hora, justo el
-  /// tope de la API de GitHub, así que el mecanismo puesto para avisar ANTES
-  /// terminaría agotando el cupo y dejando de avisar del todo.
-  ///
-  /// Veinte minutos alcanzan de sobra: un release que tarda más que eso en
-  /// completarse no se está completando. Pasado ese punto se vuelve al ritmo
-  /// normal, que igual lo va a encontrar cuando esté listo — solo que sin
-  /// insistir.
-  static int _rafagasRapidas = 0;
-  static const _maxRafagasRapidas = 20;
 
   static void iniciarChequeoPeriodico(BuildContext context) {
     if (kIsWeb) return;
     // Uno solo: en Android el shell se reconstruye al cambiar de pestaña, y sin
     // esto quedaba un temporizador nuevo por cada reconstrucción.
     _chequeoPeriodico?.cancel();
-    // El temporizador late al ritmo RÁPIDO siempre, y adentro se decide si toca
-    // preguntar. Así el cambio de ritmo no obliga a destruir y recrear el
-    // temporizador, que es donde se cuelan los duplicados.
-    var pulsos = 0;
-    _chequeoPeriodico = Timer.periodic(_cadaCuantoEsperando, (_) {
-      pulsos++;
-      // Ver _maxRafagasRapidas: la espera acelerada tiene techo.
-      final rapido =
-          _esperandoReleaseIncompleto && _rafagasRapidas < _maxRafagasRapidas;
-      final cadaCuantosPulsos =
-          rapido ? 1 : _cadaCuanto.inMinutes ~/ _cadaCuantoEsperando.inMinutes;
-      if (pulsos % cadaCuantosPulsos != 0) return;
-      if (rapido) _rafagasRapidas++;
+    _chequeoPeriodico = Timer.periodic(_cadaCuanto, (_) {
       // Se relee el ajuste en cada vuelta: si el usuario lo apaga mientras
       // tanto, esto deja de molestar sin necesidad de reiniciar nada.
       if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) != true) {
         return;
       }
       if (!context.mounted) return;
-      // checkForcedUpdate y no checkUpdate: cuando aparece una version nueva
-      // con la app abierta, el aviso BLOQUEA hasta actualizar, igual que el
-      // que sale al arrancar. Antes esta comprobacion mostraba el dialogo
-      // descartable, asi que se podia seguir usando una version vieja sin
-      // enterarse — que es justo lo que se queria evitar.
-      //
-      // Es seguro llamarlo cada tanto: tiene guardas propias para no apilar la
-      // pantalla si ya esta abierta (_forcedUpdatePageOpen) ni lanzar dos
-      // comprobaciones a la vez (_forcedUpdateCheckInFlight). Y si no hay
-      // version nueva no muestra nada.
-      unawaited(checkForcedUpdate(context));
+      // Sin snackbar: esto no lo pidió nadie tocando un botón, así que si
+      // no hay nada nuevo (o el release sigue incompleto) se queda callado.
+      // `checkUpdate` ya trae sus propias guardas para no apilar un aviso
+      // si ya hay uno en pantalla — ver `_avisoDeVersionEnPantalla`.
+      unawaited(checkUpdate(context));
     });
   }
 
@@ -1753,420 +1565,6 @@ try {
   }
 }
 
-// Página de pantalla completa sin forma de descartarla (PopScope con
-// canPop:false, sin AppBar/botón atrás) — se muestra solo cuando
-// checkForcedUpdate() confirmó una versión más nueva. En Windows/Linux con
-// asset disponible, "Actualizar ahora" descarga+instala+reinicia el proceso
-// solo (nunca vuelve a esta página). En Android (y Desktop sin asset
-// coincidente) abre la página de GitHub en el navegador y agrega un botón
-// "Ya actualicé": vuelve a consultar PackageInfo.fromPlatform() (lee el
-// paquete instalado en el SO, no el proceso en memoria) para detectar si la
-// actualización ya se instaló y, en ese caso, recién ahí cierra el gate.
-class _ForcedUpdatePage extends StatefulWidget {
-  const _ForcedUpdatePage({
-    required this.remoteVersion,
-    required this.changelog,
-    required this.htmlUrl,
-    required this.asset,
-  });
-
-  final String remoteVersion;
-  final String changelog;
-  final String htmlUrl;
-  final Map<String, dynamic>? asset;
-
-  @override
-  State<_ForcedUpdatePage> createState() => _ForcedUpdatePageState();
-}
-
-class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
-  bool _checking = false;
-
-  // Uno por variante: solo se construye una de las dos, pero teniendolos
-  // separados un cambio de tamano de ventana (de la disposicion de escritorio a
-  // la de celular) no deja un mismo controller enganchado a dos vistas.
-  final _scrollEscritorio = ScrollController();
-  final _scrollMovil = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollEscritorio.dispose();
-    _scrollMovil.dispose();
-    super.dispose();
-  }
-
-  bool get _needsManualRetry => Platform.isAndroid || widget.asset == null;
-
-  Future<void> _retryCheck() async {
-    setState(() => _checking = true);
-    try {
-      packageInfo = await PackageInfo.fromPlatform();
-      if (packageInfo.version == widget.remoteVersion) {
-        if (mounted) Navigator.of(context, rootNavigator: true).pop();
-        return;
-      }
-      if (mounted) {
-        showPlatformSnackbar(
-          context: context,
-          content: 'upgrade.still-outdated'.i18n,
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        showPlatformSnackbar(context: context, content: 'upgrade.error'.i18n);
-      }
-    } finally {
-      if (mounted) setState(() => _checking = false);
-    }
-  }
-
-  // Mientras se descarga, los botones quedan apagados. Sin esto, tocar
-  // "Actualizar ahora" dos veces arrancaba DOS descargas del mismo archivo
-  // sobre la misma ruta, cada una escribiendo encima de la otra: el instalador
-  // podía quedar a medio escribir y fallar sin motivo aparente.
-  bool _descargando = false;
-
-  bool get _ocupado => _checking || _descargando;
-
-  /// Etiqueta del boton principal. Mientras se descarga muestra una rueda y el
-  /// texto de "descargando": los botones quedan apagados, y sin ninguna senal
-  /// parecia que el toque no habia hecho nada y se volvia a tocar.
-  Widget get _etiquetaActualizar {
-    if (!_descargando) return Text('upgrade.update-now'.i18n);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox(
-          width: 15,
-          height: 15,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-        const SizedBox(width: 10),
-        Flexible(
-          child: Text(
-            'upgrade.downloading'.i18n,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _updateNow() async {
-    if (_ocupado) return;
-    // Sin asset no hay nada que descargar: se abre la página de versiones y
-    // listo, no hay estado que bloquear.
-    if (widget.asset == null) {
-      await launchUrl(
-        Uri.parse(widget.htmlUrl),
-        mode: LaunchMode.externalApplication,
-      );
-      return;
-    }
-    setState(() => _descargando = true);
-    try {
-      // Mismo camino en las tres plataformas: _downloadAndInstall ya ramifica
-      // adentro (APK en Android, instalador o comprimido en escritorio).
-      await ApplicationUtils._downloadAndInstall(
-        context,
-        widget.asset!,
-        widget.remoteVersion,
-      );
-    } finally {
-      if (mounted) setState(() => _descargando = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 600;
-
-    if (!isMobile) {
-      return PopScope(
-        canPop: false,
-        // Fondo propio: sin esto queda el negro crudo de la ventana, que no es
-        // el fondo de la app y se notaba sobre todo arriba, alrededor de la
-        // franja de arrastre.
-        child: ColoredBox(
-          color: HomeTheme.bg,
-          child: Column(
-            children: [
-              // Barra de ventana propia. La barra nativa de Windows esta oculta
-              // (TitleBarStyle.hidden en main.dart), asi que antes aca solo habia
-              // una franja transparente de 32px: se podia arrastrar, pero se veia
-              // como una banda negra sin nada y —mas importante— no habia NINGUNA
-              // forma de minimizar ni cerrar. Con esta pantalla abierta al
-              // arrancar, la unica salida era el administrador de tareas.
-              if (Platform.isWindows || Platform.isLinux)
-                const _BarraVentanaActualizacion(),
-              Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Card(
-                      elevation: 8,
-                      // Colores de la app y no los de Material: en escritorio la
-                      // raiz es FluentApp, asi que no hay Theme y Card caia al
-                      // tema CLARO por defecto — tarjeta casi blanca sobre el
-                      // fondo oscuro.
-                      color: HomeTheme.cardSurface,
-                      surfaceTintColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: HomeTheme.border)),
-                      child: Container(
-                        constraints: const BoxConstraints(
-                          maxWidth: 600,
-                          maxHeight: 500,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color:
-                                    HomeTheme.accentPink.withValues(alpha: 0.1),
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(12),
-                                  topRight: Radius.circular(12),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.system_update,
-                                      size: 24, color: HomeTheme.accentPink),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      FlutterI18n.translate(
-                                        context,
-                                        'upgrade.new-version',
-                                        translationParams: {
-                                          'version': widget.remoteVersion
-                                        },
-                                      ),
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: HomeTheme.accentPink,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Scrollbar(
-                                controller: _scrollEscritorio,
-                                // Siempre visible: es la unica pista de que las
-                                // notas siguen mas abajo. Por defecto aparece
-                                // solo mientras se arrastra, o sea justo cuando
-                                // ya te enteraste de que habia scroll.
-                                thumbVisibility: true,
-                                child: SingleChildScrollView(
-                                  controller: _scrollEscritorio,
-                                  child: Padding(
-                                    // Aire a la derecha para que la barra no quede
-                                    // pintada encima del texto.
-                                    padding: const EdgeInsets.fromLTRB(
-                                        24, 24, 32, 24),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          FlutterI18n.translate(
-                                            context,
-                                            'upgrade.forced-required',
-                                            translationParams: {
-                                              'actual': packageInfo.version
-                                            },
-                                          ),
-                                          style: TextStyle(
-                                              color: HomeTheme.textPrimary),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        MarkdownBody(
-                                          data: widget.changelog,
-                                          styleSheet: estiloNotasVersion(),
-                                          onTapLink: abrirEnlaceDeNotas,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  if (_needsManualRetry) ...[
-                                    Expanded(
-                                      child: PlatformTextButton(
-                                        onPressed:
-                                            _ocupado ? null : _retryCheck,
-                                        child: Text(
-                                            'upgrade.already-updated'.i18n),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                  ],
-                                  Expanded(
-                                    child: PlatformFilledButton(
-                                      onPressed: _ocupado ? null : _updateNow,
-                                      child: _etiquetaActualizar,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Mobile: pantalla completa forzada (sin forma de salir)
-    return PopScope(
-      canPop: false,
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.5),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Card(
-              elevation: 8,
-              // Ver el comentario de la tarjeta de escritorio.
-              color: HomeTheme.cardSurface,
-              surfaceTintColor: Colors.transparent,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: HomeTheme.border)),
-              child: Container(
-                constraints: BoxConstraints(
-                  // Tope de ancho: en horizontal, con el telefono acostado, la
-                  // tarjeta se estiraba de borde a borde y las lineas quedaban
-                  // larguisimas e incomodas de leer.
-                  maxWidth: 560,
-                  // En horizontal el alto util es la mitad, asi que 0.8 dejaba
-                  // el contenido apretado contra los bordes; se deja mas margen
-                  // cuando la pantalla es baja.
-                  maxHeight: MediaQuery.sizeOf(context).height *
-                      (MediaQuery.orientationOf(context) ==
-                              Orientation.landscape
-                          ? 0.86
-                          : 0.8),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: DesplazableConMando(
-                        controlador: _scrollMovil,
-                        child: Scrollbar(
-                          controller: _scrollMovil,
-                          thumbVisibility: true,
-                          child: SingleChildScrollView(
-                            controller: _scrollMovil,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(24, 24, 30, 20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(Icons.system_update,
-                                      size: 48, color: HomeTheme.accentPink),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    FlutterI18n.translate(
-                                      context,
-                                      'upgrade.new-version',
-                                      translationParams: {
-                                        'version': widget.remoteVersion
-                                      },
-                                    ),
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: HomeTheme.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    FlutterI18n.translate(
-                                      context,
-                                      'upgrade.forced-required',
-                                      translationParams: {
-                                        'actual': packageInfo.version
-                                      },
-                                    ),
-                                    style:
-                                        TextStyle(color: HomeTheme.textPrimary),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  MarkdownBody(
-                                    data: widget.changelog,
-                                    styleSheet: estiloNotasVersion(),
-                                    onTapLink: abrirEnlaceDeNotas,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Botones en COLUMNA y no en fila. Con los dos al lado,
-                    // "Ya actualice" y "Actualizar ahora" se repartian medio
-                    // ancho de telefono cada uno: los textos entraban justos,
-                    // se partian en dos lineas o quedaban con puntos
-                    // suspensivos. Uno abajo del otro cada uno tiene el ancho
-                    // entero, y el principal queda primero, que es lo que se
-                    // espera que toques.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _BotonActualizarMovil(
-                            onPressed: _ocupado ? null : _updateNow,
-                            principal: true,
-                            child: _etiquetaActualizar,
-                          ),
-                          if (_needsManualRetry) ...[
-                            const SizedBox(height: 10),
-                            _BotonActualizarMovil(
-                              onPressed: _ocupado ? null : _retryCheck,
-                              principal: false,
-                              child: Text('upgrade.already-updated'.i18n),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Espera a que la app vuelva al frente para retomar algo que quedo pendiente
 /// en una pantalla del sistema (ver ApplicationUtils._instalarAlVolver).
 ///
@@ -2334,138 +1732,7 @@ MarkdownStyleSheet estiloNotasVersion() {
   );
 }
 
-/// Barra de ventana de la pantalla de actualizacion obligatoria.
-///
-/// La app oculta la barra de titulo nativa, asi que cada pantalla que pueda
-/// aparecer sola tiene que dibujar la suya. Esta pantalla se muestra ANTES que
-/// el resto de la interfaz, o sea antes de que exista cualquier otra barra.
-///
-/// Lleva minimizar y cerrar a proposito: la actualizacion es obligatoria para
-/// USAR la app, no para tenerla abierta. Sin estos botones, y con la barra
-/// nativa oculta, la unica manera de salir era matar el proceso.
-class _BarraVentanaActualizacion extends StatelessWidget {
-  const _BarraVentanaActualizacion();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: HomeTheme.cardSurface,
-        border: Border(bottom: BorderSide(color: HomeTheme.border)),
-      ),
-      child: Row(
-        children: [
-          // El area arrastrable se queda con todo el espacio libre, no solo con
-          // el ancho del texto: asi se puede mover la ventana desde cualquier
-          // parte vacia de la barra, como en cualquier ventana del sistema.
-          Expanded(
-            child: DragToMoveArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  children: [
-                    Icon(Icons.system_update,
-                        size: 16, color: HomeTheme.accentPink),
-                    const SizedBox(width: 10),
-                    Text(
-                      'PrismHub',
-                      style: TextStyle(
-                        color: HomeTheme.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'v${packageInfo.version}',
-                      style: TextStyle(
-                        color: HomeTheme.textMuted,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          _BotonVentana(
-            icono: Icons.remove,
-            onTap: () => windowManager.minimize(),
-          ),
-          _BotonVentana(
-            icono: Icons.close,
-            peligro: true,
-            onTap: () => windowManager.close(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BotonVentana extends StatefulWidget {
-  const _BotonVentana({
-    required this.icono,
-    required this.onTap,
-    this.peligro = false,
-  });
-
-  final IconData icono;
-  final VoidCallback onTap;
-
-  /// Cerrar se pinta en rojo al pasar por encima, como en Windows.
-  final bool peligro;
-
-  @override
-  State<_BotonVentana> createState() => _BotonVentanaState();
-}
-
-class _BotonVentanaState extends State<_BotonVentana> {
-  bool _encima = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final fondo = !_encima
-        ? Colors.transparent
-        : (widget.peligro
-            ? HomeTheme.accentRed
-            : Colors.white.withValues(alpha: 0.08));
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _encima = true),
-      onExit: (_) => setState(() => _encima = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          width: 46,
-          height: 40,
-          color: fondo,
-          child: Icon(
-            widget.icono,
-            size: 16,
-            color: _encima && widget.peligro
-                ? Colors.white
-                : HomeTheme.textPrimary,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Abre un enlace de las notas de version en el navegador del sistema.
-///
-/// Va aparte porque las notas se muestran en TRES lugares: el dialogo de "hay
-/// version nueva" y las dos variantes —escritorio y celular— de la pantalla de
-/// actualizacion obligatoria. En esas dos ultimas no habia manejador, asi que
-/// los enlaces se veian subrayados y con el color de acento pero tocarlos no
-/// hacia absolutamente nada.
-///
-/// La firma es la que espera MarkdownBody.onTapLink: (texto, href, titulo).
-///
-/// Nunca lanza: un href vacio o mal formado no puede tumbar la pantalla que
-/// justamente esta pidiendo actualizar.
+/// Qué hacer al tocar un enlace dentro de las notas de versión (Markdown).
 void abrirEnlaceDeNotas(String _, String? href, String __) {
   if (href == null || href.trim().isEmpty) return;
   try {
@@ -2476,77 +1743,6 @@ void abrirEnlaceDeNotas(String _, String? href, String __) {
     unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
   } catch (e) {
     debugPrint('No se pudo abrir el enlace de las notas: $e');
-  }
-}
-
-/// Boton de la pantalla de actualizacion en celular.
-///
-/// No usa PlatformFilledButton porque ese cae en el FilledButton de Material
-/// con el tema por defecto: color del sistema en vez del acento de la app, y
-/// una altura pensada para un boton de formulario, no para la accion principal
-/// de una pantalla que ocupa todo el ancho.
-class _BotonActualizarMovil extends StatelessWidget {
-  const _BotonActualizarMovil({
-    required this.child,
-    required this.onPressed,
-    required this.principal,
-  });
-
-  final Widget child;
-  final VoidCallback? onPressed;
-
-  /// El principal va relleno con el acento; el otro, solo con borde. Deja claro
-  /// cual es la accion que se espera sin tener que leer los dos.
-  final bool principal;
-
-  @override
-  Widget build(BuildContext context) {
-    final apagado = onPressed == null;
-    final fondo = !principal
-        ? Colors.transparent
-        : (apagado
-            // Apagado pero reconocible: en gris quedaba como si el boton no
-            // existiera, y este es JUSTO el momento en que se esta descargando
-            // y hay que ver que sigue ahi.
-            ? HomeTheme.accentPink.withValues(alpha: 0.35)
-            : HomeTheme.accentPink);
-    final texto = principal
-        ? Colors.white
-        : (apagado ? HomeTheme.textMuted : HomeTheme.textPrimary);
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: Material(
-        color: fondo,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: principal
-                  ? null
-                  : Border.all(
-                      color: apagado ? HomeTheme.border : HomeTheme.accentPink),
-            ),
-            child: DefaultTextStyle.merge(
-              style: TextStyle(
-                color: texto,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-              child: IconTheme.merge(
-                data: IconThemeData(color: texto),
-                child: child,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
