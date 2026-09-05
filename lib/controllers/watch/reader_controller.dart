@@ -116,6 +116,33 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
   /// `_MedidorDeAltura` en reader_view.dart) el margen reservado es siempre
   /// el que hace falta, ni uno más ni uno menos.
   final alturaPanelInferior = 0.0.obs;
+
+  /// Cuánto espacio de abajo NO puede cubrir la capa de toque del centro
+  /// del lector (la que muestra/oculta los controles, ver `ReaderView`).
+  /// En 0, la de siempre.
+  ///
+  /// ── El bug que esto arregla ──────────────────────────────────────────
+  ///
+  /// Esa capa de toque flota ENCIMA del contenido del lector, y Flutter
+  /// resuelve un toque disputado a favor de la capa de más arriba. O sea
+  /// que cualquier botón que quede debajo de ella no recibe el toque
+  /// aunque se vea perfecto: se aprieta y no pasa nada.
+  ///
+  /// Deja libres 120 px arriba y abajo justamente para no comerse los
+  /// controles de los bordes. El problema es que los botones de capítulo
+  /// siguiente/anterior del final de la cascada se corren hacia ARRIBA
+  /// tanto como mida la franja flotante de abajo (ver
+  /// [alturaPanelInferior]) — y con las burbujas desplegadas esa franja
+  /// pasa de 120, así que los botones terminaban justo adentro de la capa
+  /// de toque. Reportado en vivo: con la flecha mostrando las burbujas no
+  /// se los podía tocar; colapsadas sí, porque ahí la franja mide menos y
+  /// los botones caían en la zona libre.
+  ///
+  /// Lo pone el propio pie de la cascada mientras está montado, y lo
+  /// devuelve a 0 al desmontarse — así la zona libre más grande existe
+  /// solo cerca del final del capítulo, que es donde hacen falta, y no se
+  /// pierde el toque para mostrar los controles en todo el resto.
+  final zonaLibreAbajo = 0.0.obs;
   late final index = playIndex.obs;
   get cuurentPlayUrl => playList[index.value].url;
   Timer? _timer;
@@ -184,8 +211,7 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
     // no puede esperar a que alguien más lo detecte. Antes esto salía como un
     // error de carga cualquiera y el lector ofrecía "reintentar" contra algo
     // que ya no existe.
-    final motivo =
-        ExtensionUtils.motivoNoDisponible(runtime.extension.package);
+    final motivo = ExtensionUtils.motivoNoDisponible(runtime.extension.package);
     if (motivo != null) {
       extensionCaida.value = motivo;
       error.value = motivo.i18n;

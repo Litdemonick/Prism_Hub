@@ -45,7 +45,14 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
           if (c.error.value.isEmpty)
             Positioned(
               top: 120,
-              bottom: 120,
+              // 120 de siempre, salvo cuando el pie de la cascada avisa que
+              // necesita más (ver ReaderController.zonaLibreAbajo): esta
+              // capa está POR ENCIMA del contenido y le gana cualquier
+              // toque disputado, así que sin esto los botones de capítulo
+              // siguiente/anterior quedaban tocables solo por casualidad,
+              // según cuánto midiera la franja flotante de abajo.
+              bottom:
+                  c.zonaLibreAbajo.value > 120 ? c.zonaLibreAbajo.value : 120,
               left: 0,
               // Leave the system scrollbar's hit strip free on desktop —
               // this overlay is translucent, so its tap recognizer competes

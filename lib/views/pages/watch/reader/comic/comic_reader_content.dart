@@ -1464,13 +1464,34 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
 /// MISMA `ScrollablePositionedList` (ver `itemCount: images.length + 1` en
 /// el `build` de más arriba), aparece solo cuando de verdad se llegó al
 /// final — sin un `NotificationListener` aparte para adivinarlo.
-class _PieDeCapituloCascada extends StatelessWidget {
+class _PieDeCapituloCascada extends StatefulWidget {
   const _PieDeCapituloCascada({required this.controlador});
 
   final ComicController controlador;
 
   @override
+  State<_PieDeCapituloCascada> createState() => _PieDeCapituloCascadaState();
+}
+
+class _PieDeCapituloCascadaState extends State<_PieDeCapituloCascada> {
+  /// Alto aproximado que ocupan los botones con su padding de arriba: no
+  /// hace falta medirlo fino, solo que la zona libre les sobre.
+  static const _altoDeLosBotones = 90.0;
+
+  @override
+  void dispose() {
+    // Se sale de pantalla (o se cambia de capítulo): la capa de toque del
+    // centro vuelve a su zona libre de siempre, para no dejar muerto un
+    // pedazo grande de pantalla el resto de la lectura.
+    if (!widget.controlador.isClosed) {
+      widget.controlador.zonaLibreAbajo.value = 0;
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final controlador = widget.controlador;
     return Obx(() {
       final hayAnterior = controlador.index.value > 0;
       final haySiguiente =
@@ -1530,6 +1551,19 @@ class _PieDeCapituloCascada extends StatelessWidget {
       // momento — se le suma un margen fijo de respiro, pero ya no hay que
       // adivinar cuánto mide lo que hay que esquivar.
       final margenInferior = controlador.alturaPanelInferior.value + 24;
+      // Mientras este pie esté en pantalla, la capa de toque del centro del
+      // lector tiene que dejar libre TODO lo que ocupan estos botones — si
+      // no, están por debajo de ella y el toque nunca les llega (ver el
+      // comentario largo en ReaderController.zonaLibreAbajo). Se hace en el
+      // siguiente frame porque escribir un Rx en medio de un build es
+      // exactamente lo que Flutter no deja.
+      final libreQueNecesita = margenInferior + _altoDeLosBotones;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || controlador.isClosed) return;
+        if (controlador.zonaLibreAbajo.value != libreQueNecesita) {
+          controlador.zonaLibreAbajo.value = libreQueNecesita;
+        }
+      });
       return Padding(
         padding: EdgeInsets.fromLTRB(16, 28, 16, margenInferior),
         child: Row(

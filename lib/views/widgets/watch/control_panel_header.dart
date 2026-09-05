@@ -384,15 +384,17 @@ class _ControlPanelHeaderState<T extends ReaderController>
                             // siempre entera y a la vista.
                             //
                             // Proporcional a la ventana, no un número
-                            // fijo: en una ventana chica 520 sería más
-                            // alto que la pantalla y volvería el mismo
-                            // problema. Se queda en el más chico de los
-                            // dos, y nunca baja de 240 para que con una
-                            // ventana muy baja siga siendo usable.
+                            // fijo: la idea es que aproveche el alto de la
+                            // pantalla —de arriba abajo— y solo se frene un
+                            // poco antes del borde, no que quede una
+                            // tarjetita chica en el medio (primer intento,
+                            // con tope de 520: se veía corta y desaprovechaba
+                            // toda la pantalla). Con muchos capítulos se
+                            // desplaza por dentro.
                             final alto = MediaQuery.sizeOf(context).height;
-                            final tope = (alto * 0.7).clamp(240.0, 520.0);
+                            final tope = (alto - 140).clamp(240.0, 900.0);
                             return Container(
-                              width: 300,
+                              width: 340,
                               constraints: BoxConstraints(maxHeight: tope),
                               decoration: BoxDecoration(
                                 color: HomeTheme.cardSurface,
