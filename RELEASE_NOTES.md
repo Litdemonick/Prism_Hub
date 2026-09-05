@@ -1,4 +1,4 @@
-## PrismHub v1.0.104 — El movimiento dentro de una fila lo decide la app
+## PrismHub v1.0.105 — Aire para el marco al subir, y el mando queda registrado
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,27 +12,16 @@
 
 ### 📺 Android TV
 
-- **Al llegar al final de una fila, ya no se mueve nada: ni la selección ni
-  la pantalla.** El arreglo anterior dejaba que el sistema hiciera el salto
-  y después lo deshacía, y eso no alcanzaba por dos motivos.
+- **Al subir a las tarjetas grandes, la pantalla ahora se corre lo que
+  falta para que el marco se vea entero.** La cuenta que decidía si algo
+  "ya se ve" miraba el rectángulo de la tarjeta, y el marco de selección no
+  vive ahí dentro: se dibuja unos píxeles por fuera. Con la tarjeta pegada
+  al borde, la tarjeta entraba pero el marco quedaba mordido.
 
-  Primero, cuando el sistema salta, antes **desplaza la pantalla** para
-  revelar el destino — devolver la selección a su sitio no deshace ese
-  desplazamiento. Es el "la selección se queda quieta pero se mueven las
-  tarjetas de abajo, como si moviera todo alrededor".
-
-  Y segundo, deshacerlo dependía de ganarle una carrera al propio sistema,
-  que en un televisor modesto no se gana siempre. De ahí que el mismo caso
-  a veces se viera bien y a veces no.
-
-  Ahora, dentro de una fila, el movimiento no se delega: se busca la
-  tarjeta de al lado —la que pertenece a la misma fila y está en el mismo
-  renglón— y se va ahí. Si no hay ninguna, no se hace nada en absoluto.
-
-- **Desde la primera categoría del panel, la flecha arriba vuelve a llegar
-  a los botones de arriba** (buscar, extensiones, favoritos, historial,
-  ajustes). Se había roto en la versión anterior.
-
-Las pruebas automáticas de navegación son ahora 16 casos, y comprueban
-también que al toparse contra el final de una fila las tarjetas de abajo
-no se muevan ni un píxel.
+- **Cada flecha del mando queda anotada en el registro.** Dice qué camino
+  tomó y por qué: si se fue a la tarjeta de al lado, si era el final de la
+  fila y no se movió nada, o si el movimiento se deshizo. El recorrido con
+  el mando es lo que más veces volvió, y hasta ahora cada vuelta se iba en
+  adivinar qué había pasado — desde el sillón solo se ve "se movió raro".
+  Ahora se reproduce el fallo, se exporta el registro desde Ajustes y ahí
+  está escrito.
