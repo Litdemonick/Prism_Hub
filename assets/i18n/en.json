@@ -909,6 +909,7 @@
         "settings-pin-subtitle": "Set or change the PIN that protects the 18+ Zone",
         "settings-pin-set": "Set PIN",
         "settings-pin-change": "Change PIN",
+        "tv-empty": "No favorites or history in the 18+ Zone",
         "settings-pin-configured": "PIN set",
         "settings-pin-none": "No PIN set",
         "settings-pin-remove": "Remove PIN",

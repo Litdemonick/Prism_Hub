@@ -905,6 +905,7 @@
         "settings-pin-subtitle": "Configurá o cambiá el PIN que protege la Zona +18",
         "settings-pin-set": "Establecer PIN",
         "settings-pin-change": "Cambiar PIN",
+        "tv-empty": "Sin favoritos ni registros en la Zona +18",
         "settings-pin-configured": "PIN configurado",
         "settings-pin-none": "Sin PIN configurado",
         "settings-pin-remove": "Quitar PIN",

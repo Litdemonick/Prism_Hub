@@ -19,6 +19,7 @@ import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_lock_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page_tv.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/dialogs/import_dialog.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -135,6 +136,9 @@ class _Nsfw18ZoneGateState extends State<Nsfw18ZoneGate> {
         onUnlocked: () => setState(() => _unlocked = true),
       );
     }
+    // TV: pantalla propia, sin nada del diseño de Android/escritorio — ver
+    // el comentario largo de Nsfw18ZonePageTv.
+    if (PlatformTv.esTelevisionSync) return const Nsfw18ZonePageTv();
     return const Nsfw18ZonePage();
   }
 }
