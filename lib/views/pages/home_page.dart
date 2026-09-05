@@ -32,6 +32,7 @@ import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
 import 'package:prismhub/views/widgets/home/panel_info_hover.dart';
 import 'package:prismhub/views/widgets/home/refresh_button.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
+import 'package:prismhub/views/widgets/tv/cargando_tv.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/views/widgets/tv/recorte_de_fila.dart';
 import 'package:prismhub/views/widgets/tv/region_de_foco.dart';

@@ -130,25 +130,42 @@ const int _postersPorFilaTv = 7;
 
 /// El alto de la fila de tarjetas grandes de Inicio.
 ///
-/// El 55% del alto útil (lo que queda debajo de la barra de arriba), que es
-/// lo medido sobre la foto del televisor con el diseño aprobado. Antes salía
-/// de la fórmula del acordeón, pensada para cuando el destacado era lo único
-/// arriba, y se comía media pantalla.
+/// ── Por qué bajó del 55% al 44% ───────────────────────────────────────
+///
+/// Con el 55% (más el 24% de las medianas de abajo) el hero y las medianas
+/// se comían casi el 80% del alto útil, y a la primera fila de extensiones
+/// —la que sigue después— no le quedaba lugar: el título aparecía pegado al
+/// borde de abajo y ni una tarjeta llegaba a asomar. Reportado en vivo con
+/// foto: «sale solo el título de jkanime cortado y ni se ven las cards
+/// abajo», con una app de referencia al lado donde SÍ se ve el título
+/// siguiente entero y las tarjetas empiezan a asomar.
+///
+/// Con menos alto acá, a la fila siguiente le queda más para mostrarse sin
+/// esperar a que el usuario baje.
 double _altoGrandesTv(BuildContext context) {
   final util = MediaQuery.sizeOf(context).height - _altoBarraTv;
-  return (util * 0.555).clamp(180.0, 460.0);
+  return (util * 0.44).clamp(150.0, 340.0);
 }
 
-/// El alto de la fila de medianas: el 24% del alto útil.
+/// El alto de la fila de medianas: ídem, bajó del 24% al 16%.
 double _altoMedianasTv(BuildContext context) {
   final util = MediaQuery.sizeOf(context).height - _altoBarraTv;
-  return (util * 0.24).clamp(90.0, 210.0);
+  return (util * 0.16).clamp(70.0, 140.0);
 }
 
 /// Lo que se lleva la barra de arriba.
 const double _altoBarraTv = 46;
 
 /// El ancho de un póster de fila, para que entren [_postersPorFilaTv].
+///
+/// ── Por qué el tope bajó de 260 a 200 ────────────────────────────────────
+///
+/// Con 260 la portada (3:2, más el título debajo) pasaba los 400 de alto:
+/// cada fila —tanto las de Inicio como las de una zona— pesaba tanto que la
+/// siguiente quedaba fuera de la pantalla. Reportado en vivo junto con el
+/// del hero: «hace más chico las cards por si ocupan mucho espacio». Con
+/// 200 entran las mismas siete por fila pero cada una pesa menos, así que
+/// asoma antes lo que sigue debajo.
 double _anchoPosterTv(BuildContext context) {
   final util = MediaQuery.sizeOf(context).width -
       _anchoSidebarContraidoTv(Ancho.de(context)) -
@@ -156,7 +173,7 @@ double _anchoPosterTv(BuildContext context) {
       _aireDerechoTv;
   final ancho =
       (util - _huecoPosterTv * (_postersPorFilaTv - 1)) / _postersPorFilaTv;
-  return ancho.clamp(96.0, 260.0);
+  return ancho.clamp(96.0, 200.0);
 }
 
 /// El margen "TV-safe" contra el borde de la pantalla (overscan).
@@ -1242,6 +1259,7 @@ class _TarjetaDensaTv extends StatelessWidget {
     required this.item,
     required this.ancho,
     this.encabezado,
+    this.focusNode,
   });
 
   final String package;
@@ -1252,6 +1270,11 @@ class _TarjetaDensaTv extends StatelessWidget {
   /// en el resto del app.
   final String? encabezado;
 
+  /// Para la primera tarjeta de la fila: el mismo nodo que tenía el giro de
+  /// carga, así el foco no se pierde ni salta al llegar el contenido. Ver
+  /// `_FilaZonaTv._focoFila`.
+  final FocusNode? focusNode;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -1261,6 +1284,7 @@ class _TarjetaDensaTv extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           FocusableCard(
+            focusNode: focusNode,
             // La MISMA curva que la portada (`TarjetaDeCatalogo` usa
             // `radioTv` en televisor). Con el radio grande de los destacados,
             // el marco dibujaba una esquina más abierta que la de la imagen y
@@ -1296,6 +1320,7 @@ class _FilaDensaTv extends StatefulWidget {
     required this.rotulo,
     required this.items,
     this.alLlegarAlFinal,
+    this.focoPrimero,
   });
 
   final String rotulo;
@@ -1309,6 +1334,9 @@ class _FilaDensaTv extends StatefulWidget {
   /// la cantidad de filas es la cantidad de extensiones. Así que la página
   /// siguiente se pide acá, al llegar al final de esta fila.
   final VoidCallback? alLlegarAlFinal;
+
+  /// El nodo de foco para la PRIMERA tarjeta — ver `_FilaZonaTv._focoFila`.
+  final FocusNode? focoPrimero;
 
   @override
   State<_FilaDensaTv> createState() => _FilaDensaTvState();
@@ -1460,6 +1488,7 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
                       item: par.$2,
                       ancho: ancho,
                       encabezado: widget.rotulo,
+                      focusNode: i == 0 ? widget.focoPrimero : null,
                     );
                   },
                 ),
@@ -1520,7 +1549,10 @@ class _ContenidoTV extends StatelessWidget {
             final extraArriba = medianas.isEmpty ? 1 : 2;
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 24),
+              // Un poco de aire arriba del hero: pedido explícito, «da más
+              // aire a las cards grandes en el inicio». Antes arrancaba
+              // pegado a la barra superior.
+              padding: const EdgeInsets.only(top: 10, bottom: 24),
               // ── Se construye una pantalla POR DELANTE ─────────────────
               //
               // Cada fila pide su contenido cuando se construye, y de fábrica
@@ -1870,6 +1902,27 @@ class _FilaZonaTv extends StatefulWidget {
 class _FilaZonaTvState extends State<_FilaZonaTv> {
   Timer? _esperaAntesDePedir;
 
+  /// El nodo de foco de esta fila, de la primera posición.
+  ///
+  /// ── Por qué es UNO solo para el giro Y la primera tarjeta ────────────
+  ///
+  /// Mientras carga, el D-pad tiene que poder pararse en esta fila —si no,
+  /// bajar la salta entera y sigue de largo a la próxima, que es el bug
+  /// contrario al que se arregló acá: «bloquea el scroll» hasta que haya
+  /// contenido, y recién ahí sigue.
+  ///
+  /// Y cuando el contenido llega, el giro desaparece y en su lugar aparecen
+  /// las tarjetas de verdad: si el giro tenía el foco en ese instante y cada
+  /// uno usara su propio `FocusNode`, el que tenía el foco se destruye y el
+  /// foco cae al ámbito de la pantalla — la selección desaparece hasta la
+  /// próxima flecha, el mismo bug ya visto varias veces esta sesión.
+  ///
+  /// Con el MISMO objeto pasado a los dos —el giro antes, la primera
+  /// tarjeta después— Flutter lo desprende de uno y lo prende al otro
+  /// dentro del mismo cuadro: el foco sigue estando ahí sin que nadie tenga
+  /// que rescatarlo.
+  final FocusNode _focoFila = FocusNode(debugLabel: 'zona-fila');
+
   /// Cuánto se espera antes de pedirle contenido a esta extensión.
   ///
   /// ── Por qué no se pide de una ───────────────────────────────────────
@@ -1900,6 +1953,7 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
   @override
   void dispose() {
     _esperaAntesDePedir?.cancel();
+    _focoFila.dispose();
     super.dispose();
   }
 
@@ -1919,7 +1973,21 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
             children: [
               _EncabezadoFilaZonaTv(nombre: f.nombre),
               const SizedBox(height: 6),
-              EsqueletoDeFila(ancho: ancho, separacion: _huecoPosterTv),
+              // El mismo alto que tendría la fila real, para que al llegar
+              // el contenido la pantalla no salte — ver el porqué de fondo,
+              // sin esqueleto, en `CargandoTv`.
+              SizedBox(
+                height: TarjetaDeCatalogo.altoDeUnaLineaDeAncho(ancho),
+                width: double.infinity,
+                child: Center(
+                  child: FocusableCard(
+                    focusNode: _focoFila,
+                    borderRadius: 999,
+                    onTap: () {},
+                    child: const CargandoTv(),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -1936,6 +2004,7 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
       alLlegarAlFinal: f.items.length >= _maxTarjetasPorFilaTv
           ? null
           : () => unawaited(widget.controlador.paginarFuente(f)),
+      focoPrimero: _focoFila,
     );
   }
 }
