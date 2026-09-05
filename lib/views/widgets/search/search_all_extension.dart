@@ -19,6 +19,7 @@ class SearchAllExtSearch extends StatefulWidget {
     required this.runtimeList,
     required this.onClickMore,
     this.cabecera,
+    this.accent,
   });
 
   /// La franja del título, como PRIMER elemento de la lista.
@@ -31,6 +32,12 @@ class SearchAllExtSearch extends StatefulWidget {
   final String kw;
   final List<SearchResult> runtimeList;
   final Function(int) onClickMore;
+
+  /// El acento de la pantalla que llama: rosa en el buscador general, rojo
+  /// en el de la Zona +18. En null usa el rosa de siempre — antes el ícono de
+  /// "escribí algo" quedaba rosa SIEMPRE, incluso dentro de la Zona +18
+  /// donde todo lo demás (teclado, campo, botones) ya es rojo.
+  final Color? accent;
 
   @override
   State<SearchAllExtSearch> createState() => _SearchAllExtSearchState();
@@ -56,6 +63,7 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
       if (hayInstaladas) {
         return _EsperandoQueEscribas(
           sinEscribir: widget.kw.trim().isEmpty,
+          accent: widget.accent,
         );
       }
       return SizedBox(
@@ -158,10 +166,12 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
 /// costar caro. Con este ritmo no compite con nada, ni siquiera mientras se
 /// escribe.
 class _EsperandoQueEscribas extends StatefulWidget {
-  const _EsperandoQueEscribas({required this.sinEscribir});
+  const _EsperandoQueEscribas({required this.sinEscribir, this.accent});
 
   /// True: todavía no se escribió nada. False: se buscó y no hubo resultados.
   final bool sinEscribir;
+
+  final Color? accent;
 
   @override
   State<_EsperandoQueEscribas> createState() => _EsperandoQueEscribasState();
@@ -206,53 +216,79 @@ class _EsperandoQueEscribasState extends State<_EsperandoQueEscribas>
     final icono = widget.sinEscribir
         ? Icons.search_rounded
         : Icons.search_off_rounded;
-    return SizedBox(
-      height: tv ? 380 : 300,
-      width: double.infinity,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FadeTransition(
-              opacity: Tween<double>(begin: 0.35, end: 0.9).animate(_pulso),
-              child: Icon(
-                icono,
-                size: tv ? 74 : 54,
-                color: HomeTheme.accentPink,
-              ),
-            ),
-            SizedBox(height: tv ? 22 : 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                widget.sinEscribir
-                    ? 'search.escribi-algo'.i18n
-                    : 'search.nada-encontrado'.i18n,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: tv ? 19 : 15,
-                  height: 1.45,
-                  color: HomeTheme.textPrimary,
-                ),
-              ),
-            ),
-            if (widget.sinEscribir) ...[
-              SizedBox(height: tv ? 10 : 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  'search.busca-en-todas'.i18n,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: tv ? 15 : 12.5,
-                    color: HomeTheme.textMuted,
-                  ),
-                ),
-              ),
-            ],
-          ],
+    final acento = widget.accent ?? HomeTheme.accentPink;
+    // ── El ícono con su halo, no suelto en el aire ──────────────────────
+    //
+    // Reportado en vivo en TV: «no me gusta mucho texto, diseñá algo
+    // mejor». Un ícono solo, sin nada detrás, se siente como un lugar a
+    // medio terminar. El círculo tenue le da un lugar propio, con el mismo
+    // acento que el resto de la pantalla (rojo en la Zona +18).
+    final iconoConHalo = FadeTransition(
+      opacity: Tween<double>(begin: 0.35, end: 0.9).animate(_pulso),
+      child: Container(
+        width: tv ? 128 : 88,
+        height: tv ? 128 : 88,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: acento.withValues(alpha: 0.12),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icono, size: tv ? 56 : 42, color: acento),
+      ),
+    );
+    final titulo = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Text(
+        widget.sinEscribir
+            ? 'search.escribi-algo'.i18n
+            : 'search.nada-encontrado'.i18n,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: tv ? 20 : 15,
+          fontWeight: tv ? FontWeight.w700 : FontWeight.normal,
+          height: 1.45,
+          color: HomeTheme.textPrimary,
         ),
       ),
+    );
+    // ── En TV, sin la segunda línea ──────────────────────────────────────
+    //
+    // «Se busca en todas tus extensiones activas...» explica un mecanismo
+    // que a nadie le importa desde el sillón — el título solo ya dice qué
+    // hacer. Fuera de TV se deja: ahí es la única pista de que no hace
+    // falta elegir una extensión antes de escribir.
+    final contenido = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        iconoConHalo,
+        SizedBox(height: tv ? 20 : 16),
+        titulo,
+        if (widget.sinEscribir && !tv) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'search.busca-en-todas'.i18n,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: HomeTheme.textMuted),
+            ),
+          ),
+        ],
+      ],
+    );
+    // ── En TV, centrado en TODO el alto disponible ───────────────────────
+    //
+    // Antes esto era una caja de alto fijo (380) sin que nadie la
+    // centrara desde afuera — en una pantalla de televisor, mucho más alta
+    // que eso, el bloque quedaba pegado arriba en vez de en el medio.
+    // Reportado en vivo: «eso centralo bien». Fuera de TV se deja la caja
+    // de siempre: ahí vive dentro de un scroll donde ese alto fijo es lo
+    // que corresponde.
+    if (tv) return Center(child: contenido);
+    return SizedBox(
+      height: 300,
+      width: double.infinity,
+      child: Center(child: contenido),
     );
   }
 }

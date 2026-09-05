@@ -140,6 +140,7 @@ class _SearchTVState extends State<SearchTV> {
               kw: widget.c.search.value,
               runtimeList: list,
               onClickMore: widget.onClickMore,
+              accent: widget.accent,
             );
           }),
         ),
