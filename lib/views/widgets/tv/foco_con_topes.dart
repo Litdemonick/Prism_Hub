@@ -223,9 +223,30 @@ class FocoConTopes extends DirectionalFocusAction {
     // panel se expande justo cuando uno está adentro. Se conserva como
     // respaldo para las pantallas que todavía no marcan sus regiones.
     final cambioDeRegion = _cambioDeRegion(antes.context, despues.context);
+    // ── En horizontal, además: tienen que compartir la MISMA fila física ──
+    //
+    // `_mismoRenglon` y `_mismaFranja` miden si dos rectángulos SE PARECEN
+    // en altura — funciona casi siempre, pero "casi" no alcanza en el borde
+    // de verdad: al llegar al último elemento de una fila y no quedar
+    // ningún vecino de verdad a la derecha, Flutter puede engancharse a
+    // CUALQUIER otro foco del árbol que ninguna de las dos reglas anteriores
+    // llegue a descartar por casualidad —un botón de otra parte de la
+    // pantalla que da la casualidad de estar a una altura parecida—, y ESE
+    // sí pasaba: la selección terminaba en algo real pero sin ninguna marca
+    // visual de foco, que desde el sillón se ve como que la selección
+    // sencillamente desaparece. Reportado en vivo: «al darle a la derecha y
+    // ya no hay nada, desaparece la selección».
+    //
+    // `_mismaFilaHorizontal` no mide parecido: comprueba si los dos widgets
+    // cuelgan del MISMO objeto de scroll horizontal, el de la fila en la
+    // que se está. Un vecino de verdad siempre lo comparte, así que esto
+    // nunca rechaza un movimiento legítimo; cualquier otra cosa —esté a la
+    // altura que esté— no lo comparte y queda descartada sin ambigüedad.
     final seFue = !seMovioComoDebia ||
         (horizontal
-            ? (!_mismoRenglon(desde, hasta) || !_mismaFranja(desde, hasta))
+            ? (!_mismaFilaHorizontal(antes.context, despues.context) ||
+                !_mismoRenglon(desde, hasta) ||
+                !_mismaFranja(desde, hasta))
             : (cambioDeRegion ??
                 _escapoALaIzquierda(desde, hasta, despues.context)));
     if (!seFue) {
@@ -373,6 +394,42 @@ class FocoConTopes extends DirectionalFocusAction {
     if (ctx == null || !ctx.mounted) return null;
     final ancho = MediaQuery.maybeSizeOf(ctx)?.width;
     return (ancho != null && ancho > 0) ? ancho : null;
+  }
+
+  /// El scroll horizontal más cercano por encima de [ctx], o null si no hay
+  /// ninguno (el widget no está dentro de ninguna fila que deslice).
+  static ScrollPosition? _scrollHorizontalDe(BuildContext? ctx) {
+    if (ctx == null || !ctx.mounted) return null;
+    var contexto = ctx;
+    var scroll = Scrollable.maybeOf(contexto);
+    while (scroll != null) {
+      if (scroll.position.axis == Axis.horizontal) return scroll.position;
+      contexto = scroll.context;
+      scroll = Scrollable.maybeOf(contexto);
+    }
+    return null;
+  }
+
+  /// ¿[a] y [b] viven en la MISMA fila horizontal?
+  ///
+  /// No mide parecido de rectángulos: compara si es literalmente el mismo
+  /// objeto de scroll. Dos tarjetas de la misma fila SIEMPRE lo comparten
+  /// (cuelgan del mismo `ScrollController`/`Scrollable`); cualquier otra
+  /// cosa no puede compartirlo por casualidad.
+  ///
+  /// Cuando NINGUNO de los dos vive dentro de un scroll horizontal —la
+  /// barra de arriba, con sus botones sueltos en un `Row` común, no una
+  /// lista que desliza— esta comprobación no tiene nada que confirmar: se
+  /// deja pasar, y el asunto queda en manos de `_mismoRenglon`/
+  /// `_mismaFranja` como siempre. Tratarlo como "no es la misma fila" acá
+  /// habría bloqueado mover el foco entre esos botones, que nunca estuvo
+  /// roto.
+  static bool _mismaFilaHorizontal(BuildContext? a, BuildContext? b) {
+    final filaA = _scrollHorizontalDe(a);
+    final filaB = _scrollHorizontalDe(b);
+    if (filaA == null && filaB == null) return true;
+    if (filaA == null || filaB == null) return false;
+    return identical(filaA, filaB);
   }
 
   static bool _mismaFranja(Rect a, Rect b) {
