@@ -389,61 +389,81 @@ class _ControlPanelHeaderState<T extends ReaderController>
                         icon: const Icon(fluent.FluentIcons.collapse_menu),
                         onPressed: () {
                           _playListFlayoutcontroller.showFlyout(
+                              // Centrada en la pantalla, no colgando del
+                              // botón. Anclada al botón (arriba a la
+                              // derecha) la lista quedaba pegada al techo y
+                              // corrida a un costado — reportado en vivo:
+                              // "no tan arriba, centrada". `full` le da
+                              // toda la pantalla como espacio y deja que el
+                              // contenido se ubique solo, que es lo mismo
+                              // que ya hace el panel de ajustes de al lado.
+                              placementMode: fluent.FlyoutPlacementMode.full,
+                              barrierColor:
+                                  Colors.black.withValues(alpha: 0.35),
                               builder: (context) {
-                            // Con fondo propio, del modo. El flyout de Fluent es
-                            // translúcido, así que sin esto la lista de capítulos
-                            // quedaba flotando sobre la página de manga y se leía la
-                            // una encima de la otra.
-                            // ── Con tope de alto ────────────────────────
-                            //
-                            // PlayList arma un Column con la lista adentro
-                            // de un Flexible, y este contenedor no le ponía
-                            // ningún límite de alto: con una obra de
-                            // muchos capítulos la lista se estiraba más
-                            // allá de la ventana y se pasaba de largo.
-                            // Reportado en vivo. Con el tope, la lista se
-                            // desplaza por dentro y la tarjeta queda
-                            // siempre entera y a la vista.
-                            //
-                            // Proporcional a la ventana, no un número
-                            // fijo: la idea es que aproveche el alto de la
-                            // pantalla —de arriba abajo— y solo se frene un
-                            // poco antes del borde, no que quede una
-                            // tarjetita chica en el medio (primer intento,
-                            // con tope de 520: se veía corta y desaprovechaba
-                            // toda la pantalla). Con muchos capítulos se
-                            // desplaza por dentro.
-                            final alto = MediaQuery.sizeOf(context).height;
-                            final tope = (alto - 140).clamp(240.0, 900.0);
-                            return Container(
-                              width: 340,
-                              constraints: BoxConstraints(maxHeight: tope),
-                              decoration: BoxDecoration(
-                                color: HomeTheme.cardSurface,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: HomeTheme.border),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Color(0x66000000),
-                                    blurRadius: 18,
-                                    offset: Offset(0, 6),
+                                // Con fondo propio, del modo. El flyout de Fluent es
+                                // translúcido, así que sin esto la lista de capítulos
+                                // quedaba flotando sobre la página de manga y se leía la
+                                // una encima de la otra.
+                                // ── Con tope de alto ────────────────────────
+                                //
+                                // PlayList arma un Column con la lista adentro
+                                // de un Flexible, y este contenedor no le ponía
+                                // ningún límite de alto: con una obra de
+                                // muchos capítulos la lista se estiraba más
+                                // allá de la ventana y se pasaba de largo.
+                                // Reportado en vivo. Con el tope, la lista se
+                                // desplaza por dentro y la tarjeta queda
+                                // siempre entera y a la vista.
+                                //
+                                // Proporcional a la ventana, no un número
+                                // fijo: la idea es que aproveche el alto de la
+                                // pantalla —de arriba abajo— y solo se frene un
+                                // poco antes del borde, no que quede una
+                                // tarjetita chica en el medio (primer intento,
+                                // con tope de 520: se veía corta y desaprovechaba
+                                // toda la pantalla). Con muchos capítulos se
+                                // desplaza por dentro.
+                                final alto = MediaQuery.sizeOf(context).height;
+                                final tope = (alto - 140).clamp(240.0, 900.0);
+                                // Con `placementMode: full`, el flyout recibe la
+                                // pantalla entera como espacio: es este Center
+                                // el que decide dónde queda la tarjeta.
+                                return Center(
+                                  child: Container(
+                                    width: 340,
+                                    constraints:
+                                        BoxConstraints(maxHeight: tope),
+                                    decoration: BoxDecoration(
+                                      color: HomeTheme.cardSurface,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border:
+                                          Border.all(color: HomeTheme.border),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Color(0x66000000),
+                                          blurRadius: 18,
+                                          offset: Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Obx(
+                                      () => PlayList(
+                                        title: _c.title,
+                                        list: _c.playList
+                                            .map((e) => e.name)
+                                            .toList(),
+                                        selectIndex: _c.index.value,
+                                        onChange: (value) {
+                                          _c.index.value = value;
+                                          router.pop();
+                                        },
+                                      ),
+                                    ),
                                   ),
-                                ],
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: Obx(
-                                () => PlayList(
-                                  title: _c.title,
-                                  list: _c.playList.map((e) => e.name).toList(),
-                                  selectIndex: _c.index.value,
-                                  onChange: (value) {
-                                    _c.index.value = value;
-                                    router.pop();
-                                  },
-                                ),
-                              ),
-                            );
-                          });
+                                );
+                              });
                         },
                       ),
                     ),
