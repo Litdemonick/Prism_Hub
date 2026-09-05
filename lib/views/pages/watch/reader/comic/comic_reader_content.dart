@@ -1514,19 +1514,24 @@ class _PieDeCapituloCascada extends StatelessWidget {
         );
       }
 
+      // El pie de 40 de antes se pensó sin la fila de burbujas de
+      // "Continuar leyendo" (BurbujasContinuarLeyendo, en ReaderView) — esa
+      // flota FIJA sobre el final de la cascada, así que al llegar hasta
+      // acá scrolleando quedaba TAPADA por el panel: como la burbuja está
+      // encima en la pila de widgets, el toque nunca llegaba a estos
+      // botones — se veía como que "no funcionan". Reportado en vivo.
+      //
+      // Antes esto era un número fijo adivinado (40, después 130, después
+      // 200) — y cualquier cosa que cambiara el alto real de esa franja
+      // (una fuente del sistema más grande, las burbujas cambiando de
+      // tamaño, colapsarlas, o no tener burbujas porque la extensión no
+      // calificó) lo dejaba corto o de sobra. `controlador.alturaPanelInferior`
+      // (ver ReaderController) es el alto REAL medido de esa franja en este
+      // momento — se le suma un margen fijo de respiro, pero ya no hay que
+      // adivinar cuánto mide lo que hay que esquivar.
+      final margenInferior = controlador.alturaPanelInferior.value + 24;
       return Padding(
-        // El pie de 40 de antes se pensó sin la fila de burbujas de
-        // "Continuar leyendo" (BurbujasContinuarLeyendo, en ReaderView) —
-        // esa flota FIJA sobre el final de la cascada, así que al llegar
-        // hasta acá scrolleando quedaba TAPADA por el panel: como la
-        // burbuja está encima en la pila de widgets, el toque nunca
-        // llegaba a estos botones — se veía como que "no funcionan".
-        // Reportado en vivo. 130 quedaba casi exacto a la altura real del
-        // panel (círculo + flechita + márgenes) y cualquier variación
-        // chica (una fuente más grande, un aparato distinto) alcanzaba
-        // para taparlos de nuevo. 200 deja aire de sobra de verdad, en
-        // los dos tamaños, PC y Android.
-        padding: const EdgeInsets.fromLTRB(16, 28, 16, 200),
+        padding: EdgeInsets.fromLTRB(16, 28, 16, margenInferior),
         child: Row(
           children: [
             boton(habilitado: hayAnterior, esSiguiente: false),

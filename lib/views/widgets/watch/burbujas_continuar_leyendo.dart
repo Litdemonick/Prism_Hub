@@ -5,12 +5,10 @@ import 'package:get/get.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/models/history.dart';
 import 'package:prismhub/models/extension.dart';
-import 'package:prismhub/router/router.dart' show currentContext;
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/history_cover.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
-import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 
@@ -25,6 +23,14 @@ Map<String, String>? _cabeceras(String package) {
   return {'Referer': sitio};
 }
 
+/// Cuánto mide el círculo de una burbuja en la fila, según la plataforma.
+///
+/// Compartido entre `BurbujasContinuarLeyendo` (que arma la fila) y
+/// `ReaderView` (que necesita el mismo número para la vista agrandada,
+/// afuera de este widget) — un solo lugar que lo decide, para que las dos
+/// vistas nunca queden desincronizadas.
+double diametroDeBurbuja(bool esAndroid) => esAndroid ? 68.0 : 60.0;
+
 /// La fila de burbujas para saltar a otra obra de "Continuar leyendo" sin
 /// salir del lector actual.
 ///
@@ -37,8 +43,9 @@ Map<String, String>? _cabeceras(String package) {
 /// exactamente lo contrario del trabajo de esta semana soltando motores e
 /// imágenes agresivamente. Acá no se guarda nada en memoria: tocar una
 /// burbuja cierra el lector actual y abre el otro donde había quedado, con
-/// el mismo camino que ya usa "Continuar" desde Home (`resumeHistoryItem`).
-/// Se siente igual de instantáneo para quien lo usa, sin el costo.
+/// el mismo camino que ya usa "Continuar" desde Home (`resumeHistoryItem`,
+/// llamado desde `ReaderController.saltarABurbuja`). Se siente igual de
+/// instantáneo para quien lo usa, sin el costo.
 ///
 /// ── Por qué vive en `ReaderView` y no en cada lector ─────────────────────
 ///
@@ -55,7 +62,17 @@ Map<String, String>? _cabeceras(String package) {
 /// acá se reiniciaría en cada ciclo. El valor de verdad vive en
 /// `ReaderController.burbujasColapsadas`, que dura toda la sesión de
 /// lectura — ver el comentario largo ahí.
-class BurbujasContinuarLeyendo extends StatefulWidget {
+///
+/// ── Toque directo vs. mantener presionado ────────────────────────────────
+///
+/// Tocar una burbuja manda DIRECTO a esa obra (pedido explícito). Mantener
+/// presionado, en cambio, muestra la vista agrandada — imagen y título
+/// completos, centrados en TODO el lector — para decidir sin comprometerse;
+/// tocar esa vista agrandada confirma el salto, tocar en cualquier otro
+/// lado la cierra. Esa vista vive afuera de este widget (`ReaderView` la
+/// dibuja aparte, ver `onPreview`/`ReaderController.burbujaExpandida`) para
+/// poder centrarse de verdad en toda la pantalla.
+class BurbujasContinuarLeyendo extends StatelessWidget {
   const BurbujasContinuarLeyendo({
     super.key,
     required this.packageActual,
@@ -63,6 +80,8 @@ class BurbujasContinuarLeyendo extends StatefulWidget {
     required this.isNsfw,
     required this.colapsado,
     required this.onToggleColapsado,
+    required this.onTocar,
+    required this.onPreview,
   });
 
   /// La obra que se está leyendo ahora — se excluye de la fila, no tiene
@@ -78,24 +97,14 @@ class BurbujasContinuarLeyendo extends StatefulWidget {
   final bool colapsado;
   final VoidCallback onToggleColapsado;
 
-  @override
-  State<BurbujasContinuarLeyendo> createState() =>
-      _BurbujasContinuarLeyendoState();
-}
+  /// Toque simple: salta directo a esa obra.
+  final ValueChanged<History> onTocar;
 
-class _BurbujasContinuarLeyendoState extends State<BurbujasContinuarLeyendo> {
-  /// Ya se tocó una burbuja y el salto está en curso — dos toques rápidos
-  /// (dos burbujas distintas, o la misma dos veces) no tienen que abrir dos
-  /// lectores.
-  bool _saltando = false;
-
-  /// Cuál burbuja está en medio de la animación de "se agranda en el
-  /// centro" — null si ninguna. Mientras tanto la fila normal se esconde y
-  /// se dibuja el círculo grande encima de todo.
-  History? _expandiendo;
+  /// Mantener presionado: muestra la vista agrandada de esa obra.
+  final ValueChanged<History> onPreview;
 
   List<History> _otrasEnCurso(HomePageController c) {
-    final actual = '${widget.packageActual}|${widget.urlActual}';
+    final actual = '$packageActual|$urlActual';
     final vistos = <String>{};
     final resultado = <History>[];
     for (final h in c.resents) {
@@ -114,62 +123,6 @@ class _BurbujasContinuarLeyendoState extends State<BurbujasContinuarLeyendo> {
     return resultado;
   }
 
-  /// Primer toque: solo muestra la vista grande, no navega a nada todavía.
-  ///
-  /// Pedido explícito: la burbuja se agranda para ver bien la imagen y el
-  /// título — de ahí, tocar la vista grande recién ahí manda al otro manga,
-  /// y tocar en cualquier otro lado la cierra sin hacer nada. No hay
-  /// temporizador que decida solo.
-  void _mostrarPreview(History h) {
-    setState(() => _expandiendo = h);
-  }
-
-  void _cancelarPreview() {
-    setState(() => _expandiendo = null);
-  }
-
-  Future<void> _confirmarSalto(History h) async {
-    if (_saltando) return;
-    // Todo lo que necesita el `context` de ESTE widget se saca ANTES de
-    // cualquier `await` — un `Navigator`/`ModalRoute` no cambia de
-    // significado con el tiempo, así que no hay ganancia en pedirlos más
-    // tarde, y sí el riesgo de terminar usando un `context` de un widget
-    // que ya se desmontó.
-    final rutaVieja = ModalRoute.of(context);
-    final navegadorDeEsteLector = Navigator.of(context, rootNavigator: true);
-    setState(() => _saltando = true);
-
-    // ── Por qué `currentContext` y no el `context` de este widget ────────
-    //
-    // `resumeHistoryItem` empuja la ruta nueva con
-    // `Navigator.of(context, rootNavigator: true)` — y "raíz" es relativo a
-    // DESDE QUÉ `context` se lo pida: en Android el lector se abre sobre el
-    // Navigator propio de GetX (`Get.context`), no sobre el de go_router
-    // (`rootNavigatorKey`), así que pasarle el `context` de go_router
-    // empujaba la obra nueva a una pila que no es la que se está mirando —
-    // el lector se cerraba (eso sí pasaba) pero la obra nueva quedaba
-    // abierta en otro lado, invisible. `currentContext` (router.dart) ya
-    // resuelve esta diferencia por plataforma; es el mismo que usa el resto
-    // de la app para esto. Es un getter, no un `context` capturado antes
-    // del `await`: cada lectura devuelve el de ESE momento, así que el
-    // aviso de "no uses un context después de un async gap" no aplica acá.
-    // ignore: use_build_context_synchronously
-    await resumeHistoryItem(currentContext, h);
-    if (!mounted) return;
-    // ── Empuja PRIMERO, cierra DESPUÉS ────────────────────────────────────
-    //
-    // Al revés —cerrar este lector y recién ahí abrir el otro— hay un
-    // instante en el medio sin nada válido que mostrar si algo del camino
-    // de apertura tarda (red, chequeo de actualización pendiente). Abriendo
-    // primero, lo peor que puede pasar es quedar con las dos rutas un
-    // instante; se saca la vieja apenas la nueva ya está en camino. El
-    // `Navigator` se guardó ANTES del primer `await` a propósito: es el
-    // mismo objeto de siempre, no depende de que este `context` siga vivo.
-    if (rutaVieja != null && rutaVieja.isActive) {
-      navegadorDeEsteLector.removeRoute(rutaVieja);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     // En Android TV esto no tiene forma de alcanzarse: las burbujas son
@@ -178,7 +131,7 @@ class _BurbujasContinuarLeyendoState extends State<BurbujasContinuarLeyendo> {
     // tapando parte de la pantalla para nada. Mismo criterio que ya usa la
     // pista de "esto se desliza" del carrusel, que tampoco se muestra en TV.
     if (PlatformTv.esTelevisionSync) return const SizedBox.shrink();
-    final tag = widget.isNsfw ? HomePageController.zoneTag : null;
+    final tag = isNsfw ? HomePageController.zoneTag : null;
     if (!Get.isRegistered<HomePageController>(tag: tag)) {
       return const SizedBox.shrink();
     }
@@ -195,28 +148,14 @@ class _BurbujasContinuarLeyendoState extends State<BurbujasContinuarLeyendo> {
       final otras = _otrasEnCurso(c);
       if (otras.isEmpty) return const SizedBox.shrink();
       final esAndroid = Platform.isAndroid;
-      final diametro = esAndroid ? 56.0 : 48.0;
-      return Stack(
-        alignment: Alignment.center,
-        clipBehavior: Clip.none,
-        children: [
-          if (_expandiendo == null)
-            _FilaDeBurbujas(
-              otras: otras,
-              diametro: diametro,
-              esAndroid: esAndroid,
-              colapsado: widget.colapsado,
-              onToggleColapsado: widget.onToggleColapsado,
-              onTocar: _mostrarPreview,
-            ),
-          if (_expandiendo != null)
-            _BurbujaExpandida(
-              historia: _expandiendo!,
-              diametro: diametro,
-              onConfirmar: () => _confirmarSalto(_expandiendo!),
-              onCancelar: _cancelarPreview,
-            ),
-        ],
+      return _FilaDeBurbujas(
+        otras: otras,
+        diametro: diametroDeBurbuja(esAndroid),
+        esAndroid: esAndroid,
+        colapsado: colapsado,
+        onToggleColapsado: onToggleColapsado,
+        onTocar: onTocar,
+        onPreview: onPreview,
       );
     });
   }
@@ -230,6 +169,7 @@ class _FilaDeBurbujas extends StatefulWidget {
     required this.colapsado,
     required this.onToggleColapsado,
     required this.onTocar,
+    required this.onPreview,
   });
 
   final List<History> otras;
@@ -238,6 +178,7 @@ class _FilaDeBurbujas extends StatefulWidget {
   final bool colapsado;
   final VoidCallback onToggleColapsado;
   final ValueChanged<History> onTocar;
+  final ValueChanged<History> onPreview;
 
   @override
   State<_FilaDeBurbujas> createState() => _FilaDeBurbujasState();
@@ -269,35 +210,38 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // El contador de página ("12/34") vive pegado a la esquina inferior
-      // izquierda (ver comic_reader_content.dart, _buildBottomBar) en su
-      // propia capa, sin saber nada de esto. Un margen chico dejaba la fila
-      // pegada contra esa esquina — reportado en vivo, en PC, con foto: "más
-      // a la derecha". 72 en PC (antes 16) le da el mismo respiro que ya
-      // tenía Android, sin llegar a los 96 que ahí hacen falta por la letra
-      // más chica del contador táctil.
-      padding: EdgeInsets.only(
-        left: widget.esAndroid ? 96 : 72,
-        right: 16,
-        bottom: widget.esAndroid ? 10 : 8,
-        top: 4,
-      ),
+      // SIN padding izquierdo/derecho acá: pedido explícito, la fila tiene
+      // que arrancar del borde izquierdo de la pantalla y llegar hasta el
+      // derecho. El respiro para no tapar el contador de página ("12/34",
+      // ver _buildBottomBar en comic_reader_content.dart) se resuelve
+      // ADENTRO, con el padding propio del ListView (ver más abajo) — así
+      // solo se corre el CONTENIDO que desliza, no el ancho de la fila
+      // entera (que es lo que necesita también la flechita de colapsar,
+      // centrada más abajo contra este mismo ancho completo).
+      padding: EdgeInsets.only(bottom: widget.esAndroid ? 10 : 8, top: 4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _BotonColapsar(
-            colapsado: widget.colapsado,
-            onTap: widget.onToggleColapsado,
+          // Centrada contra el ANCHO COMPLETO del lector, no contra la caja
+          // (antes angosta y corrida) del contenido de la fila — reportado
+          // en vivo: "queda como hacia un lado". Al no tener este Center
+          // ningún padding lateral heredado, coincide con el centro real de
+          // la pantalla.
+          Center(
+            child: _BotonColapsar(
+              colapsado: widget.colapsado,
+              onTap: widget.onToggleColapsado,
+            ),
           ),
           if (!widget.colapsado) ...[
             const SizedBox(height: 6),
             SizedBox(
-              // +8 de aire para el marco/sombra del círculo, +20 más para
+              // +8 de aire para el marco/sombra del círculo, +22 más para
               // el título de abajo (ver _Burbuja) — antes esto medía justo
               // el círculo y el renglón del título se salía por debajo:
               // el aviso de overflow de Flutter (reportado como "una raya
               // amarilla").
-              height: widget.diametro + 28,
+              height: widget.diametro + 30,
               child: Row(
                 children: [
                   if (!widget.esAndroid)
@@ -309,12 +253,8 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
                     // Un insinuado de que hay más para el lado, no un
                     // desvanecido de verdad — reportado en vivo: "no le
                     // pongas esa difuminación tan [fuerte] que ni se ve".
-                    // La primera versión llegaba a Colors.transparent, así
-                    // que en una fila angosta (poco ancho disponible en
-                    // PC) la única burbuja asomando quedaba invisible en
-                    // vez de "a medias". Ahora nunca baja de la mitad de
-                    // opacidad, y el tramo que se atenúa es bien angosto
-                    // (2% de cada lado): se nota que sigue, no se pierde.
+                    // Nunca baja de la mitad de opacidad, y el tramo que se
+                    // atenúa es bien angosto (2% de cada lado).
                     child: ShaderMask(
                       shaderCallback: (rect) => LinearGradient(
                         begin: Alignment.centerLeft,
@@ -331,14 +271,25 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         controller: _scroll,
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        // El contador de página vive pegado a la esquina
+                        // inferior izquierda de la PANTALLA — un padding
+                        // más grande solo del lado izquierdo, acá adentro
+                        // del scroll, deja la primera burbuja sin taparlo
+                        // sin angostar la fila entera (que va de punta a
+                        // punta, ver el comentario del Padding de afuera).
+                        padding: EdgeInsets.only(
+                          left: widget.esAndroid ? 90 : 66,
+                          right: 12,
+                        ),
                         itemCount: widget.otras.length,
                         separatorBuilder: (_, __) =>
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                         itemBuilder: (context, i) => _Burbuja(
                           historia: widget.otras[i],
                           diametro: widget.diametro,
                           onTap: () => widget.onTocar(widget.otras[i]),
+                          onLongPress: () =>
+                              widget.onPreview(widget.otras[i]),
                         ),
                       ),
                     ),
@@ -425,41 +376,39 @@ class _BotonColapsar extends StatelessWidget {
   }
 }
 
-/// Una burbuja de la fila — solo el círculo con la portada. El título NO va
-/// acá abajo a texto fijo: a este tamaño (48-56px) una sola línea de título
-/// completo no entra sin desbordar, y es justo lo que se reportó como una
-/// raya amarilla en Android (el aviso de overflow de Flutter). El título se
-/// ve al tocar, en `_BurbujaExpandida`, donde sí hay sitio para mostrarlo
-/// entero.
+/// Una burbuja de la fila: el círculo con la portada y el título debajo.
 class _Burbuja extends StatelessWidget {
   const _Burbuja({
     required this.historia,
     required this.diametro,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final History historia;
   final double diametro;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: SizedBox(
-        width: diametro + 8,
+        width: diametro + 14,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _CirculoDePortada(historia: historia, diametro: diametro),
-            const SizedBox(height: 3),
+            const SizedBox(height: 4),
             // Alto FIJO con FittedBox adentro: un título largo se achica
             // para entrar en una línea en vez de desbordar hacia abajo
-            // (que es lo que se veía como una raya amarilla de aviso en
-            // Android — el overflow real de Flutter). El ancho ya lo
-            // acota el SizedBox de afuera.
+            // (que es lo que se veía como una raya amarilla de aviso —
+            // el overflow real de Flutter). El ancho ya lo acota el
+            // SizedBox de afuera.
             SizedBox(
-              height: 14,
+              height: 16,
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
@@ -467,7 +416,7 @@ class _Burbuja extends StatelessWidget {
                   maxLines: 1,
                   softWrap: false,
                   style: const TextStyle(
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
@@ -482,13 +431,28 @@ class _Burbuja extends StatelessWidget {
 }
 
 /// El círculo con la portada — compartido entre la fila y la vista
-/// expandida, para que sea EXACTAMENTE el mismo dibujo en los dos casos y
-/// la animación de agrandarse se sienta continua.
+/// expandida, para que sea EXACTAMENTE el mismo dibujo en los dos casos.
 class _CirculoDePortada extends StatelessWidget {
-  const _CirculoDePortada({required this.historia, required this.diametro});
+  const _CirculoDePortada({
+    required this.historia,
+    required this.diametro,
+    this.anchoDeCache,
+  });
 
   final History historia;
   final double diametro;
+
+  /// Ancho de decodificación a usar en vez del que sale de [diametro].
+  ///
+  /// Lo usa la vista expandida (`BurbujaExpandidaOverlay`, reader_view.dart)
+  /// para pedir la imagen al MISMO ancho que ya pidió la fila (`diametro`
+  /// de ahí, no el 2.6x de acá) — así reutiliza la entrada de caché que la
+  /// fila ya dejó cargada en vez de disparar una descarga/decodificación
+  /// nueva solo porque el círculo se ve más grande. La calidad se resigna
+  /// un poco (una imagen chica estirada), pero es una vista temporal que
+  /// dura lo que tarda en decidirse — no vale la pena una descarga extra
+  /// por eso.
+  final int? anchoDeCache;
 
   @override
   Widget build(BuildContext context) {
@@ -524,7 +488,7 @@ class _CirculoDePortada extends StatelessWidget {
                   headers: portada.necesitaHeaders
                       ? _cabeceras(historia.package)
                       : null,
-                  cacheWidth: (diametro * 3).round(),
+                  cacheWidth: anchoDeCache ?? (diametro * 3).round(),
                   fallback: const _PortadaFaltante(),
                 )
               : (portada.archivo != null
@@ -540,96 +504,113 @@ class _CirculoDePortada extends StatelessWidget {
   }
 }
 
-/// Lo que se ve al tocar una burbuja: el mismo círculo, grande, en el medio
-/// de la pantalla, con el título completo debajo — y de ahí, un instante
-/// después, sigue el salto de verdad al otro lector.
-/// La vista grande al tocar una burbuja: se agranda para ver bien la
-/// portada y el título completo, y AHÍ SE QUEDA — no navega sola. Pedido
-/// explícito: tocar ESTA vista manda al otro manga; tocar en cualquier
-/// otro lado la cierra sin hacer nada, como cancelar.
-class _BurbujaExpandida extends StatelessWidget {
-  const _BurbujaExpandida({
+/// La vista grande al mantener presionada una burbuja: se agranda para ver
+/// bien la portada y el título completo, centrada en TODO el lector — no en
+/// la franja de abajo donde vive la fila (pedido explícito, antes quedaba
+/// "hacia un lado" porque solo tenía dónde centrarse ahí). Tocarla confirma
+/// el salto; tocar en cualquier otro lado la cierra sin hacer nada, como
+/// cancelar. Vive en `ReaderView`, no en `BurbujasContinuarLeyendo` — ver el
+/// comentario largo de esa clase.
+class BurbujaExpandidaOverlay extends StatelessWidget {
+  const BurbujaExpandidaOverlay({
+    super.key,
     required this.historia,
-    required this.diametro,
+    required this.diametroFila,
     required this.onConfirmar,
     required this.onCancelar,
   });
 
   final History historia;
-  final double diametro;
+
+  /// El diámetro que la burbuja tiene en la FILA (56-68px según
+  /// plataforma) — de ahí sale tanto el tamaño final agrandado (un
+  /// múltiplo fijo de este) como el ancho de caché a reutilizar (ver
+  /// `_CirculoDePortada.anchoDeCache`).
+  final double diametroFila;
+
   final VoidCallback onConfirmar;
   final VoidCallback onCancelar;
 
   @override
   Widget build(BuildContext context) {
-    // El fondo entero (tocar afuera) cancela; el contenido de adentro
-    // tiene su PROPIO GestureDetector que confirma y, con `opaque`, se
-    // queda con el toque antes de que le llegue al de afuera — sin esto,
-    // tocar la burbuja agrandada cancelaría Y confirmaría a la vez.
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onCancelar,
-      child: Container(
-        // Bien liviano a propósito: esto se dibuja sobre el mismo rincón
-        // donde vive el contador de página ("2/34", ver _buildBottomBar en
-        // comic_reader_content.dart) — un fondo oscuro de verdad lo tapaba
-        // justo mientras más se necesita ver que sigue ahí. Reportado con
-        // foto. Con esto tan tenue el círculo igual se destaca (crece y
-        // tiene su propio marco/sombra), pero no esconde nada detrás.
-        color: Colors.black.withValues(alpha: 0.12),
-        alignment: Alignment.center,
-        // ── Por qué NO hay un FittedBox envolviendo todo esto ────────────
-        //
-        // La versión anterior metía el círculo Y el título adentro de un
-        // solo FittedBox "por las dudas". Eso fue lo que en realidad
-        // causaba la raya amarilla: FittedBox mide a su hijo con anchura
-        // NO acotada antes de achicarlo, y en esa medición un
-        // ConstrainedBox(maxWidth) adentro de un TweenAnimationBuilder que
-        // todavía no terminó de crecer podía pedir un ancho mayor al que
-        // el propio remedio (achicar) llegaba a corregir a tiempo — el
-        // resultado era overflow real, el aviso de Flutter, justo lo que
-        // se estaba tratando de evitar.
-        //
-        // Ahora cada parte tiene su propio límite, sin intermediarios: el
-        // círculo crece con la animación (nunca más de 2.6x, un número
-        // chico y fijo), y el título vive en un SizedBox de ancho FIJO con
-        // su propio `overflow: ellipsis` — la forma de toda la vida de
-        // Flutter para "que nunca se corte mal", sin nada más pidiendo
-        // reinterpretar el tamaño por arriba.
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onConfirmar,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: diametro, end: diametro * 2.6),
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  builder: (context, tam, child) =>
-                      _CirculoDePortada(historia: historia, diametro: tam),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: 220,
-                  child: Text(
-                    historia.title,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      shadows: [
-                        Shadow(blurRadius: 6, color: Colors.black),
-                      ],
+    final diametroGrande = diametroFila * 2.6;
+    // El fondo entero (tocar afuera) cancela; el contenido de adentro tiene
+    // su PROPIO GestureDetector que confirma y, con `opaque`, se queda con
+    // el toque antes de que le llegue al de afuera — sin esto, tocar la
+    // burbuja agrandada cancelaría Y confirmaría a la vez.
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onCancelar,
+        child: Container(
+          // Bien liviano a propósito: en el lector de cómic esto puede
+          // coincidir con el contador de página ("2/34") — un fondo oscuro
+          // de verdad lo tapaba justo mientras más se necesita ver que
+          // sigue ahí. Reportado con foto. Con esto tan tenue el círculo
+          // igual se destaca (crece y tiene su propio marco/sombra), pero
+          // no esconde nada detrás.
+          color: Colors.black.withValues(alpha: 0.12),
+          alignment: Alignment.center,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onConfirmar,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ── Por qué Transform.scale y no reconstruir más grande ──
+                  //
+                  // Antes esto era un `TweenAnimationBuilder<double>` que
+                  // reconstruía `_CirculoDePortada` con un `diametro`
+                  // DISTINTO en cada frame de la animación (220ms, ~13
+                  // frames) — y como `cacheWidth` sale de `diametro`, cada
+                  // frame pedía la imagen decodificada a un tamaño nuevo:
+                  // se veía recargar/parpadear durante todo el agrandado.
+                  // Reportado en vivo más de una vez.
+                  //
+                  // Ahora el círculo se construye UNA sola vez, ya al
+                  // tamaño final Y con el `anchoDeCache` de la FILA (no el
+                  // suyo propio, más grande) — mismo ancho, misma clave de
+                  // caché, la MISMA imagen que la fila ya tiene decodificada
+                  // se reusa tal cual. Lo que anima es solo la ESCALA
+                  // (`Transform.scale`), una operación de pintado que no
+                  // toca la red ni el decodificador para nada.
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(
+                      begin: diametroFila / diametroGrande,
+                      end: 1.0,
+                    ),
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    child: _CirculoDePortada(
+                      historia: historia,
+                      diametro: diametroGrande,
+                      anchoDeCache: (diametroFila * 3).round(),
+                    ),
+                    builder: (context, escala, child) =>
+                        Transform.scale(scale: escala, child: child),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: 240,
+                    child: Text(
+                      historia.title,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(blurRadius: 6, color: Colors.black),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

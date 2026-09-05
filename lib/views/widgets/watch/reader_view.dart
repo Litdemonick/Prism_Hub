@@ -118,30 +118,92 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
             // fila de burbujas (que puede no mostrar nada, ver
             // BurbujasContinuarLeyendo) empuja al footer hacia arriba solo
             // cuando de verdad ocupa espacio.
+            //
+            // `_MedidorDeAltura` mide el alto REAL que termina ocupando
+            // toda esta franja y lo guarda en `c.alturaPanelInferior` — lo
+            // usa `_PieDeCapituloCascada` (comic_reader_content.dart) para
+            // no tapar sus propios botones con esto, sin depender de un
+            // número adivinado a mano (ver el comentario largo en
+            // ReaderController.alturaPanelInferior).
             Positioned(
               right: 0,
               left: 0,
               bottom: 0,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  BurbujasContinuarLeyendo(
-                    packageActual: c.runtime.extension.package,
-                    urlActual: c.detailUrl,
-                    isNsfw: c.isNsfw,
-                    colapsado: c.burbujasColapsadas.value,
-                    onToggleColapsado: () => c.burbujasColapsadas.value =
-                        !c.burbujasColapsadas.value,
-                  ),
-                  buildFooter != null
-                      ? buildFooter!(context)
-                      : ControlPanelFooter<T>(tag),
-                ],
+              child: _MedidorDeAltura(
+                onAltura: (alto) => c.alturaPanelInferior.value = alto,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    BurbujasContinuarLeyendo(
+                      packageActual: c.runtime.extension.package,
+                      urlActual: c.detailUrl,
+                      isNsfw: c.isNsfw,
+                      colapsado: c.burbujasColapsadas.value,
+                      onToggleColapsado: () => c.burbujasColapsadas.value =
+                          !c.burbujasColapsadas.value,
+                      onTocar: (h) => c.saltarABurbuja(context, h),
+                      onPreview: (h) => c.burbujaExpandida.value = h,
+                    ),
+                    buildFooter != null
+                        ? buildFooter!(context)
+                        : ControlPanelFooter<T>(tag),
+                  ],
+                ),
               ),
             ),
-          ]
+          ],
+
+          // La vista agrandada de una burbuja (mantener presionado) vive
+          // FUERA del `if` de arriba a propósito: si el panel de controles
+          // se auto-oculta a los 3s (ReaderController.showControlPanel)
+          // mientras el usuario todavía está mirándola para decidir, no
+          // tiene que desaparecer con él. Se centra contra este Stack
+          // entero (el lector completo), no contra la franja de abajo —
+          // pedido explícito, antes quedaba corrida "hacia un lado" porque
+          // solo tenía la franja angosta para centrarse.
+          if (c.burbujaExpandida.value != null)
+            BurbujaExpandidaOverlay(
+              historia: c.burbujaExpandida.value!,
+              diametroFila: diametroDeBurbuja(Platform.isAndroid),
+              onConfirmar: () =>
+                  c.saltarABurbuja(context, c.burbujaExpandida.value!),
+              onCancelar: () => c.burbujaExpandida.value = null,
+            ),
         ],
       ),
     );
+  }
+}
+
+/// Mide el alto real que termina ocupando [child] después de cada layout y
+/// lo avisa por [onAltura] — solo cuando cambió de verdad, para no disparar
+/// el callback en cada frame sin necesidad.
+class _MedidorDeAltura extends StatefulWidget {
+  const _MedidorDeAltura({required this.onAltura, required this.child});
+
+  final ValueChanged<double> onAltura;
+  final Widget child;
+
+  @override
+  State<_MedidorDeAltura> createState() => _MedidorDeAlturaState();
+}
+
+class _MedidorDeAlturaState extends State<_MedidorDeAltura> {
+  double? _ultima;
+
+  void _medir(Duration _) {
+    if (!mounted) return;
+    final caja = context.findRenderObject() as RenderBox?;
+    if (caja == null || !caja.hasSize) return;
+    final alto = caja.size.height;
+    if (_ultima != null && (alto - _ultima!).abs() < 0.5) return;
+    _ultima = alto;
+    widget.onAltura(alto);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback(_medir);
+    return widget.child;
   }
 }

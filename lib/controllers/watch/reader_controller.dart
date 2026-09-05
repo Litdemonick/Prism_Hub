@@ -7,11 +7,13 @@ import 'package:prismhub/models/history.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/router/router.dart' show currentContext;
 import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/utils/watch_state.dart';
 
 class ReaderController<T> extends GetxController with WidgetsBindingObserver {
@@ -80,6 +82,40 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
   /// de la interfaz. Reportado en vivo: "la flechita de ocultar... no debe
   /// otra vez salir la burbuja, debe estar oculta hasta que le dé otra vez".
   final burbujasColapsadas = false.obs;
+
+  /// Cuál burbuja de "Continuar leyendo" está en su vista agrandada — null
+  /// si ninguna.
+  ///
+  /// Vive acá y no dentro de `BurbujasContinuarLeyendo` porque esa vista
+  /// agrandada tiene que centrarse en TODO el lector (pedido explícito), y
+  /// la fila de burbujas vive metida en una franja pegada abajo de la
+  /// pantalla, no en toda su altura — nada adentro de esa franja puede
+  /// centrarse de verdad contra el alto completo. `ReaderView` la dibuja
+  /// como una capa propia de su `Stack`, hermana de la fila y del resto de
+  /// los paneles, así que sí puede.
+  final burbujaExpandida = Rxn<History>();
+
+  /// Ya se está saltando a otra obra desde una burbuja — evita abrir dos
+  /// lectores si se toca (o se mantiene presionado) más de una vez seguida.
+  final saltandoABurbuja = false.obs;
+
+  /// Alto real, en píxeles, de la franja flotante de abajo (burbujas +
+  /// panel de controles). La usa `_PieDeCapituloCascada` (comic_reader_
+  /// content.dart) para saber cuánto aire dejar debajo de los botones de
+  /// capítulo siguiente/anterior en la cascada, para que esa franja
+  /// flotante no los tape.
+  ///
+  /// ── Por qué medido y no un número fijo ───────────────────────────────
+  ///
+  /// Antes era un padding fijo (40, después 130, después 200) adivinado a
+  /// ojo — y cada vez que la franja de abajo cambiaba de alto (una fuente
+  /// del sistema más grande, las burbujas ahora más grandes, colapsarlas o
+  /// no, o directamente no tener burbujas porque la extensión no calificó)
+  /// el número fijo se quedaba corto o sobraba. Reportado en vivo más de
+  /// una vez como "no funciona". Con el alto MEDIDO de verdad (ver
+  /// `_MedidorDeAltura` en reader_view.dart) el margen reservado es siempre
+  /// el que hace falta, ni uno más ni uno menos.
+  final alturaPanelInferior = 0.0.obs;
   late final index = playIndex.obs;
   get cuurentPlayUrl => playList[index.value].url;
   Timer? _timer;
@@ -219,6 +255,53 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
     }
     _workers.clear();
     super.onClose();
+  }
+
+  /// Salta a otra obra desde una burbuja de "Continuar leyendo" — tocarla
+  /// manda directo, sin paso intermedio (pedido explícito: "al tocar la
+  /// burbuja debe ir al manga directamente"). Mantenerla presionada, en
+  /// cambio, solo pone [burbujaExpandida] y no llama a esto: ese es el
+  /// gesto para "ver antes de ir" que sigue existiendo aparte.
+  Future<void> saltarABurbuja(BuildContext context, History h) async {
+    if (saltandoABurbuja.value) return;
+    // Se saca ANTES del primer `await` — un `Navigator`/`ModalRoute` no
+    // cambia de significado con el tiempo, y esperar a después arriesga
+    // usar un `context` de un widget que ya se desmontó.
+    final rutaVieja = ModalRoute.of(context);
+    final navegadorDeEsteLector = Navigator.of(context, rootNavigator: true);
+    saltandoABurbuja.value = true;
+    burbujaExpandida.value = null;
+    try {
+      // ── Por qué `currentContext` y no el `context` que llega acá ────────
+      //
+      // `resumeHistoryItem` empuja la ruta nueva con
+      // `Navigator.of(context, rootNavigator: true)` — y "raíz" es relativo
+      // a DESDE QUÉ `context` se lo pida: en Android el lector se abre sobre
+      // el Navigator propio de GetX (`Get.context`), no sobre el de
+      // go_router (`rootNavigatorKey`), así que pasarle el `context` de
+      // go_router empujaba la obra nueva a una pila que no es la que se
+      // está mirando — el lector se cerraba pero la obra nueva quedaba
+      // abierta en otro lado, invisible. `currentContext` (router.dart) ya
+      // resuelve esta diferencia por plataforma. Es un getter, no un
+      // `context` capturado antes del `await`, así que el aviso de "no uses
+      // un context después de un async gap" no aplica acá.
+      // ignore: use_build_context_synchronously
+      await resumeHistoryItem(currentContext, h);
+      if (isClosed) return;
+      // ── Empuja PRIMERO, cierra DESPUÉS ────────────────────────────────
+      //
+      // Al revés —cerrar este lector y recién ahí abrir el otro— hay un
+      // instante en el medio sin nada válido que mostrar si algo del
+      // camino de apertura tarda (red, chequeo de actualización
+      // pendiente). Abriendo primero, lo peor que puede pasar es quedar
+      // con las dos rutas un instante; se saca la vieja apenas la nueva ya
+      // está en camino.
+      if (rutaVieja != null && rutaVieja.isActive) {
+        navegadorDeEsteLector.removeRoute(rutaVieja);
+      }
+    } finally {
+      if (!isClosed) saltandoABurbuja.value = false;
+    }
   }
 
   addHistory(String progress, String totalProgress) async {
