@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/views/widgets/tv/region_de_foco.dart';
 
 /// Hace que las flechas del mando signifiquen lo que dicen.
@@ -91,10 +92,12 @@ class FocoConTopes extends DirectionalFocusAction {
     // que se venía pidiendo.
     if (horizontal && antes != null) {
       final fila = _scrollHorizontalDe(antes.context);
+      final aLaDerecha = intent.direction == TraversalDirection.right;
       if (fila != null) {
-        final aLaDerecha = intent.direction == TraversalDirection.right;
         final vecino = _vecinoEnLaFila(antes, fila, aLaDerecha);
         if (vecino != null) {
+          _anotar('${aLaDerecha ? "derecha" : "izquierda"}: '
+              'a la vecina de la fila (${vecino.debugLabel})');
           vecino.requestFocus();
           return;
         }
@@ -102,7 +105,15 @@ class FocoConTopes extends DirectionalFocusAction {
         // consume la tecla y no pasa nada. Hacia la IZQUIERDA sí hay a
         // dónde ir —el panel de categorías—, así que se deja seguir por el
         // camino de siempre, que ya sabe distinguirlo (ver `cambioDeRegion`).
-        if (aLaDerecha) return;
+        if (aLaDerecha) {
+          _anotar('derecha: fin de la fila, no se mueve nada');
+          return;
+        }
+        _anotar('izquierda: sin vecina en la fila, se busca fuera '
+            '(deberia ser el panel)');
+      } else {
+        _anotar('${aLaDerecha ? "derecha" : "izquierda"}: '
+            'el origen no esta en una fila que se desplace');
       }
     }
     // ── Que Flutter no mueva el eje que nadie tocó ──────────────────────
@@ -387,6 +398,9 @@ class FocoConTopes extends DirectionalFocusAction {
                     !_mismaFranja(desde, hasta)))
             : (cambioDeRegion ??
                 _escapoALaIzquierda(desde, hasta, despues.context)));
+    _anotar('${intent.direction.name}: de ${antes.debugLabel} '
+        'a ${despues.debugLabel} · region=${cambioDeRegion ?? "?"} '
+        '· ${seFue ? "SE DESHACE" : "vale"}');
     if (!seFue) {
       _restaurar(aRestaurar);
       return;
@@ -459,6 +473,21 @@ class FocoConTopes extends DirectionalFocusAction {
       antes.requestFocus();
     });
   }
+
+  /// Deja constancia de qué decidió esta flecha, en el registro de la app.
+  ///
+  /// ── Por qué queda puesto y no se saca ────────────────────────────────
+  ///
+  /// El recorrido con el mando es lo que más veces volvió del televisor, y
+  /// cada vuelta se perdía en adivinar qué había pasado: desde el sillón
+  /// solo se ve «se movió raro». Con esto, reproducir el fallo y exportar
+  /// el registro (Ajustes → Registro) dice exactamente qué camino tomó cada
+  /// pulsación y por qué.
+  ///
+  /// Es una línea de texto por flecha, solo en televisor, y solo cuando el
+  /// usuario está navegando: no cuesta nada y ahorra una release entera de
+  /// ida y vuelta.
+  static void _anotar(String queHizo) => logger.fine('[mando] $queHizo');
 
   /// La tarjeta de al lado DENTRO de la misma fila, o null si no hay.
   ///

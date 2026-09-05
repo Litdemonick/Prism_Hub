@@ -473,13 +473,30 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
     // poder mandar el scroll para el lado equivocado.
     final limiteBajo = alFinal < alPrincipio ? alFinal : alPrincipio;
     final limiteAlto = alFinal < alPrincipio ? alPrincipio : alFinal;
+    // ── «Entero» incluye el marco, que se dibuja POR FUERA ──────────────
+    //
+    // La cuenta de arriba dice si la CAJA de lo enfocado entra en pantalla.
+    // Pero el marco de selección y su resplandor no viven dentro de esa
+    // caja: salen unos píxeles hacia afuera. Con la tarjeta pegada al filo,
+    // la caja «entra» pero el marco queda mordido — que es justo lo que se
+    // ve al subir a las tarjetas grandes de arriba. Reportado en vivo: «al
+    // subir y posicionar en la card se corta; la cámara tiene que subir
+    // hasta arriba para que se vea bien el área de la selección».
+    //
+    // Estrechando los límites por ese margen, una tarjeta pegada al borde
+    // deja de contar como visible y la lista se corre lo poco que falta.
+    const margenDelMarco = 16.0;
     final double destino;
-    if (actual < limiteBajo) {
+    if (actual < limiteBajo - margenDelMarco) {
       destino = limiteBajo + asomo; // quedó pasado el filo de salida
-    } else if (actual > limiteAlto) {
+    } else if (actual > limiteAlto + margenDelMarco) {
       destino = limiteAlto - asomo; // quedó antes del filo de entrada
+    } else if (actual < limiteBajo) {
+      destino = limiteBajo; // entra, pero con el marco contra el filo
+    } else if (actual > limiteAlto) {
+      destino = limiteAlto;
     } else {
-      return; // ya se ve entero: no se toca nada
+      return; // ya se ve entero, marco incluido: no se toca nada
     }
     final acotado =
         destino.clamp(posicion.minScrollExtent, posicion.maxScrollExtent);

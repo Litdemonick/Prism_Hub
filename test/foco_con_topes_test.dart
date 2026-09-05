@@ -411,6 +411,41 @@ void main() {
     });
   });
 
+  group('la izquierda vuelve por la fila y termina en el panel', () {
+    testWidgets('en una fila larga: se desanda entera y se entra al panel',
+        (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(arbol(porFila: 15, conRescate: true));
+      await t.pumpAndSettle();
+
+      // Se avanza hasta el final de la fila...
+      nodo('f0-c0').requestFocus();
+      await t.pumpAndSettle();
+      for (var i = 0; i < 14; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await t.pumpAndSettle();
+      }
+      expect(enfocado(), 'f0-c14');
+
+      // ...y se vuelve. Las catorce primeras tienen que recorrer la fila
+      // hacia atrás, y la quince —ya sin vecino a la izquierda— tiene que
+      // ENTRAR AL PANEL, no quedarse trabada.
+      //
+      // «A la derecha ya tiene el tope, pero a la izquierda, en vez de
+      // bloquear, debe ir a la zona del panel izquierdo.»
+      for (var i = 0; i < 14; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await t.pumpAndSettle();
+      }
+      expect(enfocado(), 'f0-c0');
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await t.pumpAndSettle();
+      expect(enfocado(), startsWith('rail'));
+    });
+  });
+
   group('dentro del panel, arriba y abajo no sacan de ahí', () {
     // «Si estoy en el panel izquierdo y estoy subiendo y bajando, no me debe
     // sacar a otro lugar: estoy eligiendo a qué zona entrar. No me puede
