@@ -1235,7 +1235,11 @@ class _FilaMedianasTv extends StatelessWidget {
       // rail — reportado con foto: "las cards se cortan y se ven mal al
       // estar seleccionadas cerca del panel izquierdo".
       child: Padding(
-        padding: const EdgeInsets.only(left: 10),
+        // El de la derecha, mismo motivo que en el hero de arriba: sin fila
+        // que se desplace, la última mediana llegaba al borde de verdad de
+        // la pantalla y el marco de foco —que crece 3px hacia afuera— se
+        // cortaba ahí.
+        padding: const EdgeInsets.only(left: 10, right: 6),
         child: Row(
           children: [
             for (var i = 0; i < cuantas; i++) ...[
@@ -1595,9 +1599,23 @@ class _ContenidoTV extends StatelessWidget {
                 // Casi pegadas: los catorce que habia antes se veian como
                 // huecos negros entre tarjetas.
                 0 => RepaintBoundary(
-                    child: SizedBox(
-                      height: _altoGrandesTv(context),
-                      child: heroSecundario == null
+                    // ── Un poco de aire a la derecha, solo acá ────────────
+                    //
+                    // El contenido corre sin margen derecho a propósito (ver
+                    // el comentario de `margenParaElSidebar`/`right: 0` más
+                    // arriba): en una FILA que se desplaza, la tarjeta
+                    // siguiente asoma cortada contra el borde y eso dice
+                    // "hay más para el lado". Acá no hay fila: el hero y el
+                    // secundario son fijos, y sin ese aire el marco de foco
+                    // —que se dibuja 3px por FUERA de la tarjeta— quedaba
+                    // mordido contra el borde de verdad de la pantalla.
+                    // Reportado en vivo: «el borde rosado se corta por
+                    // arriba y por la derecha en el secundario».
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 6, top: 4),
+                      child: SizedBox(
+                        height: _altoGrandesTv(context),
+                        child: heroSecundario == null
                           ? _CarruselAndroid(
                               c: c,
                               conFocoTv: true,
@@ -1630,6 +1648,7 @@ class _ContenidoTV extends StatelessWidget {
                                 ],
                               ),
                             ),
+                      ),
                     ),
                   ),
                 1 when medianas.isNotEmpty => Padding(
