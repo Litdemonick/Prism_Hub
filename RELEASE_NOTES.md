@@ -1,4 +1,4 @@
-## PrismHub v1.0.103 — Los topes del mando nunca se estaban ejecutando
+## PrismHub v1.0.104 — El movimiento dentro de una fila lo decide la app
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,29 +12,27 @@
 
 ### 📺 Android TV
 
-- **La selección ya no se va bajando de fila al insistir con la derecha.**
-  Y esta vez se encontró el motivo de fondo, que explica por qué ninguno de
-  los arreglos anteriores cambiaba nada.
+- **Al llegar al final de una fila, ya no se mueve nada: ni la selección ni
+  la pantalla.** El arreglo anterior dejaba que el sistema hiciera el salto
+  y después lo deshacía, y eso no alcanzaba por dos motivos.
 
-  Flutter no mueve la selección en el momento en que se aprieta la flecha:
-  anota el pedido y lo aplica un instante después. El código que pone los
-  topes preguntaba "¿a dónde se movió?" **antes de que se hubiera movido**,
-  así que siempre recibía la misma respuesta —"a ningún lado"— y se iba sin
-  revisar nada. Los topes existían pero no llegaban a ejecutarse nunca.
+  Primero, cuando el sistema salta, antes **desplaza la pantalla** para
+  revelar el destino — devolver la selección a su sitio no deshace ese
+  desplazamiento. Es el "la selección se queda quieta pero se mueven las
+  tarjetas de abajo, como si moviera todo alrededor".
 
-  Ahora la revisión espera a que el movimiento esté aplicado. Recorrer una
-  fila de quince tarjetas y seguir apretando la derecha se queda clavado en
-  la última, como corresponde.
+  Y segundo, deshacerlo dependía de ganarle una carrera al propio sistema,
+  que en un televisor modesto no se gana siempre. De ahí que el mismo caso
+  a veces se viera bien y a veces no.
 
-- **Al deshacer un movimiento, la selección vuelve aunque su tarjeta se
-  haya reciclado.** Al desplazarse, la lista destruye lo que sale de la
-  vista, y a veces eso incluía la tarjeta a la que había que volver.
+  Ahora, dentro de una fila, el movimiento no se delega: se busca la
+  tarjeta de al lado —la que pertenece a la misma fila y está en el mismo
+  renglón— y se va ahí. Si no hay ninguna, no se hace nada en absoluto.
 
-- **Se va el esqueleto de bloques grises.** En Inicio, en las zonas y en
-  cada fila, mientras carga se ve solo el giro en el centro sobre el fondo
-  limpio; las tarjetas aparecen cuando están de verdad.
+- **Desde la primera categoría del panel, la flecha arriba vuelve a llegar
+  a los botones de arriba** (buscar, extensiones, favoritos, historial,
+  ajustes). Se había roto en la versión anterior.
 
-- **Subir y bajar dentro del panel de categorías ya no saca de ahí**, y la
-  izquierda llega al panel desde cualquier fila.
-
-Las pruebas automáticas de navegación pasan de ocho a catorce casos.
+Las pruebas automáticas de navegación son ahora 16 casos, y comprueban
+también que al toparse contra el final de una fila las tarjetas de abajo
+no se muevan ni un píxel.
