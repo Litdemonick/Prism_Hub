@@ -271,12 +271,13 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
     return Padding(
       // El contador de página ("12/34") vive pegado a la esquina inferior
       // izquierda (ver comic_reader_content.dart, _buildBottomBar) en su
-      // propia capa, sin saber nada de esto. En un celular angosto una fila
-      // centrada de punta a punta le pasa por encima. 96 de margen es más
-      // que de sobra para ese contador (nunca pasa de 3-4 dígitos por
-      // lado) sin robarle a la fila más espacio del necesario.
+      // propia capa, sin saber nada de esto. Un margen chico dejaba la fila
+      // pegada contra esa esquina — reportado en vivo, en PC, con foto: "más
+      // a la derecha". 72 en PC (antes 16) le da el mismo respiro que ya
+      // tenía Android, sin llegar a los 96 que ahí hacen falta por la letra
+      // más chica del contador táctil.
       padding: EdgeInsets.only(
-        left: widget.esAndroid ? 96 : 16,
+        left: widget.esAndroid ? 96 : 72,
         right: 16,
         bottom: widget.esAndroid ? 10 : 8,
         top: 4,
@@ -305,23 +306,26 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
                       onTap: () => _correr(-1),
                     ),
                   Expanded(
-                    // Desvanecido en los dos bordes — mismo recurso que ya
-                    // usan las demás filas horizontales de la app para la
-                    // burbuja que asoma a medias: sin esto se corta en
-                    // seco contra el borde de su propia caja, que se lee
-                    // como un error de dibujo y no como "hay más para
-                    // este lado".
+                    // Un insinuado de que hay más para el lado, no un
+                    // desvanecido de verdad — reportado en vivo: "no le
+                    // pongas esa difuminación tan [fuerte] que ni se ve".
+                    // La primera versión llegaba a Colors.transparent, así
+                    // que en una fila angosta (poco ancho disponible en
+                    // PC) la única burbuja asomando quedaba invisible en
+                    // vez de "a medias". Ahora nunca baja de la mitad de
+                    // opacidad, y el tramo que se atenúa es bien angosto
+                    // (2% de cada lado): se nota que sigue, no se pierde.
                     child: ShaderMask(
-                      shaderCallback: (rect) => const LinearGradient(
+                      shaderCallback: (rect) => LinearGradient(
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          Colors.transparent,
+                          Colors.white.withValues(alpha: 0.5),
                           Colors.white,
                           Colors.white,
-                          Colors.transparent,
+                          Colors.white.withValues(alpha: 0.5),
                         ],
-                        stops: [0, 0.06, 0.94, 1],
+                        stops: const [0, 0.02, 0.98, 1],
                       ).createShader(rect),
                       blendMode: BlendMode.dstIn,
                       child: ListView.separated(
