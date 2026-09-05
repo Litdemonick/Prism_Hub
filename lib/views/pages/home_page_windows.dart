@@ -348,20 +348,25 @@ class _FilaWindowsState extends State<_FilaWindows> {
               // muestra la forma de lo que va a llegar y nada aparece de la
               // nada.
               child: (items.isEmpty && estado != EstadoDeFila.fallo)
-                  // Los que entran, no seis fijos: en una ventana ancha la fila
-                  // de bloques terminaba a media pantalla. Ver EsqueletoDeFila.
-                  ? EsqueletoDeFila(
-                      ancho: widget.conFocoTv
-                          ? _anchoTarjetaTv(context)
-                          : TarjetaDeCatalogo.anchoPara(context),
-                      separacion: 14,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: widget.conFocoTv
-                            ? _margenDeFilaTv(context)
-                            : _margen(context),
-                      ),
-                      paddingDeCadaUno: const EdgeInsets.only(top: 10),
-                    )
+                  // ── En televisor, el giro; en el resto, los bloques ──
+                  //
+                  // Los bloques con forma de tarjeta se leen bien de cerca.
+                  // A tres metros son cajas grises que parecen contenido
+                  // roto. Pedido explícito y repetido: en TV, el giro en el
+                  // centro de la fila y nada más hasta que llegue lo real.
+                  ? (widget.conFocoTv
+                      ? const Center(child: CargandoTv())
+                      // Los que entran, no seis fijos: en una ventana ancha
+                      // la fila de bloques terminaba a media pantalla. Ver
+                      // EsqueletoDeFila.
+                      : EsqueletoDeFila(
+                          ancho: TarjetaDeCatalogo.anchoPara(context),
+                          separacion: 14,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: _margen(context),
+                          ),
+                          paddingDeCadaUno: const EdgeInsets.only(top: 10),
+                        ))
                   // ── Recorte solo a los costados ────────────────────
                   //
                   // `Clip.none` está para que la sombra del hover no se corte,

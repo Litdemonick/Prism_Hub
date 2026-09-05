@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:prismhub/views/widgets/tv/region_de_foco.dart';
 
@@ -114,10 +116,79 @@ class FocoConTopes extends DirectionalFocusAction {
         .where((s) => s.$1.axis != ejeDelMovimiento)
         .toList(growable: false);
     super.invoke(intent);
+    // ── Y se revisa DESPUÉS de que Flutter aplique el movimiento ─────────
+    //
+    // Este era el fallo de fondo, y explica por qué ningún arreglo de los
+    // topes cambiaba nada en el televisor: **`primaryFocus` no cambia
+    // durante `super.invoke`**. Flutter no mueve el foco en el acto — anota
+    // el pedido y lo aplica al final, en una microtarea
+    // (`FocusManager._markNeedsUpdate` → `applyFocusChangesIfNeeded`).
+    //
+    // O sea que leer `primaryFocus` justo después devolvía SIEMPRE el nodo
+    // de partida. Con `antes` y `despues` siendo el mismo objeto, la
+    // primera guarda («no se movió: no hay nada que revisar») salía por la
+    // puerta de atrás en CADA pulsación, y todo lo que viene detrás —los
+    // topes de fila, el cambio de región, las medidas— no llegaba a
+    // ejecutarse nunca.
+    //
+    // Medido con trazas en un test de una fila larga: en las quince
+    // pulsaciones, `de` y `a` eran el mismo nodo, y sin embargo el foco
+    // terminaba una fila más abajo.
+    //
+    // Encolando la revisión en otra microtarea, esta corre DESPUÉS de la de
+    // Flutter: el foco ya está donde quedó, y ahí sí se puede decidir si
+    // valía. Sigue siendo dentro del mismo cuadro, así que si hay que
+    // deshacerlo no se llega a dibujar nada — desde afuera, la flecha
+    // simplemente no hizo nada.
+    scheduleMicrotask(() {
+      _revisarElMovimiento(
+        intent: intent,
+        antes: antes,
+        horizontal: horizontal,
+        todosLosScrolls: todosLosScrolls,
+        aRestaurar: aRestaurar,
+      );
+    });
+  }
+
+  /// Decide si el movimiento que acaba de hacer Flutter valía, y lo deshace
+  /// si no. Corre en una microtarea posterior a la que aplica el foco — ver
+  /// el comentario largo en `invoke`.
+  void _revisarElMovimiento({
+    required DirectionalFocusIntent intent,
+    required FocusNode? antes,
+    required bool horizontal,
+    required List<(ScrollPosition, double)> todosLosScrolls,
+    required List<(ScrollPosition, double)> aRestaurar,
+  }) {
     final despues = primaryFocus;
     if (antes == null || despues == null || identical(antes, despues)) {
       _restaurar(aRestaurar);
       _rescatarSiSePerdio(antes);
+      return;
+    }
+    // ── La misma fila se comprueba ANTES de medir nada ──────────────────
+    //
+    // Todo lo de más abajo necesita medir los dos rectángulos, y medir puede
+    // fallar: al desplazarse, la lista RECICLA la tarjeta de la que se
+    // venía, y un nodo sin widget no tiene rectángulo. Cuando eso pasaba,
+    // el código se rendía y devolvía sin deshacer nada — o sea que el
+    // movimiento inválido QUEDABA PUESTO, con el foco en la fila de abajo.
+    //
+    // Ese era el «insisto con la derecha y se me va bajando de fila»
+    // reportado release tras release. Reproducido en un test con una fila
+    // larga que de verdad se desplaza: la pulsación 15 terminaba en la fila
+    // siguiente. Con la fila entera entrando en pantalla no se veía, porque
+    // sin desplazamiento no hay reciclado.
+    //
+    // `_mismaFilaHorizontal` no necesita medidas: compara si los dos nodos
+    // cuelgan del MISMO scroll. Así que se pregunta primero, y ahí el
+    // reciclado deja de importar.
+    if (horizontal &&
+        _cambioDeRegion(antes.context, despues.context) != true &&
+        !_mismaFilaHorizontal(antes.context, despues.context)) {
+      _volverA(antes);
+      _restaurar(todosLosScrolls);
       return;
     }
     // ── Los DOS rectángulos se miden DESPUÉS de mover ───────────────────
@@ -164,9 +235,8 @@ class FocoConTopes extends DirectionalFocusAction {
     if (horizontal && hasta == null && antes.context != null) {
       // Se deshace el movimiento: se devuelven los DOS ejes, no solo el que
       // nadie tocó. Ver el comentario de `todosLosScrolls`.
-      antes.requestFocus();
+      _volverA(antes);
       _restaurar(todosLosScrolls);
-      _rescatarSiSePerdio(antes);
       return;
     }
     if (desde == null || hasta == null) {
@@ -294,11 +364,10 @@ class FocoConTopes extends DirectionalFocusAction {
     // IRÍA el foco sin moverlo. Como todo esto pasa dentro del mismo cuadro,
     // el foco intermedio no llega a dibujarse: desde afuera, la flecha
     // simplemente no hizo nada.
-    antes.requestFocus();
+    _volverA(antes);
     // Los DOS ejes: el movimiento no ocurrió, así que el desplazamiento que
     // provocó tampoco puede quedar. Ver el comentario de `todosLosScrolls`.
     _restaurar(todosLosScrolls);
-    _rescatarSiSePerdio(antes);
   }
 
   /// Si después de todo esto el foco quedó en la nada, se lo devuelve a
@@ -325,6 +394,36 @@ class FocoConTopes extends DirectionalFocusAction {
     }
     if (antes.context == null || !antes.canRequestFocus) return;
     antes.requestFocus();
+  }
+
+  /// Devuelve el foco a [antes] aunque su tarjeta ya no exista AHORA.
+  ///
+  /// ── Por qué no alcanza con `antes.requestFocus()` ────────────────────
+  ///
+  /// Al desplazarse, la lista destruye las tarjetas que salen de la vista.
+  /// Yendo a la derecha en el final de una fila, `super.invoke` mueve el
+  /// foco a otra fila y de paso desplaza la lista para mostrarla — y ese
+  /// desplazamiento se lleva puesta la tarjeta DE LA QUE SE VENÍA. Para
+  /// cuando se quiere deshacer el movimiento, el sitio al que había que
+  /// volver ya no está en pantalla: `requestFocus` sobre él no hace nada y
+  /// el foco se queda en la fila de abajo, que es exactamente el fallo
+  /// reportado release tras release.
+  ///
+  /// Pero el desplazamiento SÍ se deshace (`_restaurar`), así que un cuadro
+  /// después la fila vuelve a su sitio y la tarjeta se reconstruye. Con el
+  /// reintento de después del cuadro, el foco vuelve donde estaba.
+  ///
+  /// Medido con un test de una fila larga que de verdad se desplaza: sin
+  /// esto, la pulsación 15 terminaba en la fila siguiente.
+  static void _volverA(FocusNode antes) {
+    if (antes.context != null && antes.canRequestFocus) {
+      antes.requestFocus();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (antes.context == null || !antes.canRequestFocus) return;
+      antes.requestFocus();
+    });
   }
 
   /// ¿El salto cruzó de una región a otra?

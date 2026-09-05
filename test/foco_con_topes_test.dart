@@ -310,6 +310,105 @@ void main() {
     });
   });
 
+  group('una fila LARGA, que de verdad se desplaza', () {
+    /// ── Por qué hace falta este caso aparte ──────────────────────────────
+    ///
+    /// En los casos de arriba la fila entera entra en pantalla: apretar
+    /// derecha mueve el foco pero NO desplaza nada. En el televisor eso no
+    /// pasa nunca —una fila trae quince tarjetas y se ven cinco— así que
+    /// cada paso a la derecha ADEMÁS desplaza la fila, y al desplazarse la
+    /// lista recicla las tarjetas que salen de la vista.
+    ///
+    /// Reciclar es justo lo que dispara el fallo reportado: la tarjeta que
+    /// tiene el foco deja de existir. Sin una fila que se desplace, el test
+    /// pasaba sin haber probado el caso de verdad.
+    Future<void> tvDe(WidgetTester t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+    }
+
+    testWidgets('recorrerla entera con la derecha no baja de fila', (t) async {
+      await tvDe(t);
+      await t.pumpWidget(arbol(porFila: 15, conRescate: true));
+      await t.pumpAndSettle();
+
+      nodo('f0-c0').requestFocus();
+      await t.pumpAndSettle();
+
+      // Se aprieta MÁS veces que tarjetas hay: las últimas son las que caen
+      // en el tope, que es donde se reportó el fallo.
+      for (var i = 0; i < 20; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await t.pumpAndSettle();
+        expect(
+          enfocado(),
+          startsWith('f0-'),
+          reason: 'se fue de la fila 0 en la pulsación ${i + 1}',
+        );
+      }
+    });
+  });
+
+  group('dentro del panel, arriba y abajo no sacan de ahí', () {
+    // «Si estoy en el panel izquierdo y estoy subiendo y bajando, no me debe
+    // sacar a otro lugar: estoy eligiendo a qué zona entrar. No me puede
+    // sacar hasta que yo vaya a la derecha.»
+    testWidgets('bajando por el panel no se escapa al contenido', (t) async {
+      await t.pumpWidget(arbol(conRescate: true));
+      await t.pumpAndSettle();
+
+      nodo('rail0').requestFocus();
+      await t.pumpAndSettle();
+
+      for (var i = 0; i < 8; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await t.pumpAndSettle();
+        expect(
+          enfocado(),
+          startsWith('rail'),
+          reason: 'se salió del panel bajando, en la pulsación ${i + 1}',
+        );
+      }
+    });
+
+    testWidgets('subiendo por el panel tampoco', (t) async {
+      await t.pumpWidget(arbol(conRescate: true));
+      await t.pumpAndSettle();
+
+      nodo('rail3').requestFocus();
+      await t.pumpAndSettle();
+
+      for (var i = 0; i < 8; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await t.pumpAndSettle();
+        expect(
+          enfocado(),
+          startsWith('rail'),
+          reason: 'se salió del panel subiendo, en la pulsación ${i + 1}',
+        );
+      }
+    });
+  });
+
+  group('la izquierda llega al panel desde cualquier fila', () {
+    for (final fila in [0, 1, 2]) {
+      testWidgets('desde la fila $fila', (t) async {
+        await t.binding.setSurfaceSize(const Size(1280, 720));
+        addTearDown(() => t.binding.setSurfaceSize(null));
+        await t.pumpWidget(arbol(conRescate: true));
+        await t.pumpAndSettle();
+
+        nodo('f$fila-c0').requestFocus();
+        await t.pumpAndSettle();
+
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await t.pumpAndSettle();
+
+        expect(enfocado(), startsWith('rail'));
+      });
+    }
+  });
+
   group('lo vertical sigue funcionando', () {
     testWidgets('abajo baja de fila', (t) async {
       await t.pumpWidget(arbol());

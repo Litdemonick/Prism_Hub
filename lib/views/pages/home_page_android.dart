@@ -2996,6 +2996,19 @@ class _HomeEsperando extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ── En televisor: nada, solo el giro ────────────────────────────────
+    //
+    // Los bloques grises con forma de tarjeta funcionan de cerca, donde se
+    // leen como «acá va a haber algo». En un televisor, a tres metros, son
+    // una pantalla llena de cajas grises que parece contenido roto — y la
+    // forma que insinúan casi nunca coincide con lo que después llega.
+    //
+    // Pedido explícito y repetido: «quitá el esqueleto, poné el coso dando
+    // vueltas en el centro y que no se vea nada más; cuando carga, ahí sí
+    // mostrá las tarjetas».
+    if (PlatformTv.esTelevisionSync) {
+      return const Center(child: CargandoTv());
+    }
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
       // En escritorio, el mismo aire de arriba que tiene el Home de verdad:
@@ -3021,6 +3034,14 @@ class _FilaEsperando extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Ver el mismo comentario en `_HomeEsperando`: en televisor no van
+    // bloques grises, va el giro y nada más.
+    if (PlatformTv.esTelevisionSync) {
+      return const SizedBox(
+        height: 220,
+        child: Center(child: CargandoTv()),
+      );
+    }
     final margen = _margen(context);
     final a = Ancho.de(context);
     final columnas = a.elegir(compacto: 3, medio: 4, amplio: 5, enorme: 6);
