@@ -1,4 +1,4 @@
-## PrismHub v1.0.100 — El panel izquierdo ya entra y sale sin trabarse
+## PrismHub v1.0.101 — Encontrado: por qué la selección se bajaba sola
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,27 +12,30 @@
 
 ### 📺 Android TV
 
-- **Entrar y salir del panel izquierdo con el mando ya no se deshace
-  solo.** Estando pegado del todo a la izquierda del contenido, apretar
-  izquierda no entraba al panel de categorías; y al revés, una vez adentro
-  no se podía volver al contenido — el panel se quedaba desplegado, con el
-  nombre de cada categoría a la vista. La causa: el chequeo que evita que
-  una fila "se escape" a otra parte de la pantalla no distinguía cruzar a
-  propósito hacia el panel de categorías (que no es una fila de tarjetas)
-  de escaparse por error. Ahora ese cruce, en cualquiera de los dos
-  sentidos, se reconoce como lo que es.
+- **La selección ya no se va bajando de fila sola al insistir con la
+  derecha.** Es el fallo que más veces volvió, y hasta ahora se venía
+  arreglando a ciegas: el comportamiento del mando no se podía comprobar
+  sin un televisor delante. Ahora sí se puede, y eso cambió el
+  diagnóstico por completo.
 
-- **El indicador del carrusel ya no se sobrepone al título.** La píldora
-  de puntitos que marca en qué imagen del carrusel se está, centrada y
-  pegada abajo, quedaba a la misma altura que el título — que también vive
-  abajo, pero a la izquierda — y con un título largo terminaba encima de
-  las letras. Se movió a la esquina superior derecha, donde ningún título
-  llega nunca.
+  Los topes de la fila estaban **bien**. El que fallaba era el mecanismo
+  que rescata el foco cuando se pierde: al desplazarse, la lista destruye
+  la tarjeta que tenía la selección, y ahí el rescate buscaba "el
+  siguiente enfocable" — que en orden de lectura es la **primera tarjeta de
+  la fila de abajo**. De ahí que insistir con la derecha fuera bajando fila
+  por fila.
 
-- **El marco de foco del hero y las medianas ya no se corta contra el
-  borde.** El secundario de arriba y la última "mediana" llegan hasta el
-  borde de verdad de la pantalla — a propósito, para que las filas que se
-  desplazan dejen asomar la tarjeta siguiente —, pero esos dos bloques son
-  fijos, no filas: el marco rosado, que se dibuja apenas por fuera de la
-  tarjeta al seleccionarla, quedaba mordido contra el filo. Ahora tienen su
-  propio margen, sin tocar el de las filas de pósters.
+  Ahora se recuerdan los últimos sitios donde estuvo la selección y se
+  vuelve al más reciente que siga existiendo: la tarjeta de al lado, en la
+  misma fila. Quedan siete casos cubiertos por pruebas automáticas, así
+  que este fallo no puede volver sin que se note antes de publicar.
+
+- **Aire alrededor de las tarjetas, para que el marco de foco no se
+  corte.** Reportado en los cuatro lados: la primera tarjeta de cada fila
+  contra el panel de categorías, la última contra el borde derecho, y las
+  de arriba y abajo contra el recorte de la lista. El marco no se dibuja
+  dentro de la tarjeta sino por fuera, con un resplandor todavía más
+  ancho, así que donde el contenido llegaba justo al filo quedaba mordido.
+  Ahora el contenido entero tiene margen propio, en vez de parches por
+  tarjeta que además dejaban el destacado desalineado con las filas de
+  abajo.
