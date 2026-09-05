@@ -126,10 +126,72 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
   ///
   /// Puesto una sola vez acá vale para TODA la app, incluidas las pantallas
   /// que no se tocaron.
-  /// El último sitio donde el foco estuvo de verdad.
+  /// Los últimos sitios donde el foco estuvo de verdad, del más viejo al más
+  /// reciente.
   ///
-  /// Sirve para devolverlo ahí si se pierde — ver `_recuperarElFoco`.
-  static FocusNode? _ultimoBueno;
+  /// ── Por qué un historial y no solo el último ────────────────────────────
+  ///
+  /// Guardar UNO solo alcanzaba mientras ese uno siguiera vivo. Pero el caso
+  /// que más duele es justo el contrario: la lista RECICLA la tarjeta que
+  /// tenía el foco al desplazarse, así que cuando hay que rescatar, el único
+  /// sitio que se recordaba ya no existe.
+  ///
+  /// Y sin nada que recordar, el rescate caía en `nextFocus()`, que se mueve
+  /// en ORDEN DE LECTURA: desde la última tarjeta de una fila, el siguiente
+  /// en ese orden es la PRIMERA DE LA FILA DE ABAJO. Ese era, medido, el
+  /// «me sigue bajando las cards hacia abajo automáticamente cuando yo no
+  /// estoy bajando» que volvió release tras release: no era el tope de la
+  /// fila —eso funciona, hay tests— sino el rescate saltando de fila cada
+  /// vez que una tarjeta se reciclaba debajo del foco.
+  ///
+  /// Con unos pocos sitios anteriores a mano, el rescate vuelve al más
+  /// reciente que siga vivo: la tarjeta de al lado, en la MISMA fila, que es
+  /// de donde se venía. La selección se queda donde estaba en vez de
+  /// escaparse hacia abajo.
+  static final List<FocusNode> _ultimosBuenos = <FocusNode>[];
+
+  /// Cuántos sitios anteriores se recuerdan. Con unos pocos alcanza: lo que
+  /// hace falta es el vecino inmediato del que se acaba de reciclar, no un
+  /// historial de navegación.
+  static const _cuantosSeRecuerdan = 8;
+
+  static void _anotarBueno(FocusNode nodo) {
+    _ultimosBuenos.removeWhere((n) => identical(n, nodo));
+    _ultimosBuenos.add(nodo);
+    if (_ultimosBuenos.length > _cuantosSeRecuerdan) {
+      _ultimosBuenos.removeAt(0);
+    }
+  }
+
+  /// El sitio más reciente que siga siendo un destino válido DENTRO de este
+  /// ámbito, o null si no queda ninguno.
+  ///
+  /// El ámbito importa: cada pantalla de Navigator sigue viva DEBAJO de la
+  /// que se abre encima, así que sus nodos siguen teniendo `context` y
+  /// `canRequestFocus`. Devolverle el foco a uno de esos es el «se ve la
+  /// pantalla nueva pero se navega por detrás» que ya se reportó.
+  static FocusNode? _ultimoVivoEn(FocusScopeNode ambito) {
+    for (var i = _ultimosBuenos.length - 1; i >= 0; i--) {
+      final n = _ultimosBuenos[i];
+      // Un nodo recordado puede haber sido DESCARTADO por su widget (la
+      // lista lo recicló). Tocarlo después de eso puede reventar, así que
+      // cualquier fallo acá significa lo mismo: ya no sirve, se lo saca del
+      // historial y se sigue con el anterior.
+      try {
+        final ctx = n.context;
+        if (ctx == null || !ctx.mounted || !n.canRequestFocus) {
+          _ultimosBuenos.removeAt(i);
+          continue;
+        }
+        if (n.enclosingScope != ambito) continue;
+        return n;
+      } catch (_) {
+        _ultimosBuenos.removeAt(i);
+        continue;
+      }
+    }
+    return null;
+  }
 
   /// Devuelve el foco apenas se pierde, sin esperar a la tecla siguiente.
   ///
@@ -162,8 +224,7 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
     final ambito = actual is FocusScopeNode
         ? actual
         : (actual?.nearestScope ?? FocusManager.instance.rootScope);
-    final ultimo = _ultimoBueno;
-    // ── Por qué no alcanza con `ultimo.canRequestFocus` ──────────────────
+    // ── Por qué no alcanza con `canRequestFocus` ─────────────────────────
     //
     // Cada pantalla de Navigator sigue viva DEBAJO de la que se acaba de
     // abrir encima —Flutter no la destruye, solo deja de mostrarla— así que
@@ -175,13 +236,11 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
     // se quedaban recibiendo las flechas del Inicio de atrás.
     //
     // La pertenencia al MISMO ámbito que acaba de quedar activo es lo que
-    // distingue los dos casos: si el último nodo bueno vive en otro ámbito
-    // —la pantalla de atrás—, no es un rescate, es una pantalla nueva sin
-    // nada puesto todavía.
-    if (ultimo != null &&
-        ultimo.context != null &&
-        ultimo.canRequestFocus &&
-        ultimo.nearestScope == ambito) {
+    // distingue los dos casos, y es lo que `_ultimoVivoEn` comprueba: si no
+    // queda ningún sitio anterior de ESTA pantalla, no es un rescate, es
+    // una pantalla nueva sin nada puesto todavía.
+    final ultimo = _ultimoVivoEn(ambito);
+    if (ultimo != null) {
       // Después del cuadro: si el foco se perdió porque algo se estaba
       // desmontando, pedirlo en el mismo instante puede volver a perderse
       // cuando ese desmontaje termine.
@@ -211,18 +270,34 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
           actual2.context != null) {
         return;
       }
-      ambito.nextFocus();
+      _buscarElPrimeroDe(ambito);
     });
+  }
+
+  /// Mueve el foco al primer enfocable del ámbito, si se puede.
+  ///
+  /// `nextFocus()` revienta con un error de null cuando el ámbito no tiene
+  /// contexto —pasa justo mientras algo se está desmontando, que es
+  /// exactamente cuando este rescate corre—. Salió en un test de navegación,
+  /// no en el televisor: ahí el error se lo comía el manejador de cuadros de
+  /// Flutter y lo único que se notaba era que el foco no volvía.
+  static bool _buscarElPrimeroDe(FocusScopeNode ambito) {
+    if (ambito.context == null) return false;
+    try {
+      return ambito.nextFocus();
+    } catch (_) {
+      return false;
+    }
   }
 
   void _alCambiarElFoco() {
     final nodo = FocusManager.instance.primaryFocus;
     final ctx = nodo?.context;
-    if (ctx == null || nodo is FocusScopeNode) {
+    if (nodo == null || ctx == null || nodo is FocusScopeNode) {
       _recuperarElFoco();
       return;
     }
-    _ultimoBueno = nodo;
+    _anotarBueno(nodo);
     // Después del cuadro: recién ahí el widget está ubicado en su lugar
     // definitivo, que es lo que `ensureVisible` necesita para medir.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -464,7 +539,24 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
     final ambito = actual is FocusScopeNode
         ? actual
         : (actual?.nearestScope ?? FocusManager.instance.rootScope);
-    final movio = ambito.nextFocus();
+    // ── Primero, de vuelta a donde se estaba; recién si no, a buscar ─────
+    //
+    // `nextFocus()` se mueve en ORDEN DE LECTURA, y desde la última tarjeta
+    // de una fila el siguiente en ese orden es la PRIMERA DE LA FILA DE
+    // ABAJO. Cuando el foco se perdía porque la lista recicló la tarjeta que
+    // lo tenía, esta línea era la que bajaba la selección de fila sola —
+    // reportado release tras release: «insisto con la derecha y me va
+    // bajando a las cards de abajo».
+    //
+    // El historial devuelve el sitio más reciente que siga vivo EN ESTA
+    // pantalla: el vecino de al lado, en la misma fila. `nextFocus` queda
+    // como último recurso, para cuando de verdad no hay nada que recordar.
+    final ultimo = _ultimoVivoEn(ambito);
+    if (ultimo != null) {
+      ultimo.requestFocus();
+      return KeyEventResult.handled;
+    }
+    final movio = _buscarElPrimeroDe(ambito);
     // La tecla se consume solo si de verdad se recuperó el foco: si no,
     // mejor dejarla pasar por si alguien más puede hacer algo con ella.
     return movio ? KeyEventResult.handled : KeyEventResult.ignored;
