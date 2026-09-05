@@ -1380,24 +1380,31 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                       // (`_maxPuntitos`) para no volverse una regla graduada con
                       // muchas portadas.
                       if (widget.conFocoTv && tanda.length > 1)
+                        // ── Arriba a la derecha, no centrado abajo ─────────
+                        //
+                        // Centrado y pegado abajo quedaba a la misma altura
+                        // que el título —que también vive abajo, pero a la
+                        // izquierda— y con un título largo (o de dos líneas)
+                        // la píldora terminaba encima de las letras.
+                        // Reportado en vivo: «se sobrepone arriba del
+                        // título». Arriba a la derecha no comparte esquina
+                        // con nada, así que no hay título —de ningún
+                        // largo— que le gane el lugar.
                         Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 14,
+                          top: 14,
+                          right: 14,
                           child: IgnorePointer(
-                            child: Center(
-                              child: _RayasDeCarruselTv(
-                                cantidad: tanda.length < _maxPuntitos
-                                    ? tanda.length
-                                    : _maxPuntitos,
-                                actual: tanda.length <= _maxPuntitos
-                                    ? widget.c.carruselPos
-                                        .clamp(0, tanda.length - 1)
-                                    : (widget.c.carruselPos *
-                                            _maxPuntitos ~/
-                                            tanda.length)
-                                        .clamp(0, _maxPuntitos - 1),
-                              ),
+                            child: _RayasDeCarruselTv(
+                              cantidad: tanda.length < _maxPuntitos
+                                  ? tanda.length
+                                  : _maxPuntitos,
+                              actual: tanda.length <= _maxPuntitos
+                                  ? widget.c.carruselPos
+                                      .clamp(0, tanda.length - 1)
+                                  : (widget.c.carruselPos *
+                                          _maxPuntitos ~/
+                                          tanda.length)
+                                      .clamp(0, _maxPuntitos - 1),
                             ),
                           ),
                         ),
