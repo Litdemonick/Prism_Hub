@@ -35,12 +35,17 @@
 - **"Ver detalle" ya no te deja en la Biblioteca.** Cerraba el lector y, a
   veces, la ficha nunca llegaba a abrirse. Saltando de una obra a otra desde
   una burbuja fallaba siempre.
-- **Los botones de capítulo siguiente/anterior** del final de la cascada
-  dejan de quedar tapados por la franja de abajo: ahora el hueco que se les
-  reserva se mide de verdad, en vez de ser un número fijo que se quedaba
-  corto según el aparato o el tamaño de letra.
+- **Los botones de capítulo siguiente/anterior** del final de la cascada ya
+  responden. Se apretaban y no pasaba nada, sobre todo con las burbujas
+  desplegadas: la capa invisible que muestra y oculta los controles al tocar
+  el medio de la pantalla se quedaba con el toque antes de que llegara al
+  botón. Ahora esa capa les deja el espacio libre mientras están a la vista.
+  Y el hueco que se les reserva debajo se mide de verdad, en vez de ser un
+  número fijo que se quedaba corto según el aparato o el tamaño de letra.
 - **Los ajustes del lector (la tuerca) se pueden subir hasta arriba.** En
   horizontal la hoja quedaba cortada a media pantalla y no había forma de
   llegar a las opciones de abajo.
-- **La lista de capítulos en PC ya no se pasa de la ventana** con una obra
-  larga: se desplaza por dentro.
+- **La lista de capítulos en PC aprovecha el alto de la pantalla** y se frena
+  antes del borde, en vez de pasarse de la ventana con una obra larga. Con
+  muchos capítulos se desplaza por dentro, y va un poco más ancha para que
+  los nombres se lean cómodos.
