@@ -29,7 +29,32 @@ Map<String, String>? _cabeceras(String package) {
 /// `ReaderView` (que necesita el mismo número para la vista agrandada,
 /// afuera de este widget) — un solo lugar que lo decide, para que las dos
 /// vistas nunca queden desincronizadas.
-double diametroDeBurbuja(bool esAndroid) => esAndroid ? 68.0 : 60.0;
+double diametroDeBurbuja(bool esAndroid) => esAndroid ? 70.0 : 72.0;
+
+/// Envuelve la fila (o la vista agrandada) en un `Material` transparente.
+///
+/// ── Las rayas amarillas debajo del texto ─────────────────────────────────
+///
+/// No eran overflow. Se persiguieron como si lo fueran durante varias
+/// vueltas (reservando alto, achicando con FittedBox, sacando cajas de por
+/// medio) y volvían igual — porque el aviso de overflow de Flutter son
+/// franjas diagonales amarillas y negras SOBRE el borde que se pasa, y esto
+/// era otra cosa: el DOBLE SUBRAYADO AMARILLO que Flutter le pone a
+/// cualquier `Text` que no tiene un `Material` por encima.
+///
+/// Y acá no lo había: las burbujas viven en el `Stack` de `ReaderView`, y el
+/// `Scaffold` del lector es HIJO de ese Stack (entra como `content`), no
+/// ancestro — o sea que las burbujas son hermanas del Scaffold, no
+/// descendientes. En PC no se notaba porque la ruta del lector cuelga de un
+/// envoltorio de fluent_ui que sí trae Material más arriba; en Android no
+/// hay nada de eso y el subrayado salía siempre.
+///
+/// `MaterialType.transparency` no dibuja NADA (ni fondo, ni sombra, ni
+/// esquinas): solo aporta el contexto que el texto necesita.
+Widget _conMaterial(Widget hijo) => Material(
+      type: MaterialType.transparency,
+      child: hijo,
+    );
 
 /// La fila de burbujas para saltar a otra obra de "Continuar leyendo" sin
 /// salir del lector actual.
@@ -209,6 +234,10 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
 
   @override
   Widget build(BuildContext context) {
+    return _conMaterial(_fila());
+  }
+
+  Widget _fila() {
     return Padding(
       // SIN padding izquierdo/derecho acá: pedido explícito, la fila tiene
       // que arrancar del borde izquierdo de la pantalla y llegar hasta el
@@ -236,12 +265,10 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
           if (!widget.colapsado) ...[
             const SizedBox(height: 6),
             SizedBox(
-              // +8 de aire para el marco/sombra del círculo, +22 más para
-              // el título de abajo (ver _Burbuja) — antes esto medía justo
-              // el círculo y el renglón del título se salía por debajo:
-              // el aviso de overflow de Flutter (reportado como "una raya
-              // amarilla").
-              height: widget.diametro + 30,
+              // El círculo + el aire de su sombra + los DOS renglones que
+              // ahora puede ocupar el título (ver _Burbuja): 4 de separación
+              // + 32 de texto + 6 de respiro.
+              height: widget.diametro + 42,
               child: Row(
                 children: [
                   if (!widget.esAndroid)
@@ -282,14 +309,12 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
                           right: 12,
                         ),
                         itemCount: widget.otras.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: 12),
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
                         itemBuilder: (context, i) => _Burbuja(
                           historia: widget.otras[i],
                           diametro: widget.diametro,
                           onTap: () => widget.onTocar(widget.otras[i]),
-                          onLongPress: () =>
-                              widget.onPreview(widget.otras[i]),
+                          onLongPress: () => widget.onPreview(widget.otras[i]),
                         ),
                       ),
                     ),
@@ -396,27 +421,45 @@ class _Burbuja extends StatelessWidget {
       onTap: onTap,
       onLongPress: onLongPress,
       child: SizedBox(
-        width: diametro + 14,
+        width: diametro + 26,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _CirculoDePortada(historia: historia, diametro: diametro),
             const SizedBox(height: 4),
-            // Alto FIJO con FittedBox adentro: un título largo se achica
-            // para entrar en una línea en vez de desbordar hacia abajo
-            // (que es lo que se veía como una raya amarilla de aviso —
-            // el overflow real de Flutter). El ancho ya lo acota el
-            // SizedBox de afuera.
+            // ── Tamaño fijo, no "lo que entre" ──────────────────────────
+            //
+            // Antes esto era un FittedBox que achicaba el título hasta que
+            // entrara en un solo renglón — o sea que cuanto MÁS largo el
+            // nombre, más chico se veía, y con un título largo terminaba
+            // ilegible. Reportado en vivo: "se ve diminuto, no sé qué
+            // dice". Ahora la letra mide siempre lo mismo (que es lo que
+            // se puede leer) y lo que sobra se corta con puntos suspensivos
+            // después de dos renglones — se lee el principio del nombre,
+            // que alcanza para reconocerlo, en vez de todo el nombre
+            // ilegible.
+            //
+            // El fondo oscuro es para que el texto se lea SIEMPRE: esto
+            // flota sobre la página del manga, que puede ser blanca,
+            // clara o llena de detalle. Con solo una sombra alrededor
+            // había fondos donde el título se perdía.
             SizedBox(
-              height: 16,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
+              height: 32,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                alignment: Alignment.center,
                 child: Text(
                   historia.title,
-                  maxLines: 1,
-                  softWrap: false,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 11,
+                    height: 1.15,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
@@ -539,77 +582,88 @@ class BurbujaExpandidaOverlay extends StatelessWidget {
     // el toque antes de que le llegue al de afuera — sin esto, tocar la
     // burbuja agrandada cancelaría Y confirmaría a la vez.
     return Positioned.fill(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onCancelar,
-        child: Container(
-          // Bien liviano a propósito: en el lector de cómic esto puede
-          // coincidir con el contador de página ("2/34") — un fondo oscuro
-          // de verdad lo tapaba justo mientras más se necesita ver que
-          // sigue ahí. Reportado con foto. Con esto tan tenue el círculo
-          // igual se destaca (crece y tiene su propio marco/sombra), pero
-          // no esconde nada detrás.
-          color: Colors.black.withValues(alpha: 0.12),
-          alignment: Alignment.center,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onConfirmar,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // ── Por qué Transform.scale y no reconstruir más grande ──
-                  //
-                  // Antes esto era un `TweenAnimationBuilder<double>` que
-                  // reconstruía `_CirculoDePortada` con un `diametro`
-                  // DISTINTO en cada frame de la animación (220ms, ~13
-                  // frames) — y como `cacheWidth` sale de `diametro`, cada
-                  // frame pedía la imagen decodificada a un tamaño nuevo:
-                  // se veía recargar/parpadear durante todo el agrandado.
-                  // Reportado en vivo más de una vez.
-                  //
-                  // Ahora el círculo se construye UNA sola vez, ya al
-                  // tamaño final Y con el `anchoDeCache` de la FILA (no el
-                  // suyo propio, más grande) — mismo ancho, misma clave de
-                  // caché, la MISMA imagen que la fila ya tiene decodificada
-                  // se reusa tal cual. Lo que anima es solo la ESCALA
-                  // (`Transform.scale`), una operación de pintado que no
-                  // toca la red ni el decodificador para nada.
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(
-                      begin: diametroFila / diametroGrande,
-                      end: 1.0,
+      // Mismo motivo que en la fila: sin un Material por encima, Flutter le
+      // pone doble subrayado amarillo al título — ver _conMaterial.
+      child: _conMaterial(
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onCancelar,
+          child: Container(
+            // Bien liviano a propósito: en el lector de cómic esto puede
+            // coincidir con el contador de página ("2/34") — un fondo oscuro
+            // de verdad lo tapaba justo mientras más se necesita ver que
+            // sigue ahí. Reportado con foto. Con esto tan tenue el círculo
+            // igual se destaca (crece y tiene su propio marco/sombra), pero
+            // no esconde nada detrás.
+            color: Colors.black.withValues(alpha: 0.12),
+            alignment: Alignment.center,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onConfirmar,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ── Por qué Transform.scale y no reconstruir más grande ──
+                    //
+                    // Antes esto era un `TweenAnimationBuilder<double>` que
+                    // reconstruía `_CirculoDePortada` con un `diametro`
+                    // DISTINTO en cada frame de la animación (220ms, ~13
+                    // frames) — y como `cacheWidth` sale de `diametro`, cada
+                    // frame pedía la imagen decodificada a un tamaño nuevo:
+                    // se veía recargar/parpadear durante todo el agrandado.
+                    // Reportado en vivo más de una vez.
+                    //
+                    // Ahora el círculo se construye UNA sola vez, ya al
+                    // tamaño final Y con el `anchoDeCache` de la FILA (no el
+                    // suyo propio, más grande) — mismo ancho, misma clave de
+                    // caché, la MISMA imagen que la fila ya tiene decodificada
+                    // se reusa tal cual. Lo que anima es solo la ESCALA
+                    // (`Transform.scale`), una operación de pintado que no
+                    // toca la red ni el decodificador para nada.
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(
+                        begin: diametroFila / diametroGrande,
+                        end: 1.0,
+                      ),
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      child: _CirculoDePortada(
+                        historia: historia,
+                        diametro: diametroGrande,
+                        anchoDeCache: (diametroFila * 3).round(),
+                      ),
+                      builder: (context, escala, child) =>
+                          Transform.scale(scale: escala, child: child),
                     ),
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    child: _CirculoDePortada(
-                      historia: historia,
-                      diametro: diametroGrande,
-                      anchoDeCache: (diametroFila * 3).round(),
-                    ),
-                    builder: (context, escala, child) =>
-                        Transform.scale(scale: escala, child: child),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: 240,
-                    child: Text(
-                      historia.title,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        shadows: [
-                          Shadow(blurRadius: 6, color: Colors.black),
-                        ],
+                    const SizedBox(height: 12),
+                    // Fondo sólido, no una sombra: esto se dibuja sobre la
+                    // página del manga, que puede ser blanca — con texto
+                    // blanco y solo sombra alrededor, el título desaparecía
+                    // del todo ahí. Reportado en vivo con foto.
+                    Container(
+                      constraints: const BoxConstraints(maxWidth: 260),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        historia.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
