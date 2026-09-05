@@ -137,7 +137,14 @@ class _TecladoTvState extends State<TecladoTv> {
             Row(
               children: [
                 for (final letra in fila) ...[
-                  _tecla(letra, onTap: () => _escribir(letra)),
+                  _tecla(
+                    letra,
+                    onTap: () => _escribir(letra),
+                    // La "A" arranca con el foco puesto — mismo criterio
+                    // que el "1" del teclado numérico del PIN: sin esto, al
+                    // abrir el buscador el mando no tenía dónde empezar.
+                    autofocus: indice == 0 && letra == fila.first,
+                  ),
                   const SizedBox(width: _hueco),
                 ],
                 if (indice == filas.length - 1)
@@ -178,10 +185,12 @@ class _TecladoTvState extends State<TecladoTv> {
     double ancho = _anchoTecla,
     double alto = _anchoTecla,
     String? etiqueta,
+    bool autofocus = false,
   }) {
     return FocusableCard(
       borderRadius: 8,
       accent: widget.accent,
+      autofocus: autofocus,
       onTap: onTap,
       child: Container(
         width: ancho,

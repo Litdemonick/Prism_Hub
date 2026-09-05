@@ -79,35 +79,53 @@ class _SearchTVState extends State<SearchTV> {
       children: [
         SizedBox(
           width: 380,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── Las últimas búsquedas, arriba del teclado ──────────────
-              //
-              // Solo mientras el campo está vacío: son un punto de partida
-              // para no escribir nada, y una vez que ya se está escribiendo
-              // o hay resultados en pantalla, dejan de aportar y solo
-              // ocuparían lugar. Escribir letra por letra con un control
-              // remoto es lo peor de cualquier app de TV — un botón con lo
-              // ya buscado vale por diez letras.
-              if (_texto.isEmpty && _recientes.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _BusquedasRecientesTv(
-                    terminos: _recientes,
-                    accent: widget.accent,
-                    onElegir: _buscar,
-                    onBorrar: _borrarRecientes,
+          // ── Con scroll, no un tamaño fijo que confía en que entre ────
+          //
+          // El teclado completo (recientes + "123"/borrar + cinco filas de
+          // letras) puede medir más de lo que queda de alto en un televisor
+          // chico o con overscan grande. Sin nada que lo desplazara, lo que
+          // no entraba se cortaba directo contra el borde de la pantalla —
+          // fuera de la vista y, con el mando, fuera de alcance: no había
+          // forma de bajar hasta ahí. Reportado en vivo con foto: "no me
+          // deja navegar ni escribir en el teclado y está cortado el
+          // fondo".
+          //
+          // No hace falta nada más que el `SingleChildScrollView`: el
+          // resto de la app ya trae `RescateDeFoco`, que trae a la vista
+          // sola cualquier tecla que reciba el foco dentro de CUALQUIER
+          // scroll — el mismo mecanismo que ya usa toda la app, no algo
+          // nuevo que mantener acá.
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Las últimas búsquedas, arriba del teclado ──────────────
+                //
+                // Solo mientras el campo está vacío: son un punto de partida
+                // para no escribir nada, y una vez que ya se está escribiendo
+                // o hay resultados en pantalla, dejan de aportar y solo
+                // ocuparían lugar. Escribir letra por letra con un control
+                // remoto es lo peor de cualquier app de TV — un botón con lo
+                // ya buscado vale por diez letras.
+                if (_texto.isEmpty && _recientes.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _BusquedasRecientesTv(
+                      terminos: _recientes,
+                      accent: widget.accent,
+                      onElegir: _buscar,
+                      onBorrar: _borrarRecientes,
+                    ),
                   ),
+                TecladoTv(
+                  texto: _texto,
+                  onCambio: _buscar,
+                  accent: widget.accent,
+                  ancho: 380,
                 ),
-              TecladoTv(
-                texto: _texto,
-                onCambio: _buscar,
-                accent: widget.accent,
-                ancho: 380,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(width: 24),
@@ -165,8 +183,7 @@ class _BusquedasRecientesTv extends StatelessWidget {
               borderRadius: 8,
               onTap: onBorrar,
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Icon(
                   Icons.delete_outline_rounded,
                   size: 18,
@@ -187,8 +204,8 @@ class _BusquedasRecientesTv extends StatelessWidget {
                 accent: accent,
                 onTap: () => onElegir(termino),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 9),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   decoration: BoxDecoration(
                     color: HomeTheme.cardSurface,
                     borderRadius: BorderRadius.circular(999),
