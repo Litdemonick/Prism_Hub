@@ -127,7 +127,8 @@ class _Nsfw18ZoneGateState extends State<Nsfw18ZoneGate> {
       return const _Nsfw18DisabledPage();
     }
     if (!_confirmed) {
-      return Scaffold(backgroundColor: HomeTheme.bg, body: const SizedBox.shrink());
+      return Scaffold(
+          backgroundColor: HomeTheme.bg, body: const SizedBox.shrink());
     }
     if (!_unlocked) {
       return Nsfw18LockPage(
@@ -262,6 +263,26 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
       cover: cover,
       coverHeaders: headers,
     );
+  }
+
+  /// Marca como visto lo que está en curso y avisa a dónde quedó — mismo
+  /// criterio que en Biblioteca, ver el comentario largo allá.
+  Future<void> _marcarVisto(BuildContext context, History h) async {
+    final resultado = await c.marcarVistoYPasarAlSiguiente(h);
+    if (!context.mounted) return;
+    final String mensaje;
+    if (resultado == null) {
+      mensaje = 'home.mark-watched-fail'.i18n;
+    } else if (resultado.isEmpty) {
+      mensaje = 'home.mark-watched-done'.i18n;
+    } else {
+      mensaje = FlutterI18n.translate(
+        context,
+        'home.mark-watched-next',
+        translationParams: {'ep': resultado},
+      );
+    }
+    showPlatformSnackbar(context: context, content: mensaje);
   }
 
   void _openHistoryTab(int tab) {
@@ -447,6 +468,11 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                 // administra el archivo.
                 onDelete: () => c.quitarDeContinuar(h),
                 deleteLabel: 'home.remove-from-continue'.i18n,
+                // Mismo criterio que en Biblioteca: dar por visto lo actual
+                // y pasar al que sigue sin abrirlo.
+                extraActionLabel: 'home.mark-watched'.i18n,
+                extraActionIcon: Icons.done_all_rounded,
+                onExtraAction: () => _marcarVisto(context, h),
                 // Solo si la portada es de red: el historial de vídeo guarda
                 // una captura en disco, y eso no se puede pedir por URL.
                 onVerDetalle: () => _openDetail(h.url, h.package,
@@ -669,7 +695,8 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                 await showImportDialog(context);
                 c.onRefresh();
               },
-              icon: Icon(Icons.playlist_add_rounded, color: HomeTheme.textPrimary),
+              icon: Icon(Icons.playlist_add_rounded,
+                  color: HomeTheme.textPrimary),
             ),
           IconButton(
             tooltip: 'nsfw18.search-zone-title'.i18n,
@@ -756,8 +783,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                   _BotonTvZona(
                     icono: Icons.search_rounded,
                     texto: 'nsfw18.search-zone-title'.i18n,
-                    onTap: () =>
-                        openNsfw18Search(context, yaAutorizado: true),
+                    onTap: () => openNsfw18Search(context, yaAutorizado: true),
                   ),
                   const SizedBox(width: 12),
                   _BotonTvZona(

@@ -12,6 +12,7 @@ import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/utils/resume_history.dart';
 
@@ -163,6 +164,80 @@ class HomePageController extends GetxController {
     h.newEpisodeLabel = null;
     await DatabaseService.putHistoryRaw(h);
     await refreshHistory();
+  }
+
+  /// Da por visto el episodio/capítulo actual y deja "Continuar" apuntando
+  /// al SIGUIENTE. Si el actual ya era el último, la obra sale de
+  /// "Continuar" y queda en el Historial como completada.
+  ///
+  /// Devuelve qué pasó, para que quien lo llame pueda avisarlo:
+  ///  - `null` → no se pudo (la extensión no está, o no respondió).
+  ///  - `''` → era el último: la obra se dio por terminada.
+  ///  - cualquier otro texto → el nombre del episodio al que ahora apunta.
+  ///
+  /// ── Por qué hace falta pedir el detalle ────────────────────────────────
+  ///
+  /// El historial guarda EN QUÉ POSICIÓN quedó (grupo + índice), no la lista
+  /// de episodios: para saber si hay uno después —y cómo se llama— hay que
+  /// preguntárselo a la extensión. Es una sola petición, disparada por una
+  /// acción explícita del usuario, no algo de fondo.
+  Future<String?> marcarVistoYPasarAlSiguiente(History h) async {
+    final runtime = ExtensionUtils.enabledRuntimes[h.package];
+    if (runtime == null) return null;
+    try {
+      final detalle = await runtime.detail(h.url);
+      final grupos = detalle.episodes ?? [];
+      final siguiente =
+          _episodioSiguiente(grupos, h.episodeGroupId, h.episodeId);
+      h.newEpisodeLabel = null;
+      h.knownEpisodeCount = grupos.fold<int>(0, (n, g) => n + g.urls.length);
+      if (siguiente == null) {
+        // Era el último: se comporta igual que terminarlo leyendo/viendo —
+        // sale de Continuar y queda archivado como completado.
+        h.watchState = WatchState.completed;
+        await DatabaseService.putHistoryRaw(h);
+        await refreshHistory();
+        return '';
+      }
+      h.episodeGroupId = siguiente.$1;
+      h.episodeId = siguiente.$2;
+      h.episodeTitle = siguiente.$3;
+      // Progreso a cero: es un episodio que todavía no empezó. Sin esto se
+      // arrastraba el del anterior, y la barra de la tarjeta mostraba el
+      // nuevo como si ya estuviera casi terminado.
+      h.progress = '0';
+      h.totalProgress = '0';
+      h.watchState = WatchState.pending;
+      await DatabaseService.putHistoryRaw(h);
+      await refreshHistory();
+      return siguiente.$3;
+    } catch (e) {
+      // Extensión caída o sitio sin responder: no se toca nada de lo
+      // guardado. Marcar visto a medias sería peor que no hacer nada.
+      logger.info('Sin poder marcar visto ${h.title}: $e');
+      return null;
+    }
+  }
+
+  /// El episodio que viene después de (grupo, índice): el siguiente del
+  /// mismo grupo, o el primero del próximo grupo que tenga algo. `null` si
+  /// no hay ninguno más — o sea, si ese era el último de la obra.
+  static (int, int, String)? _episodioSiguiente(
+    List<ExtensionEpisodeGroup> grupos,
+    int grupo,
+    int indice,
+  ) {
+    if (grupo < 0 || grupo >= grupos.length) return null;
+    final actuales = grupos[grupo].urls;
+    if (indice + 1 < actuales.length) {
+      return (grupo, indice + 1, actuales[indice + 1].name);
+    }
+    for (var g = grupo + 1; g < grupos.length; g++) {
+      if (grupos[g].urls.isNotEmpty) {
+        return (g, 0, grupos[g].urls.first.name);
+      }
+    }
+    return null;
   }
 
   Future<void> deleteHistory(History h) async {

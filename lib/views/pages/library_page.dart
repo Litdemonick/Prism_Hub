@@ -22,6 +22,7 @@ import 'package:prismhub/views/widgets/home/home_hero_banner.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_section.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/utils/import_platform_guard.dart';
 import 'package:prismhub/views/dialogs/import_dialog.dart';
@@ -217,6 +218,30 @@ class _LibraryPageState extends State<LibraryPage> {
     ];
   }
 
+  /// Marca como visto lo que está en curso y avisa a dónde quedó.
+  ///
+  /// El aviso importa: la tarjeta cambia sola de episodio y, sin decir nada,
+  /// se ve como si el menú no hubiera hecho lo que se le pidió. Y cuando era
+  /// el último, la tarjeta directamente desaparece — sin explicación se lee
+  /// como si se hubiera borrado algo.
+  Future<void> _marcarVisto(BuildContext context, History h) async {
+    final resultado = await c.marcarVistoYPasarAlSiguiente(h);
+    if (!context.mounted) return;
+    final String mensaje;
+    if (resultado == null) {
+      mensaje = 'home.mark-watched-fail'.i18n;
+    } else if (resultado.isEmpty) {
+      mensaje = 'home.mark-watched-done'.i18n;
+    } else {
+      mensaje = FlutterI18n.translate(
+        context,
+        'home.mark-watched-next',
+        translationParams: {'ep': resultado},
+      );
+    }
+    showPlatformSnackbar(context: context, content: mensaje);
+  }
+
   List<Widget> _continuarSecciones(BuildContext context) {
     final videos = c.resents
         .where((h) => h.type == ExtensionType.bangumi)
@@ -302,6 +327,14 @@ class _LibraryPageState extends State<LibraryPage> {
                 // administra el archivo.
                 onDelete: () => c.quitarDeContinuar(h),
                 deleteLabel: 'home.remove-from-continue'.i18n,
+                // Dar por visto lo que está viendo/leyendo y pasar al que
+                // sigue, sin tener que abrirlo. Pedido explícito: sirve
+                // para ponerse al día con lo que uno ya vio en otro lado,
+                // capítulo por capítulo, hasta terminar la obra — ahí sale
+                // de Continuar y queda en el Historial como completada.
+                extraActionLabel: 'home.mark-watched'.i18n,
+                extraActionIcon: Icons.done_all_rounded,
+                onExtraAction: () => _marcarVisto(context, h),
                 // Solo si la portada es de red: el historial de vídeo guarda
                 // una captura en disco, y eso no se puede volver a pedir por
                 // URL desde la ficha.
