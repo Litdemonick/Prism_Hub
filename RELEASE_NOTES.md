@@ -1,4 +1,4 @@
-## PrismHub v1.0.94 — El scroll de las filas de extensiones
+## PrismHub v1.0.95 — Al final de una fila, el mando se queda quieto
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
@@ -6,19 +6,18 @@
 
 ### 📺 Android TV
 
-- **La lista ya no se vuelve arriba sola** al moverse por las filas de las
-  extensiones.
+- **Al llegar al final de una fila y seguir apretando derecha, la selección
+  se queda quieta** en vez de desaparecer.
 
-  Una tarjeta vive dentro de una fila que se desliza de costado, y esa fila
-  dentro de la lista que se desliza hacia abajo: son dos desplazamientos, uno
-  adentro del otro. Al acomodar el de la lista se usaban medidas tomadas
-  contra el de la fila —que para ella no significan nada—, y el destino que
-  salía de ahí terminaba recortado contra el principio de la lista. De ahí el
-  salto hasta arriba. Ahora cada uno se acomoda con lo suyo: para la lista, lo
-  que tiene que entrar en pantalla es la fila entera, no la tarjeta suelta.
+  Las comprobaciones que ya había medían si el destino se PARECÍA a un
+  vecino de la misma fila —altura similar—, y eso funciona casi siempre.
+  Pero justo en el borde de verdad, sin ningún vecino real a la derecha,
+  podía engancharse a cualquier otro foco de la pantalla que por pura
+  coincidencia tuviera una altura parecida. Eso pasaba las comprobaciones
+  sin ser un vecino de fila, y como no tiene la marca visual propia de las
+  tarjetas, desde el sillón se veía como que la selección desaparecía.
 
-- **La selección ya no se queda invisible.** Cuando el desplazamiento sacaba
-  de la vista la tarjeta seleccionada, la lista la reciclaba y la selección
-  desaparecía hasta que se apretara otra flecha. Ahora vuelve al instante, y
-  al sitio donde estaba — no al primero que aparezca, que era lo que la hacía
-  saltar lejos.
+  Ahora se confirma algo que no admite coincidencias: si los dos widgets
+  cuelgan del mismo scroll horizontal, el de la fila en la que se está. Un
+  vecino de verdad siempre lo comparte; cualquier otra cosa no puede
+  compartirlo por casualidad.
