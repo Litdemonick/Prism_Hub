@@ -523,82 +523,110 @@ class _ExtensionTileState extends State<ExtensionTile> {
       onTap: _enabled || _updateRequired
           ? () => _openExtensionSearch(context)
           : null,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Más grande en TV — es lo que uno viene a tocar/apuntar con el
-          // mando, y de fábrica es un blanco chico (ver el comentario de
-          // más arriba en este método). Transform.scale y no un Switch
-          // distinto: agranda el widget entero, hitbox incluido, sin
-          // tener que reimplementar su lógica.
-          Transform.scale(
-            scale: tv ? 1.3 : 1.0,
-            child: Switch(
-              value: _enabled,
-              onChanged: _cambiandoEstado ? null : _toggleEnabled,
+      trailing: tv
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Switch(
+                  value: _enabled,
+                  onChanged: _cambiandoEstado ? null : _toggleEnabled,
+                ),
+                IconButton(
+                  onPressed: () => _abrirMenu(context),
+                  icon: const Icon(Icons.more_vert),
+                ),
+              ],
             ),
-          ),
-          IconButton(
-            iconSize: tv ? 28 : null,
-            onPressed: () {
-              // 弹出菜单 — solo desinstalar (ajustes/editar código quitados a
-              // pedido del usuario).
-              showModalBottomSheet(
-                context: context,
-                builder: (context) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.cleaning_services_outlined),
-                        title: Text('extension.clear-cookies'.i18n),
-                        subtitle: Text('extension.clear-cookies-subtitle'.i18n),
-                        onTap: () {
-                          Get.back();
-                          _clearCookies();
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.delete),
-                        title: Text('common.uninstall'.i18n),
-                        onTap: () {
-                          ExtensionUtils.uninstall(widget.extension.package);
-                          Get.back();
-                        },
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-            icon: const Icon(Icons.more_vert),
-          ),
-        ],
-      ),
     );
     if (!tv) return fila;
-    // ── En televisor, con el marco de foco de la app ──────────────────
+    // ── En TV, el interruptor y el menú son SU PROPIO foco ────────────────
     //
-    // Sin esto la fila se enfoca igual —es un ListTile y Material le pone
-    // su resaltado— pero ese resaltado es un GRIS apenas más claro que el
-    // fondo. Desde el sillón no se ve, y la selección se pierde: reportado
-    // en vivo, «la pusiste como gris, tenés que hacer que se vea».
+    // Antes esto seguía siendo un `Switch`/`IconButton` sueltos adentro del
+    // `trailing` de la MISMA fila que ya se envuelve entera en
+    // `FocusableCard` más abajo — o sea DOS focos independientes (Material
+    // le da uno de fábrica a cada uno) anidados dentro de un tercero. El
+    // D-pad los encontraba a los tres, casi en el mismo lugar de la
+    // pantalla, y saltar entre ellos se sentía errático — justo lo
+    // reportado en vivo: «no me deja navegar bien».
     //
-    // Con FocusableCard queda el mismo marco rosado y el mismo halo que en
-    // el resto de la app, así que el mando marca igual en todos lados.
-    return FocusableCard(
-      borderRadius: 14,
-      onTap: _enabled || _updateRequired
-          ? () => _openExtensionSearch(context)
-          : () {},
-      // SIN IgnorePointer, a diferencia de las filas de Ajustes.
-      //
-      // Esta fila tiene DOS acciones: abrirla, y su interruptor de encendido.
-      // Tapando los toques del hijo, el interruptor quedaba fuera del alcance
-      // del mando y no habría forma de apagar una extensión desde el
-      // televisor. Así el mando para primero en la fila —que la abre— y
-      // después en el interruptor.
-      child: fila,
+    // Ahora la fila entera es UN solo destino (abre la búsqueda de la
+    // extensión, como toda tarjeta), y el interruptor y el menú son DOS
+    // paradas más, cada una con su propio `FocusableCard` — mismo mecanismo
+    // que ya usa el resto de la app, así que las tres se ven y se sienten
+    // igual de claras.
+    return Row(
+      children: [
+        // El marco visible de la fila en sí — sin esto se enfoca igual (es
+        // un ListTile y Material le pone SU resaltado), pero ese resaltado
+        // es un gris apenas más claro que el fondo: desde el sillón no se
+        // ve. Reportado en vivo, en otra ronda: «la pusiste como gris,
+        // tenés que hacer que se vea».
+        Expanded(
+          child: FocusableCard(
+            borderRadius: 14,
+            onTap: _enabled || _updateRequired
+                ? () => _openExtensionSearch(context)
+                : () {},
+            child: fila,
+          ),
+        ),
+        const SizedBox(width: 10),
+        FocusableCard(
+          borderRadius: 999,
+          onTap: _cambiandoEstado ? () {} : () => _toggleEnabled(!_enabled),
+          child: IgnorePointer(
+            child: Transform.scale(
+              scale: 1.3,
+              child: Switch(value: _enabled, onChanged: null),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        FocusableCard(
+          borderRadius: 999,
+          onTap: () => _abrirMenu(context),
+          child: Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            child: const Icon(Icons.more_vert, size: 28),
+          ),
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  // El menú de "…" — limpiar cookies / desinstalar. Compartido entre el
+  // `IconButton` de siempre (táctil/mouse) y el `FocusableCard` de TV.
+  void _abrirMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.cleaning_services_outlined),
+              title: Text('extension.clear-cookies'.i18n),
+              subtitle: Text('extension.clear-cookies-subtitle'.i18n),
+              onTap: () {
+                Get.back();
+                _clearCookies();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete),
+              title: Text('common.uninstall'.i18n),
+              onTap: () {
+                ExtensionUtils.uninstall(widget.extension.package);
+                Get.back();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
