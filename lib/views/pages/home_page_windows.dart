@@ -415,7 +415,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                         separatorBuilder: (_, __) => const SizedBox(width: 14),
                         itemBuilder: (context, i) {
                           if (i >= items.length) {
-                            return Padding(
+                            final fantasma = Padding(
                               padding: const EdgeInsets.only(top: 10),
                               child: EsqueletoTarjeta(
                                 ancho: widget.conFocoTv
@@ -423,6 +423,39 @@ class _FilaWindowsState extends State<_FilaWindows> {
                                     : TarjetaDeCatalogo.anchoPara(context),
                               ),
                             );
+                            // ── En TV, con marco de foco propio ────────────
+                            //
+                            // Sin esto, estos dos bloques —que comparten el
+                            // MISMO ListView.separated que las tarjetas
+                            // reales, o sea el mismo scroll— no tienen
+                            // ningún FocusNode. Parado en la última tarjeta
+                            // de verdad mientras la fila está refrescando,
+                            // apretar derecha no encuentra ningún vecino
+                            // enfocable DENTRO de la fila —los fantasmas no
+                            // cuentan— y la búsqueda de Flutter se ve
+                            // obligada a buscar en cualquier otro lado de la
+                            // pantalla: se pierde la selección, y una
+                            // segunda pulsación termina bajando a otra fila
+                            // sin que nadie lo pidiera.
+                            //
+                            // Reportado en vivo: «en la fila de esa
+                            // extensión ya no hay más [tarjetas] pero sigue
+                            // bajando al ir a la derecha».
+                            //
+                            // Con el marco puesto, el fantasma pasa a ser un
+                            // destino legítimo DENTRO de la misma fila —sin
+                            // onTap, no hace nada al confirmarlo, es solo
+                            // una parada— y ahí sí se queda: no hay nada más
+                            // a la derecha de un fantasma, así que el tope
+                            // ya existente (`FocoConTopes`) lo frena ahí,
+                            // como corresponde.
+                            return widget.conFocoTv
+                                ? FocusableCard(
+                                    borderRadius: 8,
+                                    onTap: () {},
+                                    child: fantasma,
+                                  )
+                                : fantasma;
                           }
                           final item = items[i];
                           void abrir() =>
