@@ -1,29 +1,25 @@
-## PrismHub v1.0.96 — El actualizador no obliga, y el carrusel de Inicio se porta bien
+## PrismHub v1.0.97 — La fila que se escapaba, y el PIN de la Zona +18 en TV
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### ⬆️ El actualizador ya no obliga a nadie
-
-Había dos avisos distintos para lo mismo: el diálogo descartable de
-"Comprobar actualizaciones" en Ajustes, y una pantalla aparte que tapaba toda
-la app —sin forma de posponerla en PC— que salía sola al arrancar y cada
-tanto mientras se usaba la app.
-
-- **Ahora hay un solo aviso**, descartable, sin importar si salió solo o si
-  se tocó "Comprobar" a mano. Se puede elegir "Ahora no" siempre.
-- Si elegís posponerla, se te recuerda que podés comprobar cuando quieras
-  desde **Ajustes → Buscar actualizaciones**, y por qué conviene.
-- Si algo está sonando cuando aparece el aviso, se pausa — vale también para
-  el aviso automático, ya que ahora puede aparecer en cualquier momento.
-
 ### 📺 Android TV
 
-- **El carrusel grande de Inicio ya no pierde la selección** al llegar a la
-  última tarjeta y seguir apretando derecha. Antes, sin nada legítimo del
-  otro lado, el foco terminaba en cualquier botón de la pantalla sin ninguna
-  marca visual — ahora se queda quieto.
-- **Indicador de que el carrusel avanza solo.** Las imágenes de la card
-  grande de Inicio rotan automáticamente cada tanto; ahora una fila de
-  rayitas, superpuesta sobre la portada, muestra en cuál vas.
+- **Las filas de Inicio ya no pierden la selección mientras traen más
+  contenido.** Cada fila (por ejemplo, la de una extensión como LaMovie)
+  agrega dos bloques de carga al final mientras pide la página siguiente, y
+  esos bloques no tenían marco de foco propio. Parado en la última tarjeta
+  real justo en ese momento, apretar derecha no encontraba nada dentro de la
+  fila y la selección se perdía — y una segunda pulsación terminaba bajando
+  a otra fila sola. Ahora esos bloques son una parada válida dentro de la
+  misma fila, y ahí se frenan.
+
+- **La pantalla del PIN de la Zona +18, rediseñada para televisor.** Antes
+  era la misma pantalla vertical del celular, con los campos apilados y el
+  botón de volver diminuto. Ahora en TV es horizontal: el teclado numérico a
+  la izquierda, y a la derecha los dos campos como tarjetas que se eligen
+  con el mando — tocar una la marca como la activa, con un borde que muestra
+  claramente en cuál se está escribiendo. El botón de volver pasa a ser uno
+  grande, igual al del resto de la app. Vale tanto para configurar el PIN la
+  primera vez como para desbloquear después.
