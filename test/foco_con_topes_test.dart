@@ -113,7 +113,34 @@ void main() {
           DirectionalFocusIntent: FocoConTopes(),
         },
         child: envolver(Scaffold(
-          body: Stack(
+          body: Column(children: [
+            // ── La barra de arriba ────────────────────────────────────────
+            //
+            // Buscar, extensiones, favoritos, historial y ajustes. Vive
+            // FUERA de las dos regiones (rail y contenido), igual que en la
+            // app: es de toda la pantalla, no de ninguna de las dos. Desde
+            // la primera categoría del panel, la flecha arriba tiene que
+            // llegar acá.
+            SizedBox(
+              height: 46,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  for (var i = 0; i < 5; i++)
+                    Focus(
+                      focusNode: nodo('barra$i'),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        color: Colors.teal,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Stack(
             children: [
               RegionDeFocoTv(
                 nombre: RegionDeFocoTv.contenido,
@@ -166,7 +193,9 @@ void main() {
                 ),
               ),
             ],
-          ),
+              ),
+            ),
+          ]),
         )),
       ),
     );
@@ -349,6 +378,39 @@ void main() {
     });
   });
 
+  group('al toparse no se mueve NADA', () {
+    testWidgets('la derecha en la última no desplaza la pantalla', (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(arbol(porFila: 15, conRescate: true));
+      await t.pumpAndSettle();
+
+      // Hasta la última de la fila.
+      nodo('f0-c0').requestFocus();
+      await t.pumpAndSettle();
+      for (var i = 0; i < 14; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await t.pumpAndSettle();
+      }
+      expect(enfocado(), 'f0-c14');
+
+      // Dónde está todo ANTES de insistir contra el tope.
+      final antesDeInsistir = t.getTopLeft(find.text('f1-c0'));
+
+      for (var i = 0; i < 5; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await t.pumpAndSettle();
+      }
+
+      // Reportado con foto: «la selección se queda en la última tarjeta pero
+      // se mueven las de abajo, como si moviera todo alrededor». Eso pasaba
+      // porque el intento de salto igual desplazaba la pantalla, aunque el
+      // foco se devolviera después.
+      expect(enfocado(), 'f0-c14');
+      expect(t.getTopLeft(find.text('f1-c0')), antesDeInsistir);
+    });
+  });
+
   group('dentro del panel, arriba y abajo no sacan de ahí', () {
     // «Si estoy en el panel izquierdo y estoy subiendo y bajando, no me debe
     // sacar a otro lugar: estoy eligiendo a qué zona entrar. No me puede
@@ -371,22 +433,42 @@ void main() {
       }
     });
 
-    testWidgets('subiendo por el panel tampoco', (t) async {
+    testWidgets('subiendo, nunca se escapa a las tarjetas', (t) async {
       await t.pumpWidget(arbol(conRescate: true));
       await t.pumpAndSettle();
 
       nodo('rail3').requestFocus();
       await t.pumpAndSettle();
 
+      // Subiendo se recorre el panel y, en la primera categoría, se sale a
+      // la barra de arriba — eso SÍ está bien (ver el caso siguiente). Lo
+      // que no puede pasar nunca es terminar en una tarjeta: el contenido
+      // está a la derecha, no arriba.
       for (var i = 0; i < 8; i++) {
         await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
         await t.pumpAndSettle();
         expect(
           enfocado(),
-          startsWith('rail'),
-          reason: 'se salió del panel subiendo, en la pulsación ${i + 1}',
+          isNot(startsWith('f')),
+          reason: 'se fue a las tarjetas subiendo, en la pulsación ${i + 1}',
         );
       }
+    });
+
+    testWidgets('desde la primera categoría, arriba va a la barra de arriba',
+        (t) async {
+      // «Al estar arriba del panel y subir, debe llevarme a los botones de
+      // arriba: buscar, extensiones, etc. Antes andaba.»
+      await t.pumpWidget(arbol(conRescate: true));
+      await t.pumpAndSettle();
+
+      nodo('rail0').requestFocus();
+      await t.pumpAndSettle();
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await t.pumpAndSettle();
+
+      expect(enfocado(), startsWith('barra'));
     });
   });
 

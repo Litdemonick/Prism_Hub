@@ -71,6 +71,40 @@ class FocoConTopes extends DirectionalFocusAction {
       return;
     }
     final antes = primaryFocus;
+    // ── En horizontal, el movimiento lo decidimos NOSOTROS ──────────────
+    //
+    // Todo lo de más abajo es "dejá que Flutter mueva y después deshacelo si
+    // no correspondía". Eso NO alcanza, y se vio en el televisor: aunque el
+    // foco vuelva a su sitio, `super.invoke` ya llamó a `ensureVisible`
+    // sobre el destino al que intentó saltar, o sea que YA DESPLAZÓ la
+    // pantalla. Reportado con foto: «la selección se queda en la última
+    // tarjeta pero se mueven las de abajo, como si moviera todo alrededor».
+    //
+    // Y deshacer depende de ganarle una carrera al propio Flutter, que en un
+    // aparato con el raster a 700 ms no se gana siempre: por eso el mismo
+    // caso a veces se veía bien y a veces no.
+    //
+    // Dentro de una fila que se desplaza no hace falta adivinar nada: los
+    // vecinos son los que cuelgan del MISMO scroll horizontal y están en el
+    // mismo renglón. Se busca el de al lado y se va ahí; y si no hay, no se
+    // invoca a nadie — no se mueve el foco NI la pantalla. Ese es el tope
+    // que se venía pidiendo.
+    if (horizontal && antes != null) {
+      final fila = _scrollHorizontalDe(antes.context);
+      if (fila != null) {
+        final aLaDerecha = intent.direction == TraversalDirection.right;
+        final vecino = _vecinoEnLaFila(antes, fila, aLaDerecha);
+        if (vecino != null) {
+          vecino.requestFocus();
+          return;
+        }
+        // No hay vecino en la fila. Hacia la DERECHA eso es el final: se
+        // consume la tecla y no pasa nada. Hacia la IZQUIERDA sí hay a
+        // dónde ir —el panel de categorías—, así que se deja seguir por el
+        // camino de siempre, que ya sabe distinguirlo (ver `cambioDeRegion`).
+        if (aLaDerecha) return;
+      }
+    }
     // ── Que Flutter no mueva el eje que nadie tocó ──────────────────────
     //
     // `super.invoke` termina llamando a la política de foco de Flutter, y
@@ -424,6 +458,49 @@ class FocoConTopes extends DirectionalFocusAction {
       if (antes.context == null || !antes.canRequestFocus) return;
       antes.requestFocus();
     });
+  }
+
+  /// La tarjeta de al lado DENTRO de la misma fila, o null si no hay.
+  ///
+  /// «De al lado» sin adivinar nada: cuelga del MISMO scroll horizontal
+  /// ([fila]), está en el mismo renglón, y su borde queda del lado hacia el
+  /// que se apretó. Entre las que cumplen, la más cercana.
+  ///
+  /// Las que la lista construyó por adelantado (fuera de la vista pero ya
+  /// medidas) cuentan igual: son las que siguen, y llegar a ellas es
+  /// justamente recorrer la fila.
+  static FocusNode? _vecinoEnLaFila(
+    FocusNode antes,
+    ScrollPosition fila,
+    bool aLaDerecha,
+  ) {
+    final origen = _rectDe(antes);
+    if (origen == null) return null;
+    final ambito = antes.enclosingScope;
+    if (ambito == null) return null;
+    FocusNode? mejor;
+    double? mejorDistancia;
+    for (final nodo in ambito.traversalDescendants) {
+      if (identical(nodo, antes)) continue;
+      if (!nodo.canRequestFocus || nodo.skipTraversal) continue;
+      final ctx = nodo.context;
+      if (ctx == null || !ctx.mounted) continue;
+      final suFila = _scrollHorizontalDe(ctx);
+      if (suFila == null || !identical(suFila, fila)) continue;
+      final caja = _rectDe(nodo);
+      if (caja == null) continue;
+      if (!_mismoRenglon(origen, caja)) continue;
+      final distancia =
+          aLaDerecha ? caja.left - origen.left : origen.left - caja.left;
+      // Cero o negativo: está del otro lado, o encima. No es hacia donde se
+      // apretó.
+      if (distancia <= 0) continue;
+      if (mejorDistancia == null || distancia < mejorDistancia) {
+        mejorDistancia = distancia;
+        mejor = nodo;
+      }
+    }
+    return mejor;
   }
 
   /// ¿El salto cruzó de una región a otra?
