@@ -20,7 +20,7 @@ import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/zonas_preferidas.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
-import 'package:prismhub/views/pages/library_page.dart';
+import 'package:prismhub/views/pages/library_page_tv.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/pages/home/ultimas_actualizaciones_mangadex_page.dart';

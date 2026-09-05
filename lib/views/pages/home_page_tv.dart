@@ -487,7 +487,7 @@ class _HomeTVState extends State<HomeTV> {
                                               ZonaEnCreacion(
                                                   titulo: e.etiqueta()),
                                             _CategoriaTV.biblioteca =>
-                                              const LibraryPage(),
+                                              const LibraryPageTv(),
                                             final e when e.zona != null =>
                                               _ZonaTv(zona: e.zona!),
                                             _ => _ContenidoTV(c: widget.c),
