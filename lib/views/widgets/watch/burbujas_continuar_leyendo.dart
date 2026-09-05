@@ -305,15 +305,37 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
                       onTap: () => _correr(-1),
                     ),
                   Expanded(
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      controller: _scroll,
-                      itemCount: widget.otras.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 10),
-                      itemBuilder: (context, i) => _Burbuja(
-                        historia: widget.otras[i],
-                        diametro: widget.diametro,
-                        onTap: () => widget.onTocar(widget.otras[i]),
+                    // Desvanecido en los dos bordes — mismo recurso que ya
+                    // usan las demás filas horizontales de la app para la
+                    // burbuja que asoma a medias: sin esto se corta en
+                    // seco contra el borde de su propia caja, que se lee
+                    // como un error de dibujo y no como "hay más para
+                    // este lado".
+                    child: ShaderMask(
+                      shaderCallback: (rect) => const LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Colors.transparent,
+                          Colors.white,
+                          Colors.white,
+                          Colors.transparent,
+                        ],
+                        stops: [0, 0.06, 0.94, 1],
+                      ).createShader(rect),
+                      blendMode: BlendMode.dstIn,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        controller: _scroll,
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        itemCount: widget.otras.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(width: 10),
+                        itemBuilder: (context, i) => _Burbuja(
+                          historia: widget.otras[i],
+                          diametro: widget.diametro,
+                          onTap: () => widget.onTocar(widget.otras[i]),
+                        ),
                       ),
                     ),
                   ),
@@ -552,49 +574,58 @@ class _BurbujaExpandida extends StatelessWidget {
         // tiene su propio marco/sombra), pero no esconde nada detrás.
         color: Colors.black.withValues(alpha: 0.12),
         alignment: Alignment.center,
-        // FittedBox como red de seguridad: si el espacio disponible es más
-        // chico de lo que este contenido pide (una ventana baja, una
-        // fuente del sistema agrandada), esto lo achica entero en vez de
-        // cortarlo — la garantía real de "que no se corte nada", en vez de
-        // calcular a mano cuánto entra en cada tamaño de pantalla posible.
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: diametro, end: diametro * 2.6),
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            builder: (context, tam, child) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onConfirmar,
-              child: Padding(
-                // Aire alrededor para que el FittedBox no pegue el círculo
-                // contra el borde de la pantalla al achicar.
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _CirculoDePortada(historia: historia, diametro: tam),
-                    const SizedBox(height: 12),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 260),
-                      child: Text(
-                        historia.title,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          shadows: [
-                            Shadow(blurRadius: 6, color: Colors.black),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+        // ── Por qué NO hay un FittedBox envolviendo todo esto ────────────
+        //
+        // La versión anterior metía el círculo Y el título adentro de un
+        // solo FittedBox "por las dudas". Eso fue lo que en realidad
+        // causaba la raya amarilla: FittedBox mide a su hijo con anchura
+        // NO acotada antes de achicarlo, y en esa medición un
+        // ConstrainedBox(maxWidth) adentro de un TweenAnimationBuilder que
+        // todavía no terminó de crecer podía pedir un ancho mayor al que
+        // el propio remedio (achicar) llegaba a corregir a tiempo — el
+        // resultado era overflow real, el aviso de Flutter, justo lo que
+        // se estaba tratando de evitar.
+        //
+        // Ahora cada parte tiene su propio límite, sin intermediarios: el
+        // círculo crece con la animación (nunca más de 2.6x, un número
+        // chico y fijo), y el título vive en un SizedBox de ancho FIJO con
+        // su propio `overflow: ellipsis` — la forma de toda la vida de
+        // Flutter para "que nunca se corte mal", sin nada más pidiendo
+        // reinterpretar el tamaño por arriba.
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onConfirmar,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: diametro, end: diametro * 2.6),
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, tam, child) =>
+                      _CirculoDePortada(historia: historia, diametro: tam),
                 ),
-              ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: 220,
+                  child: Text(
+                    historia.title,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(blurRadius: 6, color: Colors.black),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
