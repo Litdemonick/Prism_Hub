@@ -46,6 +46,7 @@ class _ControlPanelHeaderState<T extends ReaderController>
     if (destino < 0 || destino >= _c.playList.length) return;
     _c.index.value = destino;
   }
+
   final fluent.FlyoutController _playListFlayoutcontroller =
       fluent.FlyoutController();
   final fluent.FlyoutController _settingFlayoutcontroller =
@@ -76,8 +77,32 @@ class _ControlPanelHeaderState<T extends ReaderController>
       // ExtensionItemCard._buildAndroid). Usar router.push también en
       // Android empujaba una ruta que nada mostraba: confirmado en vivo,
       // "Ver detalle" no hacía nada ahí aunque en PC sí funcionaba.
+      //
+      // ── Por qué NO se le pasa el `context` de este widget ───────────────
+      //
+      // Este `context` es el del ENCABEZADO DEL LECTOR, y arriba se acaba de
+      // cerrar ese lector. Para cuando corre este callback, ese widget puede
+      // estar ya desmontado — y `openExtensionDetail` arranca con un
+      // `if (!context.mounted) return;`, así que en ese caso se cancelaba
+      // sola, EN SILENCIO: el lector se cerraba, la ficha nunca se abría, y
+      // quien tocó "Ver detalle" quedaba mirando lo que hubiera debajo (la
+      // Biblioteca, el Inicio). Reportado en vivo: "me manda a biblioteca en
+      // vez de a los detalles".
+      //
+      // Era una carrera, por eso a veces funcionaba: la animación de cierre
+      // tarda, y un solo frame de espera muchas veces alcanzaba para que el
+      // widget siguiera montado. Pero `openExtensionDetail` además hace un
+      // `await` (consulta si la extensión tiene una actualización pendiente)
+      // ANTES de comprobar `mounted`, así que cualquier demora ahí la perdía.
+      // Y saltando de una obra a otra desde una burbuja la ruta vieja se saca
+      // de una, sin animación: ahí la perdía siempre.
+      //
+      // `currentContext` (router.dart) es un getter vivo que devuelve el
+      // contexto de navegación de ESTE momento, por plataforma (el de GetX en
+      // Android, el del shell en escritorio) — no depende de que el lector
+      // que se acaba de cerrar siga en pie.
       ExtensionUtils.openExtensionDetail(
-        context,
+        currentContext,
         package: package,
         url: url,
       );
@@ -147,6 +172,23 @@ class _ControlPanelHeaderState<T extends ReaderController>
                       // completa, y se notaba.
                       backgroundColor: HomeTheme.cardSurface,
                       showDragHandle: true,
+                      // ── Que se pueda subir hasta arriba ────────────────
+                      //
+                      // Sin `isScrollControlled`, Flutter le pone a la hoja
+                      // un techo de 9/16 de la pantalla (56%) y NO se puede
+                      // arrastrar más allá. En vertical eso alcanzaba justo,
+                      // pero en horizontal son unos 200 puntos de alto: la
+                      // lista de opciones quedaba cortada y no había forma
+                      // de llegar a las de abajo. Reportado en vivo.
+                      //
+                      // Con esto la hoja puede crecer hasta donde haga
+                      // falta, y `useSafeArea` es el tope: se frena debajo
+                      // de la barra de estado en vez de meterse abajo de
+                      // ella. El contenido ya trae su propio scroll (ver
+                      // ComicReaderSettings / NovelReaderSettings), así que
+                      // si aun así no entra, se desplaza.
+                      isScrollControlled: true,
+                      useSafeArea: true,
                       constraints: const BoxConstraints(maxWidth: 640),
                       shape: const RoundedRectangleBorder(
                         borderRadius:
@@ -324,25 +366,51 @@ class _ControlPanelHeaderState<T extends ReaderController>
                       child: fluent.IconButton(
                         icon: const Icon(fluent.FluentIcons.collapse_menu),
                         onPressed: () {
-                          _playListFlayoutcontroller
-                              .showFlyout(builder: (context) {
+                          _playListFlayoutcontroller.showFlyout(
+                              builder: (context) {
                             // Con fondo propio, del modo. El flyout de Fluent es
                             // translúcido, así que sin esto la lista de capítulos
                             // quedaba flotando sobre la página de manga y se leía la
                             // una encima de la otra.
+                            // ── Con tope de alto ────────────────────────
+                            //
+                            // PlayList arma un Column con la lista adentro
+                            // de un Flexible, y este contenedor no le ponía
+                            // ningún límite de alto: con una obra de
+                            // muchos capítulos la lista se estiraba más
+                            // allá de la ventana y se pasaba de largo.
+                            // Reportado en vivo. Con el tope, la lista se
+                            // desplaza por dentro y la tarjeta queda
+                            // siempre entera y a la vista.
+                            //
+                            // Proporcional a la ventana, no un número
+                            // fijo: en una ventana chica 520 sería más
+                            // alto que la pantalla y volvería el mismo
+                            // problema. Se queda en el más chico de los
+                            // dos, y nunca baja de 240 para que con una
+                            // ventana muy baja siga siendo usable.
+                            final alto = MediaQuery.sizeOf(context).height;
+                            final tope = (alto * 0.7).clamp(240.0, 520.0);
                             return Container(
                               width: 300,
+                              constraints: BoxConstraints(maxHeight: tope),
                               decoration: BoxDecoration(
                                 color: HomeTheme.cardSurface,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(color: HomeTheme.border),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x66000000),
+                                    blurRadius: 18,
+                                    offset: Offset(0, 6),
+                                  ),
+                                ],
                               ),
                               clipBehavior: Clip.antiAlias,
                               child: Obx(
                                 () => PlayList(
                                   title: _c.title,
-                                  list:
-                                      _c.playList.map((e) => e.name).toList(),
+                                  list: _c.playList.map((e) => e.name).toList(),
                                   selectIndex: _c.index.value,
                                   onChange: (value) {
                                     _c.index.value = value;
@@ -401,8 +469,7 @@ class _ControlPanelHeaderState<T extends ReaderController>
                         child: fluent.Tooltip(
                           message: 'Capítulo siguiente',
                           child: fluent.IconButton(
-                            icon:
-                                const Icon(fluent.FluentIcons.next, size: 16),
+                            icon: const Icon(fluent.FluentIcons.next, size: 16),
                             onPressed:
                                 _haySiguiente ? () => _irACapitulo(1) : null,
                           ),

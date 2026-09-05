@@ -169,7 +169,7 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
                       onToggleColapsado: () => c.burbujasColapsadas.value =
                           !c.burbujasColapsadas.value,
                       onTocar: (h) => c.saltarABurbuja(context, h),
-                      onPreview: (h) => c.burbujaExpandida.value = h,
+                      onPreview: c.mostrarBurbujaExpandida,
                     ),
                     buildFooter != null
                         ? buildFooter!(context)

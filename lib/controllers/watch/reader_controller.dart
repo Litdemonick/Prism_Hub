@@ -262,8 +262,29 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
   /// burbuja debe ir al manga directamente"). Mantenerla presionada, en
   /// cambio, solo pone [burbujaExpandida] y no llama a esto: ese es el
   /// gesto para "ver antes de ir" que sigue existiendo aparte.
+  /// Muestra la vista agrandada de una burbuja (el gesto de mantenerla
+  /// presionada) y esconde el resto de la interfaz del lector.
+  ///
+  /// Lo de esconder es a pedido explícito: la vista agrandada se dibuja en
+  /// el medio de la pantalla, y con el encabezado, el panel de abajo y la
+  /// propia fila de burbujas todavía puestos alrededor, queda todo
+  /// encimado. Escondiéndolos, lo único que se ve es la portada grande y
+  /// el título sobre la página — que es justo lo que se está mirando para
+  /// decidir.
+  ///
+  /// La vista agrandada NO se va con ellos: `ReaderView` la dibuja fuera
+  /// del `if (isShowControlPanel)`, precisamente para que esto sea posible
+  /// (y para que el auto-ocultado de los 3s tampoco se la lleve puesta).
+  void mostrarBurbujaExpandida(History h) {
+    isShowControlPanel.value = false;
+    burbujaExpandida.value = h;
+  }
+
   Future<void> saltarABurbuja(BuildContext context, History h) async {
     if (saltandoABurbuja.value) return;
+    // Se está yendo a otra obra: la interfaz de ESTE lector no tiene por
+    // qué seguir puesta mientras arranca la apertura del otro.
+    isShowControlPanel.value = false;
     // Se saca ANTES del primer `await` — un `Navigator`/`ModalRoute` no
     // cambia de significado con el tiempo, y esperar a después arriesga
     // usar un `context` de un widget que ya se desmontó.

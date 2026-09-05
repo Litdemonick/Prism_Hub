@@ -269,62 +269,78 @@ class _FilaDeBurbujasState extends State<_FilaDeBurbujas> {
               // ahora puede ocupar el título (ver _Burbuja): 4 de separación
               // + 32 de texto + 6 de respiro.
               height: widget.diametro + 42,
-              child: Row(
-                children: [
-                  if (!widget.esAndroid)
-                    _FlechitaBurbujas(
-                      icono: Icons.chevron_left_rounded,
-                      onTap: () => _correr(-1),
-                    ),
-                  Expanded(
-                    // Un insinuado de que hay más para el lado, no un
-                    // desvanecido de verdad — reportado en vivo: "no le
-                    // pongas esa difuminación tan [fuerte] que ni se ve".
-                    // Nunca baja de la mitad de opacidad, y el tramo que se
-                    // atenúa es bien angosto (2% de cada lado).
-                    child: ShaderMask(
-                      shaderCallback: (rect) => LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.5),
-                          Colors.white,
-                          Colors.white,
-                          Colors.white.withValues(alpha: 0.5),
-                        ],
-                        stops: const [0, 0.02, 0.98, 1],
-                      ).createShader(rect),
-                      blendMode: BlendMode.dstIn,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        controller: _scroll,
-                        // El contador de página vive pegado a la esquina
-                        // inferior izquierda de la PANTALLA — un padding
-                        // más grande solo del lado izquierdo, acá adentro
-                        // del scroll, deja la primera burbuja sin taparlo
-                        // sin angostar la fila entera (que va de punta a
-                        // punta, ver el comentario del Padding de afuera).
-                        padding: EdgeInsets.only(
-                          left: widget.esAndroid ? 90 : 66,
-                          right: 12,
-                        ),
-                        itemCount: widget.otras.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                        itemBuilder: (context, i) => _Burbuja(
-                          historia: widget.otras[i],
-                          diametro: widget.diametro,
-                          onTap: () => widget.onTocar(widget.otras[i]),
-                          onLongPress: () => widget.onPreview(widget.otras[i]),
+              child: Padding(
+                // En PC la barra de scroll del lector vive pegada a un
+                // costado, a lo alto de toda la pantalla (16 de ancho + 6
+                // de franja de agarre, ver _cascadeScrollbarWidth en
+                // comic_reader_content.dart). Sin este margen la flechita
+                // de correr la fila quedaba justo ENCIMA de esa barra —
+                // reportado en vivo con foto. 26 la deja limpia de los dos
+                // lados, sin importar de qué lado esté la barra (se muda
+                // según la alineación de la tira). En Android no hay barra
+                // ni flechitas: cero margen, la fila va de punta a punta.
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.esAndroid ? 0 : 26,
+                ),
+                child: Row(
+                  children: [
+                    if (!widget.esAndroid)
+                      _FlechitaBurbujas(
+                        icono: Icons.chevron_left_rounded,
+                        onTap: () => _correr(-1),
+                      ),
+                    Expanded(
+                      // Un insinuado de que hay más para el lado, no un
+                      // desvanecido de verdad — reportado en vivo: "no le
+                      // pongas esa difuminación tan [fuerte] que ni se ve".
+                      // Nunca baja de la mitad de opacidad, y el tramo que se
+                      // atenúa es bien angosto (2% de cada lado).
+                      child: ShaderMask(
+                        shaderCallback: (rect) => LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.5),
+                            Colors.white,
+                            Colors.white,
+                            Colors.white.withValues(alpha: 0.5),
+                          ],
+                          stops: const [0, 0.02, 0.98, 1],
+                        ).createShader(rect),
+                        blendMode: BlendMode.dstIn,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          controller: _scroll,
+                          // El contador de página vive pegado a la esquina
+                          // inferior izquierda de la PANTALLA — un padding
+                          // más grande solo del lado izquierdo, acá adentro
+                          // del scroll, deja la primera burbuja sin taparlo
+                          // sin angostar la fila entera (que va de punta a
+                          // punta, ver el comentario del Padding de afuera).
+                          padding: EdgeInsets.only(
+                            left: widget.esAndroid ? 90 : 66,
+                            right: 12,
+                          ),
+                          itemCount: widget.otras.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 12),
+                          itemBuilder: (context, i) => _Burbuja(
+                            historia: widget.otras[i],
+                            diametro: widget.diametro,
+                            onTap: () => widget.onTocar(widget.otras[i]),
+                            onLongPress: () =>
+                                widget.onPreview(widget.otras[i]),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  if (!widget.esAndroid)
-                    _FlechitaBurbujas(
-                      icono: Icons.chevron_right_rounded,
-                      onTap: () => _correr(1),
-                    ),
-                ],
+                    if (!widget.esAndroid)
+                      _FlechitaBurbujas(
+                        icono: Icons.chevron_right_rounded,
+                        onTap: () => _correr(1),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -350,13 +366,26 @@ class _FlechitaBurbujas extends StatelessWidget {
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: Container(
-          width: 28,
-          height: 28,
+          width: 30,
+          height: 30,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           alignment: Alignment.center,
+          // Fondo SÓLIDO y con borde, no un negro semitransparente: sobre
+          // el fondo oscuro del lector esto era negro sobre negro y no se
+          // veía dónde había que hacer clic (reportado en vivo con foto).
+          // Con la superficie de tarjeta de la app y su borde se distingue
+          // igual de bien contra el lector oscuro que contra una página de
+          // manga blanca.
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.black.withValues(alpha: 0.45),
+            color: HomeTheme.cardSurface,
+            border: Border.all(color: HomeTheme.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 4,
+              ),
+            ],
           ),
           child: Icon(icono, size: 18, color: Colors.white),
         ),
@@ -379,12 +408,24 @@ class _BotonColapsar extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          width: 32,
-          height: 20,
+          width: 38,
+          height: 24,
           alignment: Alignment.center,
+          // Sólido y con borde, igual que las flechitas de correr la fila:
+          // el negro semitransparente de antes desaparecía contra el fondo
+          // oscuro del lector — reportado en vivo, "se pierde en el fondo
+          // negro". Así se distingue contra el lector oscuro y también
+          // contra una página de manga blanca.
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.45),
+            color: HomeTheme.cardSurface,
+            border: Border.all(color: HomeTheme.border),
             borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 4,
+              ),
+            ],
           ),
           child: AnimatedRotation(
             turns: colapsado ? 0.5 : 0,
