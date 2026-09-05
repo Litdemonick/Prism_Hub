@@ -101,7 +101,7 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
               ),
             ),
 
-          if (c.isShowControlPanel.value) ...[
+          if (c.isShowControlPanel.value)
             // 顶部控制
             Positioned(
               child: ControlPanelHeader<T>(
@@ -109,26 +109,53 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
                 buildSettings: buildSettings,
               ),
             ),
-            // 底部控制
-            //
-            // Las burbujas van ARRIBA del footer, las dos dentro del MISMO
-            // Positioned/Column — puestas cada una en su propio Positioned
-            // pegado a bottom:0 se dibujan una ENCIMA de la otra, ya que
-            // ninguna sabe cuánto mide la de al lado. En una Column, la
-            // fila de burbujas (que puede no mostrar nada, ver
-            // BurbujasContinuarLeyendo) empuja al footer hacia arriba solo
-            // cuando de verdad ocupa espacio.
-            //
-            // `_MedidorDeAltura` mide el alto REAL que termina ocupando
-            // toda esta franja y lo guarda en `c.alturaPanelInferior` — lo
-            // usa `_PieDeCapituloCascada` (comic_reader_content.dart) para
-            // no tapar sus propios botones con esto, sin depender de un
-            // número adivinado a mano (ver el comentario largo en
-            // ReaderController.alturaPanelInferior).
-            Positioned(
-              right: 0,
-              left: 0,
-              bottom: 0,
+          // 底部控制
+          //
+          // Las burbujas van ARRIBA del footer, las dos dentro del MISMO
+          // Positioned/Column — puestas cada una en su propio Positioned
+          // pegado a bottom:0 se dibujan una ENCIMA de la otra, ya que
+          // ninguna sabe cuánto mide la de al lado. En una Column, la fila
+          // de burbujas (que puede no mostrar nada, ver
+          // BurbujasContinuarLeyendo) empuja al footer hacia arriba solo
+          // cuando de verdad ocupa espacio.
+          //
+          // `_MedidorDeAltura` mide el alto REAL que termina ocupando toda
+          // esta franja y lo guarda en `c.alturaPanelInferior` — lo usa
+          // `_PieDeCapituloCascada` (comic_reader_content.dart) para no
+          // tapar sus propios botones con esto, sin depender de un número
+          // adivinado a mano (ver el comentario largo en
+          // ReaderController.alturaPanelInferior).
+          //
+          // ── Por qué `Visibility(maintainState: true)` y no un `if` ──────
+          //
+          // Antes esto entraba y salía del árbol entero con el resto del
+          // panel (adentro del mismo `if (c.isShowControlPanel.value)`) —
+          // y el panel se oculta seguido sin que el usuario lo pida: cada
+          // vez que arranca un scroll en Android (ver el
+          // ScrollStartNotification de comic_reader_content.dart) o pasa
+          // el mouse cerca del borde en escritorio. Cada ocultar/mostrar
+          // DESMONTABA `BurbujasContinuarLeyendo` entera y la volvía a
+          // montar de cero — lo que de paso tiraba el `ImageStream` de
+          // cada portada ya cargada, obligándola a resolverse otra vez.
+          // Con el caché global de imágenes bajo presión de páginas de
+          // manga a resolución completa (ver AlivioDeMemoria), esa
+          // portada bien podía haber sido desalojada mientras tanto —
+          // recarga real, no solo un parpadeo. Reportado en vivo:
+          // "la burbuja... comienza a cargar... como que la refresca".
+          //
+          // `Visibility(maintainState: true)` mantiene el widget (y su
+          // `State`, y el `ImageStream` que sostiene) vivo todo el tiempo;
+          // solo deja de pintarse y de recibir toques mientras el panel
+          // está oculto. La portada nunca se resuelve dos veces.
+          Positioned(
+            right: 0,
+            left: 0,
+            bottom: 0,
+            child: Visibility(
+              visible: c.isShowControlPanel.value,
+              maintainState: true,
+              maintainAnimation: true,
+              maintainSize: false,
               child: _MedidorDeAltura(
                 onAltura: (alto) => c.alturaPanelInferior.value = alto,
                 child: Column(
@@ -151,7 +178,7 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
                 ),
               ),
             ),
-          ],
+          ),
 
           // La vista agrandada de una burbuja (mantener presionado) vive
           // FUERA del `if` de arriba a propósito: si el panel de controles
