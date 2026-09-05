@@ -173,8 +173,7 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
                       urlActual: c.detailUrl,
                       isNsfw: c.isNsfw,
                       colapsado: c.burbujasColapsadas.value,
-                      onToggleColapsado: () => c.burbujasColapsadas.value =
-                          !c.burbujasColapsadas.value,
+                      onToggleColapsado: c.alternarBurbujasColapsadas,
                       onTocar: (h) => c.saltarABurbuja(context, h),
                       onPreview: c.mostrarBurbujaExpandida,
                     ),

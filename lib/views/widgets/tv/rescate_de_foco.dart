@@ -54,6 +54,40 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
   /// `RescateDeFoco` está montado una sola vez, arriba de todo.
   static Axis? _ultimoEje;
 
+  /// Cuándo se apretó esa flecha.
+  ///
+  /// ── Por qué hace falta, y no alcanza con consumirlo una vez ──────────
+  ///
+  /// Antes el eje se leía y se ponía en null en el PRIMER cambio de foco
+  /// posterior. El problema es que una sola pulsación puede provocar VARIOS
+  /// cambios de foco: `FocoConTopes` deshace los movimientos que no
+  /// corresponden devolviendo el foco a donde estaba, y eso es un segundo
+  /// cambio. Ese segundo llegaba con el eje ya consumido —o sea en null—,
+  /// que es el caso de «lo puso el código, acomodá los dos ejes»: la lista
+  /// vertical se acomodaba al 35% aunque el usuario hubiera apretado
+  /// derecha, o rebotaba estando quieto. Reportado en vivo: «al bajar me
+  /// sube arriba, se pierde el foco».
+  ///
+  /// Con la marca de tiempo, el eje vale para TODOS los cambios de foco que
+  /// dispare esa misma pulsación, y deja de valer solo, sin que nadie tenga
+  /// que acordarse de limpiarlo.
+  static DateTime? _cuandoSeApreto;
+
+  /// Cuánto sigue valiendo la dirección de la última flecha. Alcanza de
+  /// sobra para los cambios de foco encadenados de una misma pulsación
+  /// (todos pasan en el mismo cuadro o el siguiente) y es mucho menos que
+  /// lo que tarda cualquier persona en pasar de navegar con el mando a que
+  /// el foco lo mueva el código por entrar a otra pantalla.
+  static const _validezDelEje = Duration(milliseconds: 400);
+
+  /// El eje de la última flecha, si todavía cuenta como «este movimiento».
+  static Axis? get _ejeVigente {
+    final cuando = _cuandoSeApreto;
+    if (cuando == null) return null;
+    if (DateTime.now().difference(cuando) > _validezDelEje) return null;
+    return _ultimoEje;
+  }
+
   static Axis? _ejeDe(LogicalKeyboardKey tecla) {
     if (tecla == LogicalKeyboardKey.arrowUp ||
         tecla == LogicalKeyboardKey.arrowDown) {
@@ -120,14 +154,11 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
       // ¿Y por qué no centrado? Porque centrar mueve la lista en CADA paso,
       // incluso sobre algo que ya se veía bien, y eso se siente como que la
       // pantalla se sacude sola.
-      // El eje se consume acá y se apaga: vale para ESTE movimiento del foco
-      // y nada más. Si no se limpiara, el próximo foco puesto por código
-      // —volver de una pantalla, un `autofocus`— heredaría la última flecha
-      // que alguien apretó hace rato y acomodaría un solo eje cuando lo que
-      // corresponde es acomodar los dos.
-      final eje = _ultimoEje;
-      _ultimoEje = null;
-      _traerALaVista(ctx, duracion, eje);
+      // El eje NO se consume acá: caduca solo (ver _ejeVigente). Una misma
+      // pulsación puede provocar varios cambios de foco —FocoConTopes
+      // deshace los que no corresponden— y todos son parte del MISMO
+      // movimiento, así que todos tienen que respetar la misma dirección.
+      _traerALaVista(ctx, duracion, _ejeVigente);
     });
   }
 
@@ -181,51 +212,37 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
         scroll = Scrollable.maybeOf(contexto);
         continue;
       }
-      if (posicion.axis == Axis.vertical) {
-        posicion.ensureVisible(
-          objetivo,
-          alignment: 0.35,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
-          duration: duracion,
-          curve: Curves.easeOut,
-        );
-      } else {
-        _acomodarDeCostado(posicion, objetivo, duracion);
-      }
+      _acomodar(posicion, objetivo, duracion);
       contexto = scroll.context;
       scroll = Scrollable.maybeOf(contexto);
     }
   }
 
-  /// Corre la fila de costado, dejando asomar la tarjeta que sigue.
+  /// Acomoda UN scroll —da igual el eje— con una sola regla: si lo enfocado
+  /// ya se ve entero, no se toca nada; si no, se mueve lo justo para que
+  /// entre, más un asomo de la vecina.
   ///
-  /// ── Por qué no alcanza con `ensureVisible` ──────────────────────────
+  /// ── Por qué el vertical dejó de ir «al 35%» ──────────────────────────
   ///
-  /// La política `keepVisibleAtEnd` hace lo que promete: mueve lo mínimo para
-  /// que la tarjeta entre entera. El problema es justamente ese mínimo — deja
-  /// la tarjeta enfocada PEGADA al filo derecho, con la siguiente entera
-  /// afuera. Desde el sillón eso se ve como que la fila se terminó ahí, y no
-  /// hay forma de saber que apretando derecha viene más.
+  /// Antes el eje vertical usaba `ensureVisible(alignment: 0.35)`, o sea
+  /// «poné lo enfocado a un tercio desde arriba». Eso mueve la lista SIEMPRE,
+  /// incluso cuando la tarjeta que se acaba de enfocar ya se veía perfecta —
+  /// y ese es exactamente el salto que se reportó en vivo: «quiero ir abajo y
+  /// se mueve hacia abajo automático», «al bajar me sube arriba», «debe ir
+  /// poco a poco cada card, no saltar».
   ///
-  /// Reportado en vivo: «al ir a la derecha, mostrando cards de una
-  /// extensión, que se muevan cuando está en la última y así se vea que hay
-  /// más».
+  /// La regla nueva es la que ya usaba el eje horizontal y funcionaba bien:
+  /// preguntarle al viewport los dos offsets límite —el que deja la tarjeta
+  /// tocando el filo de entrada y el que la deja tocando el de salida— para
+  /// distinguir tres casos. Si la posición actual cae ENTRE los dos, la
+  /// tarjeta se ve entera y no hay nada que hacer. Si se pasó de uno de los
+  /// dos lados, se mueve hasta ese filo y un poco más, para que la de al lado
+  /// asome y se note que la lista sigue.
   ///
-  /// Así que en vez de parar en el filo, se corre un poco de más: lo que
-  /// mide un tercio de tarjeta. La que sigue queda asomando, que es la señal
-  /// de «hay más de este lado» que usan todas las apps de televisor.
-  ///
-  /// ── Y por qué la cuenta se hace a mano ──────────────────────────────
-  ///
-  /// `ensureVisible` con `alignment` explícito sirve para poner algo en un
-  /// punto fijo, pero mueve SIEMPRE, incluso sobre una tarjeta que ya se veía
-  /// perfecta. Eso es el temblorcito que se reportó antes: «al seleccionar una
-  /// card se mueve un poquito, y al desmarcarla se reacomoda otra vez».
-  ///
-  /// Preguntándole al viewport los dos offsets límite se puede distinguir los
-  /// tres casos —se fue por la derecha, se fue por la izquierda, o ya se ve
-  /// entera— y en el tercero NO SE MUEVE NADA, que es la mitad del arreglo.
-  static void _acomodarDeCostado(
+  /// Con esto la cámara solo se mueve cuando de verdad hace falta —cuando lo
+  /// que se enfocó no entra en pantalla— y se mueve una tarjeta por vez, que
+  /// es lo que se pidió.
+  static void _acomodar(
     ScrollPosition posicion,
     RenderObject objetivo,
     Duration duracion,
@@ -242,32 +259,29 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
       );
       return;
     }
-    // Los dos extremos: cuánto habría que desplazar para que la tarjeta
-    // quede justo tocando el filo de salida (`alFinal`) o el de entrada
-    // (`alPrincipio`). Con la tarjeta más angosta que la fila —el caso
-    // normal— `alFinal` es el menor de los dos, y todo el rango entre ambos
-    // es «la tarjeta se ve entera».
     final alFinal = viewport.getOffsetToReveal(objetivo, 1).offset;
     final alPrincipio = viewport.getOffsetToReveal(objetivo, 0).offset;
     final actual = posicion.pixels;
-    // Lo que se deja asomar de la vecina. Sale del ancho de la propia
-    // tarjeta y no de un número fijo, así vale igual para un póster angosto
-    // de una zona que para una tarjeta ancha de Biblioteca.
-    final asomo = objetivo.paintBounds.width * 0.35;
+    // Lo que se deja asomar de la vecina. Sale del tamaño de la propia
+    // tarjeta en el eje que corresponde, no de un número fijo, así vale
+    // igual para un póster angosto que para una fila alta.
+    final caja = objetivo.paintBounds;
+    final asomo =
+        (posicion.axis == Axis.vertical ? caja.height : caja.width) * 0.35;
     final double destino;
     if (actual < alFinal) {
-      destino = alFinal + asomo; // se fue por la derecha
+      destino = alFinal + asomo; // quedó pasado el filo de salida
     } else if (actual > alPrincipio) {
-      destino = alPrincipio - asomo; // se fue por la izquierda
+      destino = alPrincipio - asomo; // quedó antes del filo de entrada
     } else {
-      return; // ya se ve entera: no se toca nada
+      return; // ya se ve entero: no se toca nada
     }
     final acotado =
         destino.clamp(posicion.minScrollExtent, posicion.maxScrollExtent);
-    // En los extremos de la fila el acotado puede dejar el destino donde ya
-    // estamos. Animar cero píxeles no se ve, pero igual arranca un
-    // `ScrollActivity` que cancela el desplazamiento en curso — y encadenando
-    // pulsaciones rápidas del mando eso sí se siente como un tirón.
+    // En los extremos, el acotado puede dejar el destino donde ya estamos.
+    // Animar cero píxeles no se ve, pero igual arranca un `ScrollActivity`
+    // que cancela el desplazamiento en curso — y encadenando pulsaciones
+    // rápidas del mando eso sí se siente como un tirón.
     if ((acotado - actual).abs() < 1) return;
     posicion.animateTo(acotado, duration: duracion, curve: Curves.easeOut);
   }
@@ -301,6 +315,7 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
     // ve TODAS las teclas antes que el árbol, así que la dirección queda
     // registrada aunque la flecha la termine atendiendo otro.
     _ultimoEje = _ejeDe(evento.logicalKey);
+    _cuandoSeApreto = _ultimoEje == null ? null : DateTime.now();
     if (_hayFocoUtil) return KeyEventResult.ignored;
 
     // ── Se rescata DESDE el ámbito que tiene el foco ──────────────────

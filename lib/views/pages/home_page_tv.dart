@@ -397,97 +397,105 @@ class _HomeTVState extends State<HomeTV> {
                 // una categoría no hace falta ver esas tarjetas.
                 return Stack(
                   children: [
-                    Padding(
-                      padding: EdgeInsets.only(
-                        left: margenParaElSidebar,
-                        right: _aireDerechoTv,
-                      ),
-                      // ── IndexedStack y no AnimatedSwitcher ────────────
-                      //
-                      // El switcher DESTRUYE la zona que se deja: al volver,
-                      // el scroll arrancaba de cero y el foco se perdía —
-                      // justo lo contrario de lo que uno espera al ir y
-                      // volver con el mando.
-                      //
-                      // Con IndexedStack las zonas se construyen una vez y
-                      // se quedan vivas (mismo criterio que ya usa la barra
-                      // de Android, ver main_page.dart): volver a una zona la
-                      // encuentra tal cual se dejó.
-                      //
-                      // La entrada se anima igual, sin perder ese estado: la
-                      // zona que se muestra aparece con un fundido y un
-                      // desplazamiento corto hacia arriba, atado al índice —
-                      // así cambiar de zona con el mando se siente como un
-                      // movimiento y no como un parpadeo, pero volver sigue
-                      // encontrando todo donde estaba.
-                      //
-                      // ── Y el fundido cuesta, así que se cuida ─────────
-                      //
-                      // Este `Opacity` envuelve el panel de contenido ENTERO
-                      // —el carrusel, los filtros y todas las filas—, y bajar
-                      // la intensidad de algo obliga a componerlo en una capa
-                      // aparte. Es el mismo patrón que ya se sacó de la barra
-                      // principal por costoso (ver main_page.dart).
-                      //
-                      // Acá se resuelve de dos maneras: con el
-                      // `RepaintBoundary` de más abajo, el contenido se pinta
-                      // UNA vez y el fundido solo compone esa capa ya lista;
-                      // y en un aparato modesto el fundido no se hace, que en
-                      // un televisor no se extraña —el cambio de zona pasa a
-                      // ser instantáneo, que tampoco está mal.
-                      child: _ZonaQueAparece(
-                        // La clave atada a la categoría es lo que hace que la
-                        // animación vuelva a empezar en cada cambio.
-                        key: ValueKey(_categoria),
-                        child: IndexedStack(
-                          index: _CategoriaTV.values.indexOf(_categoria),
-                          children: [
-                            for (final z in _CategoriaTV.values)
-                              // ── Y cada zona con su reloj apagado, y su foco cerrado ──
-                              //
-                              // `IndexedStack` esconde con `Offstage`, que NO
-                              // toca `TickerMode`: sin esto, las zonas que no
-                              // se ven siguen animando a 60 cuadros por
-                              // segundo. Es el mismo cuidado que ya tiene la
-                              // barra principal (ver main_page.dart), que acá
-                              // faltaba.
-                              //
-                              // Y tampoco toca el FOCO. `IndexedStack` no
-                              // pinta las zonas que no se muestran, pero las
-                              // sigue midiendo en el MISMO lugar que la que sí
-                              // se ve —ocupan la misma celda del Stack—. Sin
-                              // `ExcludeFocus`, una tarjeta de una zona
-                              // escondida es un candidato geométricamente
-                              // válido para el salto del mando: está "ahí
-                              // mismo", superpuesta con la que se ve.
-                              //
-                              // Reportado en vivo: moverse con el mando en una
-                              // zona y, de golpe, "empieza a cargar contenido
-                              // raro" — el foco se había ido a una tarjeta de
-                              // OTRA zona, invisible pero viva, y esa zona
-                              // arrancaba a pedir su catálogo al recibir el
-                              // foco por primera vez.
-                              ExcludeFocus(
-                                excluding: z != _categoria,
-                                child: TickerMode(
-                                  enabled: z == _categoria,
-                                  child: !_visitadas.contains(z)
-                                      // Todavía no se entró nunca: no hay nada
-                                      // que armar. Ver [_visitadas].
-                                      ? const SizedBox.shrink()
-                                      : switch (z) {
-                                          final e when e.enConstruccion =>
-                                            ZonaEnCreacion(
-                                                titulo: e.etiqueta()),
-                                          _CategoriaTV.biblioteca =>
-                                            const LibraryPage(),
-                                          final e when e.zona != null =>
-                                            _ZonaTv(zona: e.zona!),
-                                          _ => _ContenidoTV(c: widget.c),
-                                        },
+                    // Las dos capas quedan marcadas como regiones distintas
+                    // (ver RegionDeFocoTv): el mando puede recorrer cada una
+                    // por dentro con arriba/abajo sin escaparse a la otra, y
+                    // se cambia de una a otra solo yendo a los costados, que
+                    // es un movimiento deliberado.
+                    RegionDeFocoTv(
+                      nombre: RegionDeFocoTv.contenido,
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          left: margenParaElSidebar,
+                          right: _aireDerechoTv,
+                        ),
+                        // ── IndexedStack y no AnimatedSwitcher ────────────
+                        //
+                        // El switcher DESTRUYE la zona que se deja: al volver,
+                        // el scroll arrancaba de cero y el foco se perdía —
+                        // justo lo contrario de lo que uno espera al ir y
+                        // volver con el mando.
+                        //
+                        // Con IndexedStack las zonas se construyen una vez y
+                        // se quedan vivas (mismo criterio que ya usa la barra
+                        // de Android, ver main_page.dart): volver a una zona la
+                        // encuentra tal cual se dejó.
+                        //
+                        // La entrada se anima igual, sin perder ese estado: la
+                        // zona que se muestra aparece con un fundido y un
+                        // desplazamiento corto hacia arriba, atado al índice —
+                        // así cambiar de zona con el mando se siente como un
+                        // movimiento y no como un parpadeo, pero volver sigue
+                        // encontrando todo donde estaba.
+                        //
+                        // ── Y el fundido cuesta, así que se cuida ─────────
+                        //
+                        // Este `Opacity` envuelve el panel de contenido ENTERO
+                        // —el carrusel, los filtros y todas las filas—, y bajar
+                        // la intensidad de algo obliga a componerlo en una capa
+                        // aparte. Es el mismo patrón que ya se sacó de la barra
+                        // principal por costoso (ver main_page.dart).
+                        //
+                        // Acá se resuelve de dos maneras: con el
+                        // `RepaintBoundary` de más abajo, el contenido se pinta
+                        // UNA vez y el fundido solo compone esa capa ya lista;
+                        // y en un aparato modesto el fundido no se hace, que en
+                        // un televisor no se extraña —el cambio de zona pasa a
+                        // ser instantáneo, que tampoco está mal.
+                        child: _ZonaQueAparece(
+                          // La clave atada a la categoría es lo que hace que
+                          // la animación vuelva a empezar en cada cambio.
+                          key: ValueKey(_categoria),
+                          child: IndexedStack(
+                            index: _CategoriaTV.values.indexOf(_categoria),
+                            children: [
+                              for (final z in _CategoriaTV.values)
+                                // ── Y cada zona con su reloj apagado, y su foco cerrado ──
+                                //
+                                // `IndexedStack` esconde con `Offstage`, que NO
+                                // toca `TickerMode`: sin esto, las zonas que no
+                                // se ven siguen animando a 60 cuadros por
+                                // segundo. Es el mismo cuidado que ya tiene la
+                                // barra principal (ver main_page.dart), que acá
+                                // faltaba.
+                                //
+                                // Y tampoco toca el FOCO. `IndexedStack` no
+                                // pinta las zonas que no se muestran, pero las
+                                // sigue midiendo en el MISMO lugar que la que sí
+                                // se ve —ocupan la misma celda del Stack—. Sin
+                                // `ExcludeFocus`, una tarjeta de una zona
+                                // escondida es un candidato geométricamente
+                                // válido para el salto del mando: está "ahí
+                                // mismo", superpuesta con la que se ve.
+                                //
+                                // Reportado en vivo: moverse con el mando en una
+                                // zona y, de golpe, "empieza a cargar contenido
+                                // raro" — el foco se había ido a una tarjeta de
+                                // OTRA zona, invisible pero viva, y esa zona
+                                // arrancaba a pedir su catálogo al recibir el
+                                // foco por primera vez.
+                                ExcludeFocus(
+                                  excluding: z != _categoria,
+                                  child: TickerMode(
+                                    enabled: z == _categoria,
+                                    child: !_visitadas.contains(z)
+                                        // Todavía no se entró nunca: no hay nada
+                                        // que armar. Ver [_visitadas].
+                                        ? const SizedBox.shrink()
+                                        : switch (z) {
+                                            final e when e.enConstruccion =>
+                                              ZonaEnCreacion(
+                                                  titulo: e.etiqueta()),
+                                            _CategoriaTV.biblioteca =>
+                                              const LibraryPage(),
+                                            final e when e.zona != null =>
+                                              _ZonaTv(zona: e.zona!),
+                                            _ => _ContenidoTV(c: widget.c),
+                                          },
+                                  ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -499,11 +507,14 @@ class _HomeTVState extends State<HomeTV> {
                       left: 0,
                       top: 0,
                       bottom: 0,
-                      child: _SidebarTV(
-                        c: widget.c,
-                        primerFoco: _primerFoco,
-                        elegida: _categoria,
-                        onElegir: _elegir,
+                      child: RegionDeFocoTv(
+                        nombre: RegionDeFocoTv.rail,
+                        child: _SidebarTV(
+                          c: widget.c,
+                          primerFoco: _primerFoco,
+                          elegida: _categoria,
+                          onElegir: _elegir,
+                        ),
                       ),
                     ),
                   ],

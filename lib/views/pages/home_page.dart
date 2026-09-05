@@ -34,6 +34,7 @@ import 'package:prismhub/views/widgets/home/refresh_button.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/views/widgets/tv/recorte_de_fila.dart';
+import 'package:prismhub/views/widgets/tv/region_de_foco.dart';
 import 'package:prismhub/views/widgets/home/zona_sin_clasificar.dart';
 import 'package:prismhub/views/widgets/zona_en_creacion.dart';
 

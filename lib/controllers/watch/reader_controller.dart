@@ -13,6 +13,7 @@ import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/utils/watch_state.dart';
 
@@ -74,14 +75,24 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
   ///
   /// Vive acá y no como estado propio de `BurbujasContinuarLeyendo` porque
   /// ese widget se desmonta y se vuelve a montar cada vez que
-  /// `isShowControlPanel` cambia (`ReaderView` lo dibuja adentro de un
-  /// `if`, no con opacidad) — un `State` ahí se reinicia en cada ciclo de
-  /// ocultar/mostrar. El controller, en cambio, vive toda la sesión de
-  /// lectura: colapsarla una vez la deja colapsada hasta que se abra de
-  /// nuevo a mano, sin importar cuántas veces se oculte y muestre el resto
-  /// de la interfaz. Reportado en vivo: "la flechita de ocultar... no debe
-  /// otra vez salir la burbuja, debe estar oculta hasta que le dé otra vez".
-  final burbujasColapsadas = false.obs;
+  /// `isShowControlPanel` cambia — un `State` ahí se reinicia en cada ciclo
+  /// de ocultar/mostrar.
+  ///
+  /// Y arranca leyendo el ajuste guardado, no en false: el controller vive
+  /// UNA sesión de lectura, así que cambiar de capítulo, saltar a otra obra
+  /// con una burbuja o salir del lector y volver armaba uno nuevo y la fila
+  /// reaparecía desplegada aunque se la hubiera ocultado. Reportado en
+  /// vivo, dos veces. Ver `guardarBurbujasColapsadas`, que es quien escribe.
+  late final burbujasColapsadas =
+      (PrismHubStorage.getSetting(SettingKey.burbujasColapsadas) == true).obs;
+
+  /// Colapsa o despliega la fila de burbujas, y lo deja guardado para las
+  /// próximas veces que se abra un lector.
+  void alternarBurbujasColapsadas() {
+    final valor = !burbujasColapsadas.value;
+    burbujasColapsadas.value = valor;
+    PrismHubStorage.setSetting(SettingKey.burbujasColapsadas, valor);
+  }
 
   /// Cuál burbuja de "Continuar leyendo" está en su vista agrandada — null
   /// si ninguna.

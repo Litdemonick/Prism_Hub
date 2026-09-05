@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:prismhub/views/widgets/tv/region_de_foco.dart';
 
 /// Hace que las flechas del mando signifiquen lo que dicen.
 ///
@@ -69,7 +70,30 @@ class FocoConTopes extends DirectionalFocusAction {
     }
     final antes = primaryFocus;
     final desde = _rectDe(antes);
+    // ── Que Flutter no mueva el eje que nadie tocó ──────────────────────
+    //
+    // `super.invoke` termina llamando a la política de foco de Flutter, y
+    // esa, además de mover el foco, hace `Scrollable.ensureVisible` sobre
+    // el destino — que RECORRE TODOS los scrolls ancestros, sin mirar en
+    // qué dirección se movió el usuario. O sea que yendo a la DERECHA
+    // dentro de una fila, la lista VERTICAL que la contiene también recibe
+    // su acomodada y baja sola.
+    //
+    // Esto es de fábrica y pasa ANTES de que la app pueda opinar: por eso
+    // no alcanzaba con que `RescateDeFoco` acomodara un solo eje (ver el
+    // comentario largo allá) — el desplazamiento indeseado ya había
+    // ocurrido para cuando ese código corría. Reportado en vivo, varias
+    // veces: «al ir a la derecha baja automático».
+    //
+    // Se anotan los scrolls del OTRO eje antes de mover y se los devuelve
+    // a donde estaban después. Como el `ensureVisible` de la política es
+    // instantáneo (sin animación) y `super.invoke` es síncrono, para
+    // cuando se restaura no llegó a dibujarse ni un cuadro: desde afuera,
+    // ese eje sencillamente no se movió.
+    final ejeDelMovimiento = horizontal ? Axis.horizontal : Axis.vertical;
+    final aRestaurar = _scrollsDelOtroEje(antes?.context, ejeDelMovimiento);
     super.invoke(intent);
+    _restaurar(aRestaurar);
     final despues = primaryFocus;
     if (antes == null || despues == null || identical(antes, despues)) return;
     final hasta = _rectDe(despues);
@@ -130,10 +154,26 @@ class FocoConTopes extends DirectionalFocusAction {
     // reincidente: «al llegar al final de la fila y seguir con la derecha,
     // sigue bajando a las cards de abajo». Hace falta ADEMÁS confirmar que
     // el destino sigue en el mismo renglón — ver `_mismoRenglon`.
+    // ── Arriba y abajo NO cambian de región ─────────────────────────────
+    //
+    // La pantalla del televisor tiene dos zonas que se recorren por dentro:
+    // la columna de categorías y el contenido (ver RegionDeFocoTv). Un
+    // movimiento vertical se queda en la suya; se cambia de una a otra solo
+    // yendo a los costados, que es un gesto deliberado.
+    //
+    // Sin esto pasaban las dos cosas que se reportaron en vivo: estando en
+    // el panel izquierdo, bajar se escapaba al contenido; y estando en una
+    // zona, bajar terminaba metido en el panel. `_escapoALaIzquierda` ya
+    // cubría el segundo caso a ojo, midiendo si el destino caía en la franja
+    // pegada al borde — pero eso solo acierta con el panel CONTRAÍDO, y el
+    // panel se expande justo cuando uno está adentro. Se conserva como
+    // respaldo para las pantallas que todavía no marcan sus regiones.
+    final cambioDeRegion = _cambioDeRegion(antes.context, despues.context);
     final seFue = !seMovioComoDebia ||
         (horizontal
             ? (!_mismoRenglon(desde, hasta) || !_mismaFranja(desde, hasta))
-            : _escapoALaIzquierda(desde, hasta, despues.context));
+            : (cambioDeRegion ??
+                _escapoALaIzquierda(desde, hasta, despues.context)));
     if (!seFue) return;
     // Se fue de fila (u ocurrió el escape a la columna de categorías): se lo
     // devuelve donde estaba.
@@ -143,6 +183,50 @@ class FocoConTopes extends DirectionalFocusAction {
     // el foco intermedio no llega a dibujarse: desde afuera, la flecha
     // simplemente no hizo nada.
     antes.requestFocus();
+  }
+
+  /// ¿El salto cruzó de una región a otra?
+  ///
+  /// `null` cuando no se puede saber —alguno de los dos lados no está debajo
+  /// de ninguna `RegionDeFocoTv`, que es el caso de las pantallas que
+  /// todavía no las marcan—: ahí quien pregunta decide con lo que tenga.
+  static bool? _cambioDeRegion(BuildContext? antes, BuildContext? despues) {
+    final origen = RegionDeFocoTv.de(antes);
+    final destino = RegionDeFocoTv.de(despues);
+    if (origen == null || destino == null) return null;
+    return origen != destino;
+  }
+
+  /// Los scrolls ancestros que NO son del eje en el que se movió el usuario,
+  /// con la posición en la que están ahora mismo.
+  static List<(ScrollPosition, double)> _scrollsDelOtroEje(
+    BuildContext? ctx,
+    Axis ejeDelMovimiento,
+  ) {
+    final resultado = <(ScrollPosition, double)>[];
+    if (ctx == null || !ctx.mounted) return resultado;
+    var contexto = ctx;
+    var scroll = Scrollable.maybeOf(contexto);
+    while (scroll != null) {
+      final posicion = scroll.position;
+      if (posicion.axis != ejeDelMovimiento && posicion.hasPixels) {
+        resultado.add((posicion, posicion.pixels));
+      }
+      contexto = scroll.context;
+      scroll = Scrollable.maybeOf(contexto);
+    }
+    return resultado;
+  }
+
+  /// Devuelve cada scroll a donde estaba, si algo lo movió.
+  static void _restaurar(List<(ScrollPosition, double)> guardados) {
+    for (final (posicion, pixeles) in guardados) {
+      if (!posicion.hasPixels) continue;
+      // Menos de un píxel no es un movimiento: saltar igual solo cortaría
+      // un desplazamiento en curso por nada.
+      if ((posicion.pixels - pixeles).abs() < 1) continue;
+      posicion.jumpTo(pixeles);
+    }
   }
 
   static Rect? _rectDe(FocusNode? nodo) {

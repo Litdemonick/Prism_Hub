@@ -326,6 +326,7 @@ class PrismHubStorage {
     // usuario lo activa a mano, no que le aparezcan burbujas nuevas sin
     // haberlo pedido.
     await _initSetting(SettingKey.burbujasContinuarEnLector, false);
+    await _initSetting(SettingKey.burbujasColapsadas, false);
     await _initSetting(SettingKey.windowSize, "1280,720");
     await _initSetting(SettingKey.androidWebviewUA, _defaultAndroidUA);
     await _initSetting(SettingKey.windowsWebviewUA, _defaultDesktopUA);
@@ -504,6 +505,15 @@ class SettingKey {
   // Fila de burbujas en el lector para saltar a otra obra de "Continuar
   // leyendo" sin salir del lector actual. Apagado por defecto.
   static const burbujasContinuarEnLector = 'BurbujasContinuarEnLector';
+
+  /// Si la fila de burbujas quedó colapsada con su flechita.
+  ///
+  /// Se guarda como ajuste y no en el controller del lector porque ese vive
+  /// UNA sesión de lectura: cambiar de capítulo, saltar a otra obra o salir
+  /// y volver arma uno nuevo, y la fila reaparecía desplegada aunque se la
+  /// hubiera ocultado. Pedido explícito: tiene que quedar como se la dejó
+  /// hasta que se la vuelva a abrir a mano.
+  static const burbujasColapsadas = 'BurbujasColapsadas';
   // Cuándo el usuario declaró ser mayor de edad al activar el +18. Se guarda
   // la fecha de la DECLARACIÓN, no la de nacimiento: para el app alcanza con
   // saber que declaró y cuándo, y el otro dato es personal y no hace falta.
@@ -515,6 +525,7 @@ class SettingKey {
   static const keyJ = 'KeyJ';
   static const arrowLeft = 'Arrowleft';
   static const arrowRight = 'Arrowright';
+
   /// Si ya se mostro el tutorial de gestos del reproductor.
   static const tutorialReproductorVisto = 'TutorialReproductorVisto';
 
