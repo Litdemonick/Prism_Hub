@@ -242,11 +242,23 @@ class FocoConTopes extends DirectionalFocusAction {
     // que se está. Un vecino de verdad siempre lo comparte, así que esto
     // nunca rechaza un movimiento legítimo; cualquier otra cosa —esté a la
     // altura que esté— no lo comparte y queda descartada sin ambigüedad.
+    //
+    // ── Y en horizontal, cruzar de región es igual de deliberado ─────────
+    //
+    // Faltaba acá el mismo permiso que ya tiene la rama vertical, arriba:
+    // el rail de categorías no cuelga de ninguna fila de tarjetas, así que
+    // `_mismaFilaHorizontal` lo rechazaba SIEMPRE como si fuera "otra fila
+    // cualquiera" — exactamente lo contrario de lo que dice el comentario
+    // de más arriba, que a los costados es como se cruza a propósito entre
+    // las dos regiones. Reportado en vivo: «no me deja entrar al panel
+    // izquierdo, estando pegado del todo a la izquierda».
     final seFue = !seMovioComoDebia ||
         (horizontal
-            ? (!_mismaFilaHorizontal(antes.context, despues.context) ||
-                !_mismoRenglon(desde, hasta) ||
-                !_mismaFranja(desde, hasta))
+            ? (cambioDeRegion == true
+                ? false
+                : (!_mismaFilaHorizontal(antes.context, despues.context) ||
+                    !_mismoRenglon(desde, hasta) ||
+                    !_mismaFranja(desde, hasta)))
             : (cambioDeRegion ??
                 _escapoALaIzquierda(desde, hasta, despues.context)));
     if (!seFue) {
