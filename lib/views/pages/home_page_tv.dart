@@ -666,6 +666,28 @@ class _SidebarTVState extends State<_SidebarTV> {
     for (final nodo in _nodos) {
       nodo.addListener(_alCambiarElFoco);
     }
+    // ── Y se comprueba contra la realidad al primer cuadro ───────────────
+    //
+    // `_expandido` arranca en true dando por sentado que el `autofocus` de
+    // más abajo va a poner el foco en una categoría. Pero ese `autofocus`
+    // puede NO llegar a aplicarse: Flutter solo lo respeta si en ese momento
+    // nadie más tiene el foco dentro del ámbito, y acá compite con el aviso
+    // de beta que se abre encima, con el rescate de foco y con lo que ya
+    // tuviera el contenido.
+    //
+    // Y cuando no llega, esto quedaba roto para siempre: lo ÚNICO que
+    // apagaba `_expandido` era el oyente de abajo, que solo corre cuando el
+    // foco CAMBIA en uno de estos nodos. Sin foco nunca puesto no hay
+    // cambio, así que el panel se quedaba desplegado toda la sesión —
+    // tapando además la primera tarjeta de cada fila, porque abierto se
+    // dibuja encima del contenido. Reportado en vivo con foto, varias
+    // veces: «el panel izquierdo sale todo el rato mostrándose, no se
+    // quita», y «la primera card de la extensión se corta a la izquierda».
+    //
+    // Con esto, al cuadro siguiente el panel se acomoda a lo que de verdad
+    // pasó: si el foco quedó adentro sigue abierto (sin ningún salto), y si
+    // no, se contrae como corresponde.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _alCambiarElFoco());
   }
 
   void _alCambiarElFoco() {
@@ -1628,7 +1650,17 @@ class _ContenidoTV extends StatelessWidget {
                     // lista, para TODO el contenido por igual — antes esto
                     // llevaba el suyo propio y dejaba el hero desalineado
                     // respecto de las filas de abajo.
-                    child: SizedBox(
+                    // ── Y su propio aire arriba y a la derecha ────────────
+                    //
+                    // El destacado no lleva `FocusableCard` (se enfoca solo,
+                    // ver más abajo): su borde de selección lo dibuja el
+                    // carrusel AL RAS de la tarjeta, así que necesita que la
+                    // tarjeta no llegue justo al filo de su caja. Reportado
+                    // en vivo con foto: «arriba y derecha no hay aire, corta
+                    // el borde».
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6, right: 6),
+                      child: SizedBox(
                       height: _altoGrandesTv(context),
                       child: heroSecundario == null
                           ? _CarruselAndroid(
@@ -1663,6 +1695,7 @@ class _ContenidoTV extends StatelessWidget {
                                 ],
                               ),
                             ),
+                      ),
                     ),
                   ),
                 1 when medianas.isNotEmpty => Padding(

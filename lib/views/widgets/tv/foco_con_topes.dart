@@ -193,11 +193,32 @@ class FocoConTopes extends DirectionalFocusAction {
     // `_mismaFranja` pero sin haberse movido ni un píxel a la derecha) y
     // «al bajar, la selección rebota para arriba sola» (bajando, el destino
     // cayó dentro de la franja del rail por muy poco, sin serlo).
+    // ── Cruzando de región se compara por el CENTRO, no por el borde ─────
+    //
+    // El panel de categorías, desplegado, se dibuja ENCIMA del contenido:
+    // se superpone con la primera tarjeta de cada fila en vez de quedar a
+    // su lado. Ahí «el destino empieza más a la izquierda que el origen»
+    // deja de ser cierto —los dos empiezan casi en el mismo sitio— y un
+    // movimiento perfectamente legítimo hacia el panel se deshacía solo.
+    //
+    // Reportado en vivo, con foto y reincidente: «no me deja entrar al
+    // panel izquierdo, no me deja literal». Reproducido después en un test
+    // con el panel desplegado, que es cuando pasa.
+    //
+    // Comparando los centros, la superposición deja de importar: el ícono
+    // del panel siempre tiene su centro más a la izquierda que el de una
+    // tarjeta, se pisen o no sus bordes.
+    final cambioDeRegion = _cambioDeRegion(antes.context, despues.context);
+    final porElCentro = cambioDeRegion == true;
+    final desdeX = porElCentro ? desde.center.dx : desde.left;
+    final hastaX = porElCentro ? hasta.center.dx : hasta.left;
+    final desdeY = porElCentro ? desde.center.dy : desde.top;
+    final hastaY = porElCentro ? hasta.center.dy : hasta.top;
     final seMovioComoDebia = switch (intent.direction) {
-      TraversalDirection.right => hasta.left > desde.left,
-      TraversalDirection.left => hasta.left < desde.left,
-      TraversalDirection.down => hasta.top > desde.top,
-      TraversalDirection.up => hasta.top < desde.top,
+      TraversalDirection.right => hastaX > desdeX,
+      TraversalDirection.left => hastaX < desdeX,
+      TraversalDirection.down => hastaY > desdeY,
+      TraversalDirection.up => hastaY < desdeY,
     };
     // ── Por qué "se movió a la derecha" NO alcanza solo ─────────────────
     //
@@ -222,7 +243,8 @@ class FocoConTopes extends DirectionalFocusAction {
     // pegada al borde — pero eso solo acierta con el panel CONTRAÍDO, y el
     // panel se expande justo cuando uno está adentro. Se conserva como
     // respaldo para las pantallas que todavía no marcan sus regiones.
-    final cambioDeRegion = _cambioDeRegion(antes.context, despues.context);
+    // (`cambioDeRegion` se calcula más arriba: hace falta antes, para saber
+    // si la dirección se mide por el centro o por el borde.)
     // ── En horizontal, además: tienen que compartir la MISMA fila física ──
     //
     // `_mismoRenglon` y `_mismaFranja` miden si dos rectángulos SE PARECEN

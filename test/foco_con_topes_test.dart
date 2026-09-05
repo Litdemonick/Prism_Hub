@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/tv/foco_con_topes.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/views/widgets/tv/rescate_de_foco.dart';
 import 'package:prismhub/views/widgets/tv/region_de_foco.dart';
 
@@ -23,6 +25,11 @@ import 'package:prismhub/views/widgets/tv/region_de_foco.dart';
 /// Cada caso de acá salió de un reporte en vivo, textual.
 
 /// Una tarjeta enfocable, del tamaño de un póster de televisor.
+///
+/// Usa `FocusableCard` de verdad y no un `Focus` pelado: es lo que envuelve
+/// a CADA tarjeta en el televisor, y trae por dentro su propio manejo de
+/// teclas, su marco por fuera de los límites y su `RepaintBoundary`. Probar
+/// con otra cosa sería probar una app que no existe.
 class _Tarjeta extends StatelessWidget {
   const _Tarjeta({required this.nombre, required this.foco});
 
@@ -31,8 +38,10 @@ class _Tarjeta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
+    return FocusableCard(
       focusNode: foco,
+      onTap: () {},
+      altoMarco: 150,
       child: Container(
         width: 150,
         height: 170,
@@ -61,7 +70,17 @@ void main() {
     return 'otro(${actual.debugLabel})';
   }
 
-  setUp(() => nodos = {});
+  setUp(() {
+    nodos = {};
+    // ── En modo TELEVISOR, que es lo que hay que probar ────────────────
+    //
+    // Media app se bifurca por acá: `FocusableCard` cambia su marco, su
+    // resplandor, si crece al enfocarse y —lo que importa para esto— si
+    // hace su propio `ensureVisible` o se lo deja a `RescateDeFoco`. Con
+    // esto en false se estaría probando la versión de PC, que no es la que
+    // corre en el televisor ni la que tiene los fallos que se reportan.
+    PlatformTv.esTelevisionSync = true;
+  });
 
   tearDown(() {
     for (final n in nodos.values) {
@@ -77,7 +96,15 @@ void main() {
   /// La misma forma que la pantalla de Inicio de televisor: el rail pegado
   /// a la izquierda en su propia región, y el contenido —filas horizontales
   /// dentro de una lista vertical— en la suya.
-  Widget arbol({int filas = 3, int porFila = 4, bool conRescate = false}) {
+  Widget arbol({
+    int filas = 3,
+    int porFila = 4,
+    bool conRescate = false,
+    // El panel de categorías desplegado tapa el contenido: es más ancho que
+    // el hueco que este le deja y se dibuja ENCIMA. Es el estado de la foto
+    // que se reportó, así que hay que poder probarlo.
+    double anchoDelRail = 60,
+  }) {
     Widget envolver(Widget hijo) =>
         conRescate ? RescateDeFoco(child: hijo) : hijo;
     return MaterialApp(
@@ -120,7 +147,7 @@ void main() {
                 child: RegionDeFocoTv(
                   nombre: RegionDeFocoTv.rail,
                   child: SizedBox(
-                    width: 60,
+                    width: anchoDelRail,
                     child: Column(
                       children: [
                         for (var i = 0; i < 4; i++)
@@ -197,6 +224,39 @@ void main() {
       // «Toda la izquierda es ir al panel izquierdo: va pasando las cards y
       // llego hasta el panel izquierdo».
       expect(enfocado(), startsWith('rail'));
+    });
+
+    testWidgets('DESPLEGADO no se puede entrar: por eso tiene que contraerse',
+        (t) async {
+      // ── El motivo por el que el panel SE CONTRAE, escrito como prueba ──
+      //
+      // Para mover el foco a la izquierda, Flutter exige que el CENTRO del
+      // destino quede más a la izquierda que el BORDE del origen
+      // (`_sortAndFilterHorizontally`). Con el panel desplegado sus botones
+      // son anchos, así que su centro cae a la DERECHA del borde de las
+      // tarjetas y Flutter los descarta: el panel se vuelve inalcanzable.
+      //
+      // Y ahí se muerde la cola: si no se puede entrar, nunca recibe el
+      // foco; si nunca recibe el foco, nunca se entera de que tiene que
+      // contraerse; y desplegado sigue siendo inalcanzable. Es exactamente
+      // lo reportado en vivo, con foto: «el panel queda abierto todo el rato
+      // y no me deja ni entrar».
+      //
+      // Por eso el arreglo no está acá sino en el panel (`_SidebarTVState`),
+      // que ahora comprueba contra la realidad si tiene el foco en vez de
+      // confiar en que su `autofocus` haya llegado a aplicarse. Este caso
+      // queda escrito para que se entienda que un panel desplegado de forma
+      // permanente NO es una opción de diseño: rompe la navegación.
+      await t.pumpWidget(arbol(anchoDelRail: 220));
+      await t.pumpAndSettle();
+
+      nodo('f0-c0').requestFocus();
+      await t.pumpAndSettle();
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await t.pumpAndSettle();
+
+      expect(enfocado(), 'f0-c0');
     });
 
     testWidgets('y desde el rail se vuelve al contenido con la derecha',
