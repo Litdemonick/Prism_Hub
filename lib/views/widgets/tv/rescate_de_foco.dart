@@ -126,10 +126,57 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
   ///
   /// Puesto una sola vez acá vale para TODA la app, incluidas las pantallas
   /// que no se tocaron.
+  /// El último sitio donde el foco estuvo de verdad.
+  ///
+  /// Sirve para devolverlo ahí si se pierde — ver `_recuperarElFoco`.
+  static FocusNode? _ultimoBueno;
+
+  /// Devuelve el foco apenas se pierde, sin esperar a la tecla siguiente.
+  ///
+  /// ── Por qué no alcanzaba con el rescate por tecla ────────────────────
+  ///
+  /// El manejador de teclas de más abajo ya recuperaba el foco perdido,
+  /// pero recién cuando el usuario apretaba OTRA flecha. Entre una cosa y
+  /// la otra la selección sencillamente NO SE VE: uno se queda mirando una
+  /// pantalla sin nada resaltado sin saber si se rompió algo. Reportado en
+  /// vivo, reincidente: «sigue desapareciendo la selección».
+  ///
+  /// Y el foco se pierde por motivos normales que no son culpa de nadie: la
+  /// lista recicla la tarjeta que lo tenía cuando el desplazamiento la saca
+  /// de la vista, o la fila se rearma al llegar contenido nuevo.
+  ///
+  /// Devolverlo al ÚLTIMO SITIO BUENO es mejor que buscar el primer
+  /// enfocable que haya (que es lo que hace el rescate por tecla, y por eso
+  /// termina saltando lejos): si ese sitio sigue existiendo, la selección
+  /// vuelve exactamente donde estaba y desde afuera no pasó nada.
+  void _recuperarElFoco() {
+    final ultimo = _ultimoBueno;
+    if (ultimo == null) return;
+    if (ultimo.context == null || !ultimo.canRequestFocus) return;
+    // Después del cuadro: si el foco se perdió porque algo se estaba
+    // desmontando, pedirlo en el mismo instante puede volver a perderse
+    // cuando ese desmontaje termine.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final actual = FocusManager.instance.primaryFocus;
+      // Alguien ya lo recuperó por su cuenta: no se pisa.
+      if (actual != null &&
+          actual is! FocusScopeNode &&
+          actual.context != null) {
+        return;
+      }
+      if (ultimo.context == null || !ultimo.canRequestFocus) return;
+      ultimo.requestFocus();
+    });
+  }
+
   void _alCambiarElFoco() {
     final nodo = FocusManager.instance.primaryFocus;
     final ctx = nodo?.context;
-    if (ctx == null || nodo is FocusScopeNode) return;
+    if (ctx == null || nodo is FocusScopeNode) {
+      _recuperarElFoco();
+      return;
+    }
+    _ultimoBueno = nodo;
     // Después del cuadro: recién ahí el widget está ubicado en su lugar
     // definitivo, que es lo que `ensureVisible` necesita para medir.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -197,23 +244,48 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
   /// En null (foco puesto por código, no por una flecha) se acomodan los dos,
   /// que es lo correcto ahí: no hay dirección que respetar y lo que se acaba
   /// de enfocar puede estar fuera de la vista en cualquiera de los dos.
+  /// ── Cada scroll se acomoda contra SU PROPIO objetivo ──────────────────
+  ///
+  /// Una tarjeta vive dentro de una fila que desliza de costado, y esa fila
+  /// vive dentro de la lista que desliza hacia abajo. Son dos scrolls, uno
+  /// adentro del otro.
+  ///
+  /// Acá había un fallo feo: se usaba SIEMPRE la misma tarjeta como objetivo
+  /// para los dos niveles. Y las cuentas de `_acomodar` salen del viewport
+  /// que envuelve al objetivo, que para una tarjeta es SIEMPRE el de más
+  /// adentro —la fila horizontal—, nunca el de la lista vertical. O sea que
+  /// al acomodar la lista vertical se le pedían offsets calculados contra
+  /// otro viewport: números que no significan nada para ella. El destino que
+  /// salía de ahí podía quedar fuera de rango y terminaba recortado contra
+  /// el principio de la lista, que se ve como que el scroll «se vuelve
+  /// arriba solo». Reportado en vivo justo donde hay filas anidadas: las de
+  /// las extensiones.
+  ///
+  /// Lo correcto es lo que hace el propio `ensureVisible` de Flutter por
+  /// dentro: al subir un nivel, lo que hay que traer a la vista ya no es la
+  /// tarjeta sino LA FILA ENTERA que la contiene. Así cada scroll recibe un
+  /// objetivo que de verdad es hijo suyo, y sus cuentas vuelven a
+  /// significar lo que dicen.
   static void _traerALaVista(BuildContext ctx, Duration duracion, Axis? eje) {
-    final objetivo = ctx.findRenderObject();
+    RenderObject? objetivo = ctx.findRenderObject();
     if (objetivo == null) return;
     var contexto = ctx;
     var scroll = Scrollable.maybeOf(contexto);
     while (scroll != null) {
       final posicion = scroll.position;
-      if (eje != null && posicion.axis != eje) {
-        // Este scroll no es del eje en el que el usuario se movió: no se
-        // toca. Pero se sigue subiendo por los ancestros, porque más arriba
-        // puede haber otro que SÍ lo sea.
-        contexto = scroll.context;
-        scroll = Scrollable.maybeOf(contexto);
-        continue;
+      // Este scroll no es del eje en el que el usuario se movió: no se
+      // toca. Pero se sigue subiendo por los ancestros, porque más arriba
+      // puede haber otro que SÍ lo sea.
+      final actual = objetivo;
+      if (actual != null && (eje == null || posicion.axis == eje)) {
+        _acomodar(posicion, actual, duracion);
       }
-      _acomodar(posicion, objetivo, duracion);
       contexto = scroll.context;
+      // El objetivo del siguiente nivel es este scroll: para la lista
+      // vertical, lo que tiene que entrar en pantalla es la fila completa.
+      final siguiente = contexto.findRenderObject();
+      if (siguiente == null) return;
+      objetivo = siguiente;
       scroll = Scrollable.maybeOf(contexto);
     }
   }
@@ -268,11 +340,23 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
     final caja = objetivo.paintBounds;
     final asomo =
         (posicion.axis == Axis.vertical ? caja.height : caja.width) * 0.35;
+    // ── Los dos límites, ordenados ──────────────────────────────────────
+    //
+    // Con lo enfocado más chico que la pantalla —el caso normal— el límite
+    // de salida es el menor de los dos, y todo el rango entre ambos es «se
+    // ve entero». Pero si lo enfocado es MÁS ALTO que la pantalla (una fila
+    // grande en un televisor de poca altura) los dos límites se dan vuelta,
+    // y comparándolos en el orden fijo de antes la cuenta decidía justo lo
+    // contrario: mandaba a desplazarse hacia atrás. Ordenándolos primero,
+    // el caso normal queda exactamente igual que antes y el raro deja de
+    // poder mandar el scroll para el lado equivocado.
+    final limiteBajo = alFinal < alPrincipio ? alFinal : alPrincipio;
+    final limiteAlto = alFinal < alPrincipio ? alPrincipio : alFinal;
     final double destino;
-    if (actual < alFinal) {
-      destino = alFinal + asomo; // quedó pasado el filo de salida
-    } else if (actual > alPrincipio) {
-      destino = alPrincipio - asomo; // quedó antes del filo de entrada
+    if (actual < limiteBajo) {
+      destino = limiteBajo + asomo; // quedó pasado el filo de salida
+    } else if (actual > limiteAlto) {
+      destino = limiteAlto - asomo; // quedó antes del filo de entrada
     } else {
       return; // ya se ve entero: no se toca nada
     }
