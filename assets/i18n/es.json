@@ -905,6 +905,8 @@
         "settings-pin-subtitle": "Configurá o cambiá el PIN que protege la Zona +18",
         "settings-pin-set": "Establecer PIN",
         "settings-pin-change": "Cambiar PIN",
+        "settings-pin-configured": "PIN configurado",
+        "settings-pin-none": "Sin PIN configurado",
         "settings-pin-remove": "Quitar PIN",
         "settings-pin-remove-confirm": "¿Quitar el PIN de la Zona +18? La próxima vez que entres vas a tener que establecer uno nuevo.",
         "is-adult-about-to-read": "Estás por empezar a leer",

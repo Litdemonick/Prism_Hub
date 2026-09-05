@@ -1571,24 +1571,32 @@ class _ContenidoTV extends StatelessWidget {
                               conFocoTv: true,
                               sinVecinos: true,
                             )
-                          : Row(
-                              children: [
-                                Expanded(
-                                  child: _CarruselAndroid(
-                                    c: c,
-                                    conFocoTv: true,
-                                    sinVecinos: true,
-                                    haySecundarioALaDerecha: true,
+                          // Franja fija: ver FranjaHorizontalTv. Sin scroll
+                          // de por medio (es un Row común de dos), el D-pad
+                          // no tenía cómo saber que carrusel y hero
+                          // secundario son "la misma fila" — al llegar al
+                          // final del secundario y seguir con la derecha,
+                          // la selección se perdía.
+                          : FranjaFijaTv(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _CarruselAndroid(
+                                      c: c,
+                                      conFocoTv: true,
+                                      sinVecinos: true,
+                                      haySecundarioALaDerecha: true,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: _huecoGrandeTv),
-                                Expanded(
-                                  child: _HeroSecundarioTv(
-                                    package: heroSecundario.$1,
-                                    item: heroSecundario.$2,
+                                  const SizedBox(width: _huecoGrandeTv),
+                                  Expanded(
+                                    child: _HeroSecundarioTv(
+                                      package: heroSecundario.$1,
+                                      item: heroSecundario.$2,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                     ),
                   ),

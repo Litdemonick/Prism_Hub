@@ -483,7 +483,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                                 ),
                               ),
                               const SizedBox(height: 26),
-                              _CampoPinTv(
+                              CampoPinTv(
                                 label: 'nsfw18.pin-label'.i18n,
                                 controller: _pinController,
                                 // Sin confirmación (desbloqueo de siempre)
@@ -500,7 +500,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                               ),
                               if (_isSetup) ...[
                                 const SizedBox(height: 12),
-                                _CampoPinTv(
+                                CampoPinTv(
                                   label: 'nsfw18.pin-confirm-label'.i18n,
                                   controller: _confirmController,
                                   seleccionado: _campoTvSeleccionado,
@@ -592,8 +592,13 @@ class _BotonVolverTv extends StatelessWidget {
 /// Mismo criterio que `obscureText` en el campo de siempre: es un PIN,
 /// nunca se muestra en claro aunque esté mirando la pantalla desde el
 /// sillón con más gente alrededor.
-class _CampoPinTv extends StatelessWidget {
-  const _CampoPinTv({
+///
+/// Público (no `_CampoPinTv`): lo comparte con el diálogo de "Cambiar PIN"
+/// de Ajustes (`nsfw18_pin_settings_tile.dart`), que tenía el mismo
+/// problema por su lado — ver el comentario largo ahí.
+class CampoPinTv extends StatelessWidget {
+  const CampoPinTv({
+    super.key,
     required this.label,
     required this.controller,
     required this.seleccionado,

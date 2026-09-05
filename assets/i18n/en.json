@@ -909,6 +909,8 @@
         "settings-pin-subtitle": "Set or change the PIN that protects the 18+ Zone",
         "settings-pin-set": "Set PIN",
         "settings-pin-change": "Change PIN",
+        "settings-pin-configured": "PIN set",
+        "settings-pin-none": "No PIN set",
         "settings-pin-remove": "Remove PIN",
         "settings-pin-remove-confirm": "Remove the 18+ Zone PIN? Next time you enter you will have to set a new one.",
         "is-adult-about-to-read": "You're about to start reading",

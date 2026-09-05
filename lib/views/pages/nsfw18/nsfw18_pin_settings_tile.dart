@@ -5,10 +5,13 @@ import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/nsfw18_zone.dart';
 import 'package:prismhub/utils/router.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_lock_page.dart'
+    show CampoPinTv;
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/settings/settings_tile.dart';
+import 'package:prismhub/views/widgets/tv/pad_numerico_tv.dart';
 
 // Entrada de Ajustes para configurar/cambiar/quitar el PIN de la Zona +18.
 // Widget autocontenido (maneja su propio estado de "¿ya hay PIN?") para no
@@ -198,6 +201,13 @@ class _PinDialogState extends State<_PinDialog> {
   final _confirmController = TextEditingController();
   String? _error;
 
+  /// A qué campo le escribe el pad numérico de TV — mismo mecanismo que
+  /// `Nsfw18LockPage._campoTvSeleccionado`: acá no hay cursor que mirar, así
+  /// que el usuario elige a mano cuál de los dos campos está llenando.
+  bool _campoTvSeleccionado = false; // false = PIN, true = confirmación
+  TextEditingController get _campoActivoTv =>
+      _campoTvSeleccionado ? _confirmController : _pinController;
+
   @override
   void dispose() {
     _pinController.dispose();
@@ -287,32 +297,47 @@ class _PinDialogState extends State<_PinDialog> {
       ],
     );
 
-    // ── En televisor, apaisado: lo que se escribe a la izquierda y los
-    //    botones a la derecha ─────────────────────────────────────────────
+    // ── En televisor: el teclado propio, no el del sistema ──────────────
     //
-    // El modo compacto de arriba se enciende con poca ALTURA, que es el caso
-    // del teléfono acostado con el teclado abierto. Un televisor tiene altura
-    // de sobra, así que caía en el modo vertical: título, dos campos y dos
-    // botones apilados, con un desplazamiento para llegar al final.
+    // Antes esto usaba los mismos `TextField` de siempre, apenas
+    // reacomodados a lo ancho: título y campos a la izquierda, botones a
+    // la derecha. El problema no era el acomodo, era que un `TextField`
+    // real en TV levanta el teclado del PROPIO TELEVISOR al enfocarlo —
+    // ese teclado no es de la app, y con el mando es tosco: en la práctica
+    // no se podía navegar ni escribir. Reportado en vivo con foto, en
+    // este diálogo puntual: «Cambiar PIN» desde Ajustes.
     //
-    // Desde el sillón eso es lo peor que se puede pedir: hay que bajar con el
-    // mando para encontrar el botón de guardar, y no se ve todo junto.
-    //
-    // Acá va a lo ancho, que es lo que sobra en una pantalla de televisor:
-    // a la izquierda el título y los dos campos, a la derecha los botones,
-    // todo a la vista y sin desplazar nada.
+    // `Nsfw18LockPage` (la pantalla de desbloqueo/configuración inicial)
+    // ya había resuelto exactamente esto con su propio teclado numérico
+    // (`PadNumericoTv`) y campos elegibles con el mando (`CampoPinTv`,
+    // pública justo para poder compartirla acá). Este diálogo usa el
+    // mismo mecanismo: no hay ningún `TextField` de por medio en TV, así
+    // que no hay forma de que aparezca el teclado del sistema.
     if (PlatformTv.esTelevisionSync) {
       return Dialog(
         insetPadding: HomeTheme.margenTv(context),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
+          constraints: const BoxConstraints(maxWidth: 980),
           child: Padding(
             padding: const EdgeInsets.all(28),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
+                PadNumericoTv(
+                  accent: HomeTheme.accentRed,
+                  onDigito: (d) {
+                    if (_campoActivoTv.text.length >= 8) return;
+                    setState(() => _campoActivoTv.text += d);
+                  },
+                  onBorrar: () {
+                    if (_campoActivoTv.text.isEmpty) return;
+                    setState(() => _campoActivoTv.text = _campoActivoTv.text
+                        .substring(0, _campoActivoTv.text.length - 1));
+                  },
+                ),
+                const SizedBox(width: 40),
                 Expanded(
-                  flex: 3,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -320,13 +345,13 @@ class _PinDialogState extends State<_PinDialog> {
                       Row(
                         children: [
                           Icon(Icons.pin_outlined,
-                              color: HomeTheme.accentRed, size: 26),
+                              color: HomeTheme.accentRed, size: 24),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               widget.title,
                               style: const TextStyle(
-                                fontSize: 22,
+                                fontSize: 20,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -334,41 +359,49 @@ class _PinDialogState extends State<_PinDialog> {
                         ],
                       ),
                       const SizedBox(height: 18),
-                      pinField,
-                      confirmField,
+                      CampoPinTv(
+                        label: 'nsfw18.pin-label'.i18n,
+                        controller: _pinController,
+                        seleccionado: !_campoTvSeleccionado,
+                        onTap: () =>
+                            setState(() => _campoTvSeleccionado = false),
+                      ),
+                      const SizedBox(height: 12),
+                      CampoPinTv(
+                        label: 'nsfw18.pin-confirm-label'.i18n,
+                        controller: _confirmController,
+                        seleccionado: _campoTvSeleccionado,
+                        onTap: () =>
+                            setState(() => _campoTvSeleccionado = true),
+                      ),
                       if (_error != null)
                         Padding(
-                          padding: const EdgeInsets.only(top: 8),
+                          padding: const EdgeInsets.only(top: 10),
                           child: Text(
                             _error!,
                             style: const TextStyle(
                               color: Colors.redAccent,
-                              fontSize: 15,
+                              fontSize: 14,
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 28),
-                // Los botones en columna a la derecha: con un mando se llega a
-                // ellos con una sola pulsación desde el segundo campo, y se
-                // ven los dos a la vez sin desplazar.
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Confirmar arriba: es lo que se viene a hacer.
-                      PlatformFilledButton(
-                        onPressed: _save,
-                        child: Text('common.confirm'.i18n),
-                      ),
-                      const SizedBox(height: 12),
-                      PlatformTextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: Text('common.cancel'.i18n),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: PlatformTextButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: Text('common.cancel'.i18n),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: PlatformFilledButton(
+                              onPressed: _save,
+                              child: Text('common.confirm'.i18n),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -452,7 +485,6 @@ class _PinDialogState extends State<_PinDialog> {
     );
   }
 }
-
 
 /// Abre el diálogo de poner o cambiar el PIN de la Zona +18.
 ///

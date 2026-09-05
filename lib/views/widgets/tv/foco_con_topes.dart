@@ -417,19 +417,35 @@ class FocoConTopes extends DirectionalFocusAction {
   /// (cuelgan del mismo `ScrollController`/`Scrollable`); cualquier otra
   /// cosa no puede compartirlo por casualidad.
   ///
-  /// Cuando NINGUNO de los dos vive dentro de un scroll horizontal —la
-  /// barra de arriba, con sus botones sueltos en un `Row` común, no una
-  /// lista que desliza— esta comprobación no tiene nada que confirmar: se
-  /// deja pasar, y el asunto queda en manos de `_mismoRenglon`/
-  /// `_mismaFranja` como siempre. Tratarlo como "no es la misma fila" acá
-  /// habría bloqueado mover el foco entre esos botones, que nunca estuvo
-  /// roto.
+  /// ── Y si ninguno de los dos se desplaza ─────────────────────────────
+  ///
+  /// Una fila FIJA —los destacados de arriba en Inicio, un `Row` común sin
+  /// nada que desplazar— no tiene ScrollPosition del que agarrarse. Ahí se
+  /// mira `FranjaHorizontalTv` en su lugar: el mismo criterio (identidad,
+  /// no parecido), para el mismo problema, en widgets sin scroll. Ver el
+  /// comentario largo de esa clase — reportado en vivo: «arriba en las
+  /// cards grandes al ir a la derecha no bloquea, se pierde la selección».
+  ///
+  /// Solo cuando NINGUNO de los dos está marcado de ninguna forma —la barra
+  /// de arriba, con sus botones sueltos, no es una fila de tarjetas de
+  /// nada— esta comprobación no tiene nada que confirmar: se deja pasar, y
+  /// el asunto queda en manos de `_mismoRenglon`/`_mismaFranja` como
+  /// siempre. Tratarlo como "no es la misma fila" ahí habría bloqueado
+  /// mover el foco entre esos botones, que nunca estuvo roto.
   static bool _mismaFilaHorizontal(BuildContext? a, BuildContext? b) {
     final filaA = _scrollHorizontalDe(a);
     final filaB = _scrollHorizontalDe(b);
-    if (filaA == null && filaB == null) return true;
-    if (filaA == null || filaB == null) return false;
-    return identical(filaA, filaB);
+    if (filaA != null || filaB != null) {
+      if (filaA == null || filaB == null) return false;
+      return identical(filaA, filaB);
+    }
+    final franjaA = FranjaHorizontalTv.de(a);
+    final franjaB = FranjaHorizontalTv.de(b);
+    if (franjaA != null || franjaB != null) {
+      if (franjaA == null || franjaB == null) return false;
+      return identical(franjaA, franjaB);
+    }
+    return true;
   }
 
   static bool _mismaFranja(Rect a, Rect b) {

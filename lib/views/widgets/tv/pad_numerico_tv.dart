@@ -30,6 +30,12 @@ class PadNumericoTv extends StatelessWidget {
       return FocusableCard(
         borderRadius: 12,
         accent: color,
+        // El "1" siempre arranca con el foco puesto. Sin esto, al abrir la
+        // pantalla el mando no tenía dónde empezar y la primera flecha
+        // dependía de qué haya agarrado el rescate de foco de la app —
+        // pedido explícito: «siempre el foco indicando al número 1 por
+        // defecto».
+        autofocus: texto == '1',
         onTap: alTocar ?? () => onDigito(texto),
         child: Container(
           width: 72,

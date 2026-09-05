@@ -58,6 +58,80 @@ class RegionDeFocoTv extends InheritedWidget {
   }
 
   @override
-  bool updateShouldNotify(RegionDeFocoTv anterior) =>
-      anterior.nombre != nombre;
+  bool updateShouldNotify(RegionDeFocoTv anterior) => anterior.nombre != nombre;
+}
+
+/// Marca una franja horizontal de tarjetas que NO se desplaza —un `Row`
+/// fijo, no un `ListView`— como una unidad, para que el D-pad no se salga
+/// de ella por los costados salvo que de verdad no quede nada más adentro.
+///
+/// ── Por qué hace falta, además de `RegionDeFocoTv` ──────────────────────
+///
+/// Una fila que SÍ se desplaza tiene una forma natural de identificarse:
+/// su propio `ScrollPosition`, que dos tarjetas de la misma fila siempre
+/// comparten (ver `FocoConTopes._mismaFilaHorizontal`). Una fila FIJA —los
+/// destacados grandes y medianos de arriba en Inicio, unas pocas tarjetas
+/// en un `Row` común, sin nada que desplazar— no tiene ningún objeto así
+/// del que agarrarse. Sin uno, al llegar a la última tarjeta de la fila y
+/// no quedar ningún vecino real a la derecha, Flutter buscaba el foco más
+/// cercano en cualquier otro lado de la pantalla, sin nada que lo frenara
+/// ahí. Reportado en vivo: «arriba en las cards grandes al ir a la
+/// derecha no bloquea, se pierde la selección».
+///
+/// ── Por qué es OTRO `InheritedWidget` y no el mismo `RegionDeFocoTv` ────
+///
+/// `RegionDeFocoTv` ya vive alrededor de esta franja (marcando "esto es
+/// contenido", no "rail") y una búsqueda de tipo exacto solo encuentra el
+/// ANCESTRO MÁS CERCANO — si esto reusara el mismo widget, una tarjeta de
+/// la franja dejaría de "ver" la región de contenido de más afuera, que
+/// hace falta para la otra comprobación (que un movimiento vertical no
+/// cruce del rail al contenido). Dos preguntas distintas, dos marcadores.
+class FranjaHorizontalTv extends InheritedWidget {
+  const FranjaHorizontalTv({
+    super.key,
+    required this.identidad,
+    required super.child,
+  });
+
+  /// Cualquier objeto estable durante la vida de la franja. Dos franjas
+  /// nunca comparten el mismo, así que alcanza con comparar identidad
+  /// (`identical`), no igualdad de contenido.
+  final Object identidad;
+
+  static Object? de(BuildContext? ctx) {
+    if (ctx == null || !ctx.mounted) return null;
+    final elemento =
+        ctx.getElementForInheritedWidgetOfExactType<FranjaHorizontalTv>();
+    final widget = elemento?.widget;
+    return widget is FranjaHorizontalTv ? widget.identidad : null;
+  }
+
+  @override
+  bool updateShouldNotify(FranjaHorizontalTv anterior) =>
+      !identical(anterior.identidad, identidad);
+}
+
+/// Envuelve una fila FIJA (sin scroll) de tarjetas para que el D-pad la
+/// trate como una unidad — ver [FranjaHorizontalTv].
+///
+/// `StatefulWidget` a propósito: la identidad tiene que ser LA MISMA en
+/// cada reconstrucción de esta franja, no una nueva cada vez — si no,
+/// cualquier comparación de identidad daría siempre "distinta", como si
+/// nunca fuera la misma fila. El `State` sobrevive a los rebuilds; un
+/// `Object()` creado en un método `build` normal no.
+class FranjaFijaTv extends StatefulWidget {
+  const FranjaFijaTv({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<FranjaFijaTv> createState() => _FranjaFijaTvState();
+}
+
+class _FranjaFijaTvState extends State<FranjaFijaTv> {
+  final Object _identidad = Object();
+
+  @override
+  Widget build(BuildContext context) =>
+      FranjaHorizontalTv(identidad: _identidad, child: widget.child);
 }
