@@ -357,6 +357,7 @@ class _CarruselAndroid extends StatefulWidget {
     required this.c,
     this.conFocoTv = false,
     this.sinVecinos = false,
+    this.haySecundarioALaDerecha = false,
   });
 
   final CatalogoExtensionesController c;
@@ -381,6 +382,30 @@ class _CarruselAndroid extends StatefulWidget {
   /// —siempre centrado en la caja que le toque—, así que el arrastre y el
   /// resto de la matemática interna no se enteran de que existe.
   final bool sinVecinos;
+
+  /// Si hay algo enfocable de verdad a la derecha del carrusel (el hero
+  /// secundario, cuando la fila lo trae) al que la flecha derecha pueda
+  /// pasarle la posta al llegar al final.
+  ///
+  /// ── El bug que esto corrige ─────────────────────────────────────────
+  ///
+  /// Antes, al llegar a la última tarjeta del carrusel, la flecha derecha
+  /// SIEMPRE se dejaba pasar hacia arriba —pensado para que el foco pudiera
+  /// salir del carrusel—, sin distinguir si de verdad había algo legítimo
+  /// ahí. Cuando no lo había (el carrusel ocupa el ancho entero, sin hero
+  /// secundario), Flutter buscaba el foco más cercano en CUALQUIER lado —
+  /// incluida la barra de arriba, que son botones sueltos sin ningún
+  /// scroll de por medio, así que ninguna de las comprobaciones que
+  /// dependen de compartir un scroll horizontal tenía nada que decir ahí—
+  /// y el foco terminaba en un botón sin la marca visual de las tarjetas
+  /// de TV. Desde el sillón, eso es la selección desapareciendo. Reportado
+  /// en vivo: «en inicio le doy a la derecha y la selección se va,
+  /// desaparece».
+  ///
+  /// Con esto en `false` (el caso normal, sin hero secundario), la derecha
+  /// en el último se consume acá mismo y no pasa a ningún lado — que es
+  /// justo lo que se pidió: «debe bloquearse ahí y no hacer nada».
+  final bool haySecundarioALaDerecha;
 
   @override
   State<_CarruselAndroid> createState() => _CarruselAndroidState();
@@ -1085,9 +1110,21 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
             return KeyEventResult.ignored;
           }
           final destino = _p.round() + paso;
-          // En el extremo se deja pasar la tecla: así el foco puede salir
-          // del carrusel hacia el sidebar en vez de quedarse trabado.
-          if (destino < 0 || destino > ultimo) return KeyEventResult.ignored;
+          if (destino < 0) {
+            // Izquierda en la primera tarjeta: se deja pasar para que el
+            // foco pueda salir hacia el panel de categorías, que sí está
+            // ahí siempre.
+            return KeyEventResult.ignored;
+          }
+          if (destino > ultimo) {
+            // Derecha en la última: se deja pasar SOLO si hay algo
+            // legítimo del otro lado (el hero secundario, cuando la fila
+            // lo trae). Si no lo hay, no existe ningún vecino válido y la
+            // tecla se consume acá mismo — ver `haySecundarioALaDerecha`.
+            return widget.haySecundarioALaDerecha
+                ? KeyEventResult.ignored
+                : KeyEventResult.handled;
+          }
           _marcarAccionManual();
           _irA(destino.toDouble(), grupos);
           return KeyEventResult.handled;

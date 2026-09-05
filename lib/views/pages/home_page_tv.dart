@@ -1578,6 +1578,7 @@ class _ContenidoTV extends StatelessWidget {
                                     c: c,
                                     conFocoTv: true,
                                     sinVecinos: true,
+                                    haySecundarioALaDerecha: true,
                                   ),
                                 ),
                                 const SizedBox(width: _huecoGrandeTv),
