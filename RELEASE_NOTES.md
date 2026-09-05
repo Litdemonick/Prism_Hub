@@ -1,40 +1,24 @@
-## PrismHub v1.0.93 — Bajar es bajar, y los ajustes dicen la verdad
+## PrismHub v1.0.94 — El scroll de las filas de extensiones
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 📺 Android TV — bajar ya no sube
+### 📺 Android TV
 
-- **La flecha abajo baja.** Estaba deshaciendo movimientos perfectamente
-  válidos y devolviendo la selección a la tarjeta anterior, así que bajar se
-  sentía como subir.
+- **La lista ya no se vuelve arriba sola** al moverse por las filas de las
+  extensiones.
 
-  La comprobación que decide si un movimiento vale comparaba dos medidas
-  tomadas en momentos distintos: la de origen antes de mover el foco y la de
-  destino después. Entre una y otra, la lista se desplaza para traer a la
-  vista lo que se acaba de enfocar, así que todo cambia de sitio en pantalla
-  — y bajando, la tarjeta nueva termina dibujada más arriba de donde estaba
-  la anterior. Comparadas así, un salto hacia abajo legítimo parecía ir hacia
-  arriba. Ahora las dos se miden en el mismo momento.
+  Una tarjeta vive dentro de una fila que se desliza de costado, y esa fila
+  dentro de la lista que se desliza hacia abajo: son dos desplazamientos, uno
+  adentro del otro. Al acomodar el de la lista se usaban medidas tomadas
+  contra el de la fila —que para ella no significan nada—, y el destino que
+  salía de ahí terminaba recortado contra el principio de la lista. De ahí el
+  salto hasta arriba. Ahora cada uno se acomoda con lo suyo: para la lista, lo
+  que tiene que entrar en pantalla es la fila entera, no la tarjeta suelta.
 
-- **Y cuando un movimiento sí se frena, la pantalla tampoco se corre.** Antes
-  la selección se quedaba quieta (bien) pero la lista igual se había
-  desplazado (mal), que era la otra mitad de la sensación de que se mueve
-  sola.
-
-### ⚙️ Los interruptores de Ajustes
-
-- **Ya no mienten.** Apagar la búsqueda automática de actualizaciones se
-  guardaba de verdad —al salir y volver a entrar aparecía apagada— pero en
-  pantalla el interruptor seguía encendido.
-
-  Se redibujaba antes de que el cambio llegara a guardarse, y en los ajustes
-  que preguntan «¿seguro?» eso significaba dibujar con el valor viejo y no
-  volver a dibujar nunca. Ahora se espera al guardado y recién ahí se
-  refresca, así que lo que ves es siempre lo que está guardado. Vale para
-  todos los interruptores, no solo ese.
-
-- Con la búsqueda automática apagada, el aviso de versión nueva no aparece
-  solo: se comprueba desde **Ajustes → Buscar actualizaciones**, cuando vos
-  quieras.
+- **La selección ya no se queda invisible.** Cuando el desplazamiento sacaba
+  de la vista la tarjeta seleccionada, la lista la reciclaba y la selección
+  desaparecía hasta que se apretara otra flecha. Ahora vuelve al instante, y
+  al sitio donde estaba — no al primero que aparezca, que era lo que la hacía
+  saltar lejos.
