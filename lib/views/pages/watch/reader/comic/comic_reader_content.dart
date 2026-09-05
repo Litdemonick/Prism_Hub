@@ -10,6 +10,7 @@ import 'package:prismhub/controllers/watch/comic_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
+import 'package:prismhub/views/widgets/watch/sin_costuras.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -1284,13 +1285,23 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                         // todavía no hubo ningún scroll que lo dispare.
                         _precacheAround(images, index);
                         final url = images[index];
-                        return CacheNetWorkImagePic(
-                          url,
-                          width: double.infinity,
-                          fit: BoxFit.fitWidth,
-                          placeholder:
-                              _buildPlaceholder(context, effectiveWidth),
-                          headers: _c.watchData.value?.headers,
+                        // SinCosturas: cierra la rayita oscura que se veía
+                        // entre una página y la siguiente — ver el
+                        // comentario largo de ese widget. Vale igual para
+                        // PC y para Android: la cascada es el mismo código
+                        // en las dos, y el fallo era de rasterizado, no de
+                        // ninguna plataforma en particular.
+                        return SinCosturas(
+                          pixelesPorPunto:
+                              MediaQuery.devicePixelRatioOf(context),
+                          child: CacheNetWorkImagePic(
+                            url,
+                            width: double.infinity,
+                            fit: BoxFit.fitWidth,
+                            placeholder:
+                                _buildPlaceholder(context, effectiveWidth),
+                            headers: _c.watchData.value?.headers,
+                          ),
                         );
                       },
                       // +1: el pie de las flechas de capítulo. El contador de
