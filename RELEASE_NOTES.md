@@ -1,4 +1,4 @@
-## PrismHub v1.0.98 — Zona +18 y Biblioteca nativas para TV, y una tanda de arreglos de foco
+## PrismHub v1.0.99 — El mando ya no navega la pantalla de atrás
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,45 +12,25 @@
 
 ### 📺 Android TV
 
-- **La Zona +18 y la Biblioteca tienen Inicio nuevo, pensado para TV desde
-  cero.** Antes las dos reusaban la misma pantalla táctil de siempre, sin
-  marco de foco propio y con secciones que no tenían sentido con un mando
-  en la mano. Ahora cada una es una pantalla propia, con sus tarjetas
-  navegables y solo lo que corresponde: continuar viendo y favoritos, nada
-  más, y siempre contenido de vídeo — en televisor no se lee, en ninguna
-  zona.
+- **Al abrir una pantalla nueva, el mando ya no sigue manejando la de
+  atrás.** Pasaba en el repositorio de extensiones y en el historial: se
+  veía la pantalla nueva arriba, pero las flechas seguían moviendo la
+  selección de la que quedó debajo, todavía viva. La causa era el mismo
+  mecanismo que rescata el foco cuando se pierde de verdad —pensado para
+  una tarjeta que se recicla o un panel que se cierra—, que no distinguía
+  ese caso de "pantalla nueva sin nada enfocado todavía" y devolvía el
+  mando al último lugar bueno, que era el de la pantalla anterior. Corregido
+  en la raíz: ahora solo se vuelve ahí si ese último lugar sigue siendo
+  parte de la pantalla que se está viendo. Esto destrababa, entre otras
+  cosas, instalar extensiones nuevas desde el televisor.
 
-- **El diálogo de "Cambiar PIN" en Ajustes, con el teclado propio de la
-  app.** Antes abría el teclado del sistema, que no se navega bien con el
-  mando. Ahora usa el mismo teclado numérico que ya tiene el resto de la
-  app, con el primer botón siempre enfocado de entrada.
+- **La Zona +18 ya tiene su botón de Favoritos, separado de Historial.**
+  Antes solo estaba conectado el de Historial; ahora cada uno abre su
+  propia pantalla, con el filtro que corresponde.
 
-- **El carrusel grande de Inicio y el destacado de al lado ya se navegan
-  como una sola fila.** Al llegar al final del carrusel y seguir hacia la
-  derecha, la selección se perdía porque el mando no sabía que los dos
-  forman parte de la misma franja.
-
-- **Los botones del repositorio de extensiones ya se ven al enfocarlos.**
-  Instalar, actualizar y desinstalar no tenían ninguna señal de foco: con el
-  mando no había forma de saber dónde se estaba parado.
-
-- **En Extensiones instaladas, el interruptor y el menú dejan de pelearse
-  por el foco.** Los dos vivían dentro del mismo marco enfocable que la
-  fila entera, así que competían entre sí. Ahora son tres paradas
-  independientes: la fila, el interruptor y el menú.
-
-- **El teclado del buscador ya no se corta contra el borde de la
-  pantalla.** En un televisor con overscan grande, el teclado completo más
-  las búsquedas recientes podían medir más que el alto disponible y quedar
-  fuera de alcance. Ahora esa columna se desplaza.
-
-- **Las filas de cada zona cargan con un giro limpio, sin el esqueleto
-  brillando de antes.** Y mientras una fila todavía está pidiendo
-  contenido, el mando se frena ahí en vez de saltarla — al llegar el
-  contenido, la selección sigue en el mismo lugar sin perderse.
-
-- **El destacado de Inicio deja ver mejor lo que sigue debajo.** Ocupaba
-  casi el 80% de la pantalla entre el carrusel y las medianas, así que la
-  primera fila de extensiones quedaba con el título pegado al borde de
-  abajo, sin ninguna tarjeta a la vista. Ahora pesa menos, tanto en Inicio
-  como en cada zona.
+- **La pantalla de "escribí algo" del buscador, mejor centrada y con menos
+  texto.** Quedaba pegada arriba en vez de en el medio de la pantalla, y
+  sobraba una segunda línea explicando un mecanismo que no hace falta
+  saber desde el sillón. El ícono también usa el color de la pantalla que
+  lo llama —rosa en el buscador general, rojo en el de la Zona +18—, antes
+  quedaba siempre rosa aunque todo lo demás alrededor fuera rojo.
