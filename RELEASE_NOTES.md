@@ -1,45 +1,40 @@
-## PrismHub v1.0.92 — Sin rayas en la lectura, y el actualizador que se deja usar
+## PrismHub v1.0.93 — Bajar es bajar, y los ajustes dicen la verdad
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 📖 La rayita oscura entre páginas
+### 📺 Android TV — bajar ya no sube
 
-- **Se van las líneas negras que cruzaban la lectura** en la cascada, en
-  sitios donde la imagen original no tiene nada.
+- **La flecha abajo baja.** Estaba deshaciendo movimientos perfectamente
+  válidos y devolviendo la selección a la tarjeta anterior, así que bajar se
+  sentía como subir.
 
-  Cada página se muestra al ancho de la pantalla y su alto sale de la
-  proporción de la imagen, o sea un número con decimales. Puestas una debajo
-  de la otra, el borde entre dos caía a mitad de un píxel de la pantalla: ese
-  píxel no lo pintaba entera ninguna de las dos y por el hueco se asomaba el
-  fondo oscuro del lector. Ahora cada página se dibuja tapando ese píxel que
-  comparte con la de abajo, sin cambiar nada de lo que ocupa.
+  La comprobación que decide si un movimiento vale comparaba dos medidas
+  tomadas en momentos distintos: la de origen antes de mover el foco y la de
+  destino después. Entre una y otra, la lista se desplaza para traer a la
+  vista lo que se acaba de enfocar, así que todo cambia de sitio en pantalla
+  — y bajando, la tarjeta nueva termina dibujada más arriba de donde estaba
+  la anterior. Comparadas así, un salto hacia abajo legítimo parecía ir hacia
+  arriba. Ahora las dos se miden en el mismo momento.
 
-  Vale para PC y Android, y para cualquier extensión de lectura.
+- **Y cuando un movimiento sí se frena, la pantalla tampoco se corre.** Antes
+  la selección se quedaba quieta (bien) pero la lista igual se había
+  desplazado (mal), que era la otra mitad de la sensación de que se mueve
+  sola.
 
-### ⬆️ El actualizador
+### ⚙️ Los interruptores de Ajustes
 
-- **En el televisor ya se ve qué botón está elegido.** El principal viene
-  relleno del color de acento y el secundario se pintaba de ese mismo color
-  al enfocarse, así que con el mando los dos se veían igual. Ahora el foco
-  invierte el botón —fondo claro, texto oscuro y un aro alrededor—, así que
-  el elegido y el otro nunca se parecen. En teléfono y en escritorio, donde
-  hay dedo y cursor, los botones quedan como estaban.
-- **Si no querés actualizar, no se insiste.** Al elegir "Ahora no" se te
-  recuerda que podés hacerlo cuando quieras desde Ajustes → Buscar
-  actualizaciones, y por qué conviene: cada versión trae arreglos y las
-  extensiones dependen de eso.
-- **El botón ahora dice "Instalar la nueva versión"**, que es lo que hace.
-- **Y en el televisor que bajaba la actualización sin abrir el instalador**:
-  se preguntaba a ciegas, y en algunas cajas de Android TV la primera forma
-  de pedirlo se acepta sin protestar y no abre nada, así que la segunda no
-  llegaba a probarse nunca. Ahora se consulta antes quién puede atenderla.
+- **Ya no mienten.** Apagar la búsqueda automática de actualizaciones se
+  guardaba de verdad —al salir y volver a entrar aparecía apagada— pero en
+  pantalla el interruptor seguía encendido.
 
-### 📺 Android TV — la selección
+  Se redibujaba antes de que el cambio llegara a guardarse, y en los ajustes
+  que preguntan «¿seguro?» eso significaba dibujar con el valor viejo y no
+  volver a dibujar nunca. Ahora se espera al guardado y recién ahí se
+  refresca, así que lo que ves es siempre lo que está guardado. Vale para
+  todos los interruptores, no solo ese.
 
-- **La selección ya no desaparece al llegar al último card de una fila.**
-  Al frenar ahí, el foco pasaba un instante por una tarjeta fuera de la
-  vista y podía quedarse sin nadie enfocado. La flecha siguiente entonces
-  buscaba el primer enfocable que hubiera, y eso se veía como que la derecha
-  bajaba sola por las tarjetas de abajo. Las dos cosas eran el mismo fallo.
+- Con la búsqueda automática apagada, el aviso de versión nueva no aparece
+  solo: se comprueba desde **Ajustes → Buscar actualizaciones**, cuando vos
+  quieras.
