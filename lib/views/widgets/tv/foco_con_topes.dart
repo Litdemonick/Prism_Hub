@@ -69,7 +69,6 @@ class FocoConTopes extends DirectionalFocusAction {
       return;
     }
     final antes = primaryFocus;
-    final desde = _rectDe(antes);
     // ── Que Flutter no mueva el eje que nadie tocó ──────────────────────
     //
     // `super.invoke` termina llamando a la política de foco de Flutter, y
@@ -103,7 +102,17 @@ class FocoConTopes extends DirectionalFocusAction {
     // cosas: «al ir al último card horizontal desaparece la selección» y
     // «presionando a la derecha sigue scrolleando hacia abajo».
     final ejeDelMovimiento = horizontal ? Axis.horizontal : Axis.vertical;
-    final aRestaurar = _scrollsDelOtroEje(antes?.context, ejeDelMovimiento);
+    // Se anotan TODOS los scrolls, de los dos ejes, porque hacen falta dos
+    // cosas distintas: si el movimiento vale, se devuelve solo el eje que
+    // nadie tocó; si se deshace, se devuelven los dos — un movimiento que
+    // no ocurrió no puede dejar la lista desplazada. Sin esto, al frenar en
+    // el borde de una fila la selección se quedaba quieta (bien) pero la
+    // pantalla igual se había corrido (mal), que es la mitad de la
+    // sensación de que «se mueve solo».
+    final todosLosScrolls = _scrollsConSuPosicion(antes?.context);
+    final aRestaurar = todosLosScrolls
+        .where((s) => s.$1.axis != ejeDelMovimiento)
+        .toList(growable: false);
     super.invoke(intent);
     final despues = primaryFocus;
     if (antes == null || despues == null || identical(antes, despues)) {
@@ -111,6 +120,28 @@ class FocoConTopes extends DirectionalFocusAction {
       _rescatarSiSePerdio(antes);
       return;
     }
+    // ── Los DOS rectángulos se miden DESPUÉS de mover ───────────────────
+    //
+    // Este era el fallo de fondo, y explica el «al bajar me sube arriba».
+    //
+    // Todas las comparaciones de acá abajo —se movió para donde debía,
+    // sigue en el mismo renglón— dan por sentado que los dos rectángulos
+    // están medidos en el mismo momento. Y no lo estaban: el de origen se
+    // tomaba ANTES de `super.invoke` y el de destino DESPUÉS. En el medio,
+    // Flutter desplaza la lista para traer a la vista lo que acaba de
+    // enfocar, así que todo lo que hay en pantalla CAMBIA DE SITIO.
+    //
+    // Bajando, la lista sube el contenido: la tarjeta nueva termina
+    // dibujada MÁS ARRIBA de donde estaba la anterior antes del
+    // desplazamiento. Comparados así, un salto hacia abajo perfectamente
+    // legítimo parecía ir hacia arriba, y esta guarda lo deshacía. Lo que
+    // se veía era exactamente eso: la lista se movía, la selección volvía a
+    // la tarjeta de antes —ahora dibujada más arriba— y bajar se sentía
+    // como subir.
+    //
+    // Midiendo los dos después, ambos están en el mismo sistema de
+    // coordenadas y la comparación vuelve a significar lo que dice.
+    final desde = _rectDe(antes);
     final hasta = _rectDe(despues);
     // ── Sin poder medir el destino, en horizontal se frena ──────────────
     //
@@ -131,8 +162,10 @@ class FocoConTopes extends DirectionalFocusAction {
     // ser algo recién construido —la fila de abajo que entra en pantalla— y
     // frenar por no poder medirla sería trabar el scroll.
     if (horizontal && hasta == null && antes.context != null) {
+      // Se deshace el movimiento: se devuelven los DOS ejes, no solo el que
+      // nadie tocó. Ver el comentario de `todosLosScrolls`.
       antes.requestFocus();
-      _restaurar(aRestaurar);
+      _restaurar(todosLosScrolls);
       _rescatarSiSePerdio(antes);
       return;
     }
@@ -207,7 +240,9 @@ class FocoConTopes extends DirectionalFocusAction {
     // el foco intermedio no llega a dibujarse: desde afuera, la flecha
     // simplemente no hizo nada.
     antes.requestFocus();
-    _restaurar(aRestaurar);
+    // Los DOS ejes: el movimiento no ocurrió, así que el desplazamiento que
+    // provocó tampoco puede quedar. Ver el comentario de `todosLosScrolls`.
+    _restaurar(todosLosScrolls);
     _rescatarSiSePerdio(antes);
   }
 
@@ -249,11 +284,9 @@ class FocoConTopes extends DirectionalFocusAction {
     return origen != destino;
   }
 
-  /// Los scrolls ancestros que NO son del eje en el que se movió el usuario,
-  /// con la posición en la que están ahora mismo.
-  static List<(ScrollPosition, double)> _scrollsDelOtroEje(
+  /// Todos los scrolls ancestros, con la posición en la que están ahora.
+  static List<(ScrollPosition, double)> _scrollsConSuPosicion(
     BuildContext? ctx,
-    Axis ejeDelMovimiento,
   ) {
     final resultado = <(ScrollPosition, double)>[];
     if (ctx == null || !ctx.mounted) return resultado;
@@ -261,9 +294,7 @@ class FocoConTopes extends DirectionalFocusAction {
     var scroll = Scrollable.maybeOf(contexto);
     while (scroll != null) {
       final posicion = scroll.position;
-      if (posicion.axis != ejeDelMovimiento && posicion.hasPixels) {
-        resultado.add((posicion, posicion.pixels));
-      }
+      if (posicion.hasPixels) resultado.add((posicion, posicion.pixels));
       contexto = scroll.context;
       scroll = Scrollable.maybeOf(contexto);
     }
