@@ -11,6 +11,7 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/texto_que_no_cabe.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -598,64 +599,135 @@ class _ExtensionCardState extends State<ExtensionCard> {
                         runSpacing: 0,
                         children: [
                           if (hasUpgrade)
-                            SizedBox(
-                              height: tv ? 44 : 32,
-                              child: FilledButton(
-                                style: TextButton.styleFrom(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: tv ? 14 : 8),
-                                  minimumSize: Size.zero,
-                                  textStyle: TextStyle(fontSize: tv ? 15 : 12),
+                            tv
+                                ? _botonTv(
+                                    texto: 'extension-repo.upgrade'.i18n,
+                                    destacado: true,
+                                    onTap: () async {
+                                      await _install();
+                                      if (!mounted) return;
+                                      setState(() {});
+                                    },
+                                  )
+                                : SizedBox(
+                                    height: 32,
+                                    child: FilledButton(
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8),
+                                        minimumSize: Size.zero,
+                                        textStyle:
+                                            const TextStyle(fontSize: 12),
+                                      ),
+                                      onPressed: () async {
+                                        await _install();
+                                        // mounted: instalar y desinstalar tardan (red + escritura en disco) y
+                                        // la tarjeta puede irse mientras tanto —cambiando de pestaña, tocando
+                                        // atras, o simplemente porque la lista se refresco—. setState sobre un
+                                        // widget ya desmontado tira "setState() called after dispose()" y se
+                                        // lleva la pantalla puesta.
+                                        if (!mounted) return;
+                                        setState(() {});
+                                      },
+                                      child:
+                                          Text('extension-repo.upgrade'.i18n),
+                                    ),
+                                  ),
+                          tv
+                              ? _botonTv(
+                                  texto: 'common.uninstall'.i18n,
+                                  onTap: () async {
+                                    await ExtensionUtils.uninstall(
+                                        widget.package);
+                                    if (!mounted) return;
+                                    setState(() {
+                                      isInstall = false;
+                                    });
+                                  },
+                                )
+                              : SizedBox(
+                                  height: 32,
+                                  child: TextButton(
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8),
+                                      minimumSize: Size.zero,
+                                      textStyle: const TextStyle(fontSize: 12),
+                                    ),
+                                    onPressed: () async {
+                                      await ExtensionUtils.uninstall(
+                                          widget.package);
+                                      // Ver la nota de mounted mas arriba.
+                                      if (!mounted) return;
+                                      setState(() {
+                                        isInstall = false;
+                                      });
+                                    },
+                                    child: Text('common.uninstall'.i18n),
+                                  ),
                                 ),
-                                onPressed: () async {
-                                  await _install();
-                                  // mounted: instalar y desinstalar tardan (red + escritura en disco) y
-                                  // la tarjeta puede irse mientras tanto —cambiando de pestaña, tocando
-                                  // atras, o simplemente porque la lista se refresco—. setState sobre un
-                                  // widget ya desmontado tira "setState() called after dispose()" y se
-                                  // lleva la pantalla puesta.
-                                  if (!mounted) return;
-                                  setState(() {});
-                                },
-                                child: Text('extension-repo.upgrade'.i18n),
-                              ),
-                            ),
-                          SizedBox(
-                            height: tv ? 44 : 32,
-                            child: TextButton(
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: tv ? 14 : 8),
-                                minimumSize: Size.zero,
-                                textStyle: TextStyle(fontSize: tv ? 15 : 12),
-                              ),
-                              onPressed: () async {
-                                await ExtensionUtils.uninstall(widget.package);
-                                // Ver la nota de mounted mas arriba.
-                                if (!mounted) return;
-                                setState(() {
-                                  isInstall = false;
-                                });
-                              },
-                              child: Text('common.uninstall'.i18n),
-                            ),
-                          ),
                         ],
                       )
-                    : SizedBox(
-                        height: tv ? 44 : null,
-                        child: TextButton(
-                          style: tv
-                              ? TextButton.styleFrom(
-                                  textStyle: const TextStyle(fontSize: 15),
-                                )
-                              : null,
-                          onPressed: () async {
-                            await _install();
-                          },
-                          child: Text('common.install'.i18n),
-                        ),
-                      ),
+                    : tv
+                        ? _botonTv(
+                            texto: 'common.install'.i18n,
+                            destacado: true,
+                            onTap: () async {
+                              await _install();
+                            },
+                          )
+                        : SizedBox(
+                            child: TextButton(
+                              onPressed: () async {
+                                await _install();
+                              },
+                              child: Text('common.install'.i18n),
+                            ),
+                          ),
+      ),
+    );
+  }
+
+  /// El botón de instalar/actualizar/desinstalar, en TV.
+  ///
+  /// ── Por qué hace falta, si `FilledButton`/`TextButton` ya son "focuseables" ──
+  ///
+  /// Lo son de fábrica, en el sentido de que el D-pad puede llegar a ellos —
+  /// pero el aviso de foco de Material es un velo apenas perceptible,
+  /// pensado para un cursor de mouse que YA dice dónde está uno parado.
+  /// Con el mando esa marca es la ÚNICA pista, y en una lista densa como
+  /// esta —con varias insignias, descripción, y hasta dos botones
+  /// juntos— un velo tenue se pierde. Reportado en vivo: «el repositorio no
+  /// me deja navegar bien».
+  ///
+  /// `FocusableCard` es el mismo mecanismo que ya usa el resto de la app en
+  /// TV (la lista de Extensiones instaladas, `ExtensionTile`, incluida):
+  /// un marco de foco sólido y de alto contraste, no un tinte.
+  Widget _botonTv({
+    required String texto,
+    required VoidCallback onTap,
+    bool destacado = false,
+  }) {
+    return FocusableCard(
+      borderRadius: 10,
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: destacado ? HomeTheme.accentPink : HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(10),
+          border: destacado ? null : Border.all(color: HomeTheme.border),
+        ),
+        child: Text(
+          texto,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: destacado ? Colors.white : HomeTheme.textPrimary,
+          ),
+        ),
       ),
     );
   }
