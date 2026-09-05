@@ -150,22 +150,68 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
   /// termina saltando lejos): si ese sitio sigue existiendo, la selección
   /// vuelve exactamente donde estaba y desde afuera no pasó nada.
   void _recuperarElFoco() {
+    // ── A qué ámbito cayó el foco ─────────────────────────────────────────
+    //
+    // Cuando se navega a una pantalla nueva que todavía no puso el foco en
+    // nada —ningún `autofocus`, nada pedido en su `initState`— el foco cae
+    // acá igual que cuando se pierde por un motivo normal (una tarjeta que
+    // se recicla, un panel que se cierra). Los dos casos entran por el mismo
+    // lado, pero NO son lo mismo: en el primero no hay nada que rescatar
+    // porque nunca hubo nada enfocado EN ESTA pantalla.
+    final actual = FocusManager.instance.primaryFocus;
+    final ambito = actual is FocusScopeNode
+        ? actual
+        : (actual?.nearestScope ?? FocusManager.instance.rootScope);
     final ultimo = _ultimoBueno;
-    if (ultimo == null) return;
-    if (ultimo.context == null || !ultimo.canRequestFocus) return;
-    // Después del cuadro: si el foco se perdió porque algo se estaba
-    // desmontando, pedirlo en el mismo instante puede volver a perderse
-    // cuando ese desmontaje termine.
+    // ── Por qué no alcanza con `ultimo.canRequestFocus` ──────────────────
+    //
+    // Cada pantalla de Navigator sigue viva DEBAJO de la que se acaba de
+    // abrir encima —Flutter no la destruye, solo deja de mostrarla— así que
+    // el último nodo bueno de la pantalla ANTERIOR sigue teniendo un
+    // `context` válido y `canRequestFocus` en true. Devolverle el foco ahí
+    // es justo el bug reportado en vivo: «se pone la pantalla pero se
+    // navega por detrás, en la zona donde estaba» — el repositorio de
+    // extensiones y el historial, las dos sin ningún `autofocus` propio,
+    // se quedaban recibiendo las flechas del Inicio de atrás.
+    //
+    // La pertenencia al MISMO ámbito que acaba de quedar activo es lo que
+    // distingue los dos casos: si el último nodo bueno vive en otro ámbito
+    // —la pantalla de atrás—, no es un rescate, es una pantalla nueva sin
+    // nada puesto todavía.
+    if (ultimo != null &&
+        ultimo.context != null &&
+        ultimo.canRequestFocus &&
+        ultimo.nearestScope == ambito) {
+      // Después del cuadro: si el foco se perdió porque algo se estaba
+      // desmontando, pedirlo en el mismo instante puede volver a perderse
+      // cuando ese desmontaje termine.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final actual2 = FocusManager.instance.primaryFocus;
+        // Alguien ya lo recuperó por su cuenta: no se pisa.
+        if (actual2 != null &&
+            actual2 is! FocusScopeNode &&
+            actual2.context != null) {
+          return;
+        }
+        if (ultimo.context == null || !ultimo.canRequestFocus) return;
+        ultimo.requestFocus();
+      });
+      return;
+    }
+    // ── Pantalla nueva: se busca el primer enfocable DENTRO de ella ──────
+    //
+    // El mismo camino que ya usa el rescate por tecla (`_alLlegarUnaTecla`,
+    // más abajo) para el caso "el mando parece muerto": pedírselo al ámbito
+    // que tiene el foco encuentra lo primero enfocable de la pantalla que
+    // se está viendo, nunca de otra.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final actual = FocusManager.instance.primaryFocus;
-      // Alguien ya lo recuperó por su cuenta: no se pisa.
-      if (actual != null &&
-          actual is! FocusScopeNode &&
-          actual.context != null) {
+      final actual2 = FocusManager.instance.primaryFocus;
+      if (actual2 != null &&
+          actual2 is! FocusScopeNode &&
+          actual2.context != null) {
         return;
       }
-      if (ultimo.context == null || !ultimo.canRequestFocus) return;
-      ultimo.requestFocus();
+      ambito.nextFocus();
     });
   }
 
