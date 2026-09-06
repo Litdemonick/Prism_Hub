@@ -288,8 +288,34 @@ class FocoConTopes extends DirectionalFocusAction {
         }
         _anotar('derecha: no hay columna a la derecha');
       } else {
-        _anotar('${aLaDerecha ? "derecha" : "izquierda"}: '
-            'el origen no esta en una fila que se desplace');
+        // ── Izquierda, sin fila y sin panel: buscar igual ────────────────
+        //
+        // Este origen no es una fila de tarjetas ni viene del panel de
+        // categorías —una grilla común, por ejemplo (`GridView`, no un
+        // `ListView` horizontal)—, así que hasta acá no había NINGUNA
+        // ayuda: se delegaba entero en la búsqueda de fábrica de Flutter,
+        // que a veces no encuentra nada. Confirmado con el registro en
+        // vivo: «izquierda: el origen no está en una fila que se
+        // desplace», repetido sin que el mando se moviera un pelo —el
+        // buscador de una extensión, con su grilla a la derecha y el
+        // teclado a la izquierda.
+        //
+        // Mismo camino que ya usa la fila cuando se queda sin panel al
+        // que volver (unos párrafos más arriba): buscar geométricamente lo
+        // que quede a la izquierda, a la altura más parecida, sin filtrar
+        // por región —esta pantalla no tiene ninguna marcada—.
+        final aLaIzquierda = _loQueEstaEnfrente(
+          antes,
+          aLaDerecha: false,
+          soloContenido: false,
+        );
+        if (aLaIzquierda != null) {
+          _anotar('izquierda: sin fila, a lo de al lado '
+              '(${aLaIzquierda.debugLabel})');
+          _irA(aLaIzquierda);
+          return;
+        }
+        _anotar('izquierda: sin fila y nada a la izquierda; no se mueve nada');
       }
     }
     // ── Y en vertical, lo mismo cuando se viene de una fila ─────────────
