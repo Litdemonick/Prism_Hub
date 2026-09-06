@@ -122,6 +122,24 @@ class _DesvanecidoDeFilaState extends State<DesvanecidoDeFila> {
   void initState() {
     super.initState();
     widget.scroll?.addListener(_alDesplazarse);
+    // ── Y una comprobación al arrancar, no solo al mover ────────────────
+    //
+    // `_quedaAdelante` nace en `true` —una suposición razonable antes de
+    // medir nada— y lo único que la corrige es `_alDesplazarse`, que
+    // cuelga de un scroll que se mueve. Una fila CORTA, con todos sus
+    // ítems ya visibles de entrada, no dispara ni un solo evento de
+    // scroll en toda su vida: nunca hay nada que desplazar. El resultado
+    // era ese difuminado del lado derecho quedando puesto PARA SIEMPRE, en
+    // una fila que ya mostraba todo lo que tenía. Reportado en vivo, con
+    // foto, muchas veces, como «una sombra estática que no se mueve» —y
+    // no se movía porque nada la estaba actualizando.
+    //
+    // Después del primer cuadro, cuando el scroll ya sabe cuánto mide de
+    // verdad, se hace la misma cuenta una vez más — así una fila corta
+    // arranca sabiendo que no le queda nada por ningún lado.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _alDesplazarse();
+    });
   }
 
   @override
