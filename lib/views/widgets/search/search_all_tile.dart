@@ -9,7 +9,21 @@ import 'package:prismhub/views/widgets/extension_item_card.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/horizontal_list.dart';
+import 'package:prismhub/views/widgets/tv/recorte_de_fila.dart';
+
+/// El recorte de fila de televisor, solo cuando toca.
+///
+/// Corta a los costados y deja pasar arriba y abajo, que es por donde sale
+/// el marco de selección. Ver `RecorteDeFila`.
+Widget _envolverParaTv(bool tv, Widget fila) {
+  if (!tv) return fila;
+  return ClipRect(
+    clipper: const RecorteDeFila(aireLateral: 24),
+    child: fila,
+  );
+}
 
 class SearchAllTile extends StatefulWidget {
   const SearchAllTile({
@@ -279,10 +293,31 @@ class _SearchAllTileState extends State<SearchAllTile> {
           );
         }
 
+        final tv = PlatformTv.esTelevisionSync;
         return SizedBox(
           height: altoFila,
-          child: ListView.builder(
+          // ── En televisor, el mismo trato que las filas de Inicio ──────
+          //
+          // El marco de selección se dibuja POR FUERA de la tarjeta, y una
+          // lista recorta contra sus bordes: acá la fila iba sin nada, así
+          // que la tarjeta enfocada quedaba con el marco mordido arriba,
+          // abajo y en la primera de la izquierda. Reportado con foto: «en
+          // el buscador, al seleccionar una card se corta, no hay aire».
+          //
+          // `RecorteDeFila` corta a los costados —donde molesta, para que
+          // las tarjetas que salen no se dibujen sobre el resto— y deja
+          // pasar arriba y abajo, que es por donde sale el marco. Fuera de
+          // televisor todo queda como estaba.
+          child: _envolverParaTv(
+            tv,
+            ListView.builder(
             scrollDirection: Axis.horizontal,
+            clipBehavior: tv ? Clip.none : Clip.hardEdge,
+            padding: tv
+                ? const EdgeInsets.symmetric(
+                    horizontal: HomeTheme.aireDeFocoTv,
+                  )
+                : EdgeInsets.zero,
             controller: controller,
             itemCount: data.length,
             itemBuilder: ((context, index) {
@@ -300,6 +335,7 @@ class _SearchAllTileState extends State<SearchAllTile> {
                 ),
               );
             }),
+          ),
           ),
         );
       },
