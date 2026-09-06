@@ -266,6 +266,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   Timer? _autocompletarTimer;
   Timer? _placeholderTimer;
   int _placeholderIndex = 0;
+  // Ver el porqué en el `onCambio` del teclado de TV, más abajo.
+  Timer? _tvBusquedaDemorada;
 
   // Hasta 20 títulos, sin duplicados y sin vacíos — alcanza para
   // sugerencias/rotación sin guardar listas gigantes en memoria.
@@ -418,6 +420,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     // Si no, una sugerencia pendiente se dispara con la pantalla ya cerrada y
     // toca un controller que acaba de liberarse.
     _autocompletarTimer?.cancel();
+    _tvBusquedaDemorada?.cancel();
     _textEditingController.dispose();
     super.dispose();
   }
@@ -1267,20 +1270,32 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       // desborda.
       resizeToAvoidBottomInset: false,
       appBar: SearchAppBar(
-        // ── Sin la flechita de volver del sistema, en TV ────────────────
+        // ── En TV, una flecha de verdad, no la del sistema ───────────────
         //
         // Esta pantalla, en TV, vive DENTRO de la de arriba —el teclado a
         // la izquierda, esto a la derecha—, y el `AppBar` de acá adentro
-        // seguía agregando su propia flecha de volver, sola, pegada
-        // contra el borde de la columna de al lado. Reportado con foto:
-        // «deja la flecha a la izquierda, no pegada al teclado». Un botón
-        // de Material sin marco de foco, encima, compitiendo con el
-        // teclado por ser "lo de la izquierda".
+        // agregaba su propia flecha de volver: un botón de Material sin
+        // marco de foco, pegado contra el borde de la columna de al lado.
+        // Reportado con foto: «dejá la flecha a la izquierda, no pegada
+        // al teclado».
         //
-        // El mando ya vuelve con la tecla de atrás del control remoto —no
-        // hace falta ningún botón en pantalla para eso—, así que en TV
-        // directamente no se dibuja ninguno.
-        leading: PlatformTv.esTelevisionSync ? const SizedBox.shrink() : null,
+        // Sacarla del todo tampoco servía —reportado enseguida: «te faltó
+        // la flecha para volver atrás»—. Hace falta la flecha, con aire
+        // alrededor y con marco de foco de verdad.
+        leading: PlatformTv.esTelevisionSync
+            ? Padding(
+                padding: const EdgeInsets.all(6),
+                child: FocusableCard(
+                  borderRadius: 8,
+                  onTap: () => Get.back<void>(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(Icons.arrow_back_rounded,
+                        color: HomeTheme.textPrimary),
+                  ),
+                ),
+              )
+            : null,
         // El contador va pegado al nombre porque SearchAppBar recibe un texto,
         // no un widget. Ver _cargados.
         title: _cargados == 0
@@ -1890,8 +1905,28 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                   onCambio: (texto) {
                     _typedText = '';
                     _ghostBase = null;
+                    // ── Lo escrito, ya; la búsqueda, con una pausa ──────
+                    //
+                    // `_onSearch` no solo guarda el texto: dispara el
+                    // refresco de la extensión, que corre su motor de
+                    // JavaScript. Llamándolo en cada tecla, mantener
+                    // apretada una letra (o escribir rápido) encolaba un
+                    // refresco atrás de otro y el mando se sentía
+                    // trabado. Reportado en vivo: «cuando quiero spamear
+                    // letras no me deja, se actualiza todo el rato».
+                    //
+                    // El campo de texto se actualiza YA —lo escrito se ve
+                    // al instante, sin esperar nada— y la búsqueda de
+                    // verdad recién se dispara cuando el mando se queda
+                    // quieto un momento.
                     _textEditingController.text = texto;
-                    _onSearch(texto);
+                    _tvBusquedaDemorada?.cancel();
+                    _tvBusquedaDemorada = Timer(
+                      const Duration(milliseconds: 350),
+                      () {
+                        if (mounted) _onSearch(texto);
+                      },
+                    );
                   },
                 ),
               ),
