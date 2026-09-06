@@ -1,4 +1,4 @@
-## PrismHub v1.0.107 — Topes también a la izquierda, en el panel y arriba
+## PrismHub v1.0.108 — Las medianas con tope, y aire para que nada se corte
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,31 +12,27 @@
 
 ### 📺 Android TV
 
-Tres sitios donde la selección todavía se movía sola, y los tres eran el
-mismo agujero que ya se había tapado del lado derecho: se dejaba que el
-sistema decidiera el salto, y ese intento **ya desplaza la pantalla**
-aunque la selección después vuelva a su sitio.
+- **Las cuatro tarjetas medianas de arriba ya frenan al final.** El
+  destacado grande estaba marcado como fila y ellas no, así que seguían
+  saltando abajo con la flecha derecha. Ahora esa marca viaja dentro de la
+  propia fila, para que no vuelva a quedarse ninguna afuera.
 
-- **La izquierda al principio de una fila** ahora entra al panel de
-  categorías directo, por el botón que esté a la misma altura de donde
-  venías — así no se pierde el sitio. Nada se desplaza.
+- **Ya no se pierde un paso al apretar rápido.** El sistema aplica el
+  cambio de selección al final del cuadro, así que manteniendo la flecha la
+  tecla siguiente llegaba antes y se calculaba desde la tarjeta que ya
+  habías dejado. Por eso "yendo lento" llegabas al panel y apurando no.
 
-- **Dentro del panel, insistir con la izquierda ya no saca de ahí.** A la
-  izquierda del panel no hay nada, pero el sistema enganchaba una tarjeta
-  del contenido y arrastraba la zona entera hacia abajo.
+- **Al entrar a una zona se empieza por la primera tarjeta**, no donde
+  hubiera quedado la vez anterior.
 
-- **Los destacados de arriba tienen los mismos topes que las filas.** Los
-  dos grandes y las medianas no son filas que se desplazan sino bloques
-  fijos, así que quedaban fuera del mecanismo que ya frenaba a las filas de
-  pósters.
+- **El buscador vuelve a ocupar toda la pantalla.** Se encogía contra el
+  borde de arriba y abajo quedaba una franja muerta.
 
-Y un efecto secundario que cierra un fallo viejo: con el panel desplegado
-ahora también se puede entrar. Antes no —sus botones quedaban descartados
-por anchos— y eso se mordía la cola: sin poder entrar nunca recibía la
-selección, sin selección no se enteraba de que tenía que contraerse, y
-desplegado seguía siendo inalcanzable.
+- **Aire alrededor de todo lo que se puede seleccionar.** El marco de
+  selección se dibuja por fuera de la tarjeta, así que donde el contenido
+  llegaba justo al filo quedaba mordido — y eso volvía una y otra vez en un
+  sitio distinto: la primera de la fila, la última contra el borde derecho,
+  la de arriba, la de abajo. Ahora es un mínimo con nombre que respetan
+  todas las pantallas, en vez de un número puesto a mano en cada sitio.
 
-Más aire contra el borde derecho, donde el marco de selección se veía
-cortado.
-
-Las pruebas automáticas de navegación son ahora 25 casos.
+Las pruebas automáticas de navegación son ahora 26 casos.
