@@ -229,7 +229,17 @@ double _anchoTarjetaTv(BuildContext context) => _anchoPosterTv(context);
 /// En TV ya no hace falta ese aire: la fila no recorta (`Clip.none`) y el
 /// contenido arranca pegado al rail. Así que las dos cosas van al mismo
 /// sitio, y bien a la izquierda.
-double _margenDeFilaTv(BuildContext context) => 2;
+/// ── Por qué 8 y no 2 ────────────────────────────────────────────────────
+///
+/// El marco de foco se dibuja POR FUERA de la tarjeta. Con 2, la PRIMERA de
+/// cada fila tenía su lado izquierdo casi pegado al recorte, y ahí la línea
+/// se ve más fina que en los otros tres lados. Reportado con foto: «en la
+/// primera card se me achica la línea rosada del lado izquierdo; a la
+/// derecha ya lo mejoraste, falta el izquierdo».
+///
+/// Sigue alineada con el título de la fila a ojo —ocho puntos no se leen
+/// como una sangría— y ahora el marco entra entero.
+double _margenDeFilaTv(BuildContext context) => 8;
 
 double _altoFilaTv(BuildContext context) =>
     TarjetaDeCatalogo.altoDeUnaLineaDeAncho(_anchoTarjetaTv(context)) + 20;

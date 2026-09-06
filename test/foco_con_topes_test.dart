@@ -927,6 +927,36 @@ void main() {
     });
   });
 
+  group('al entrar a una zona se empieza por la primera', () {
+    testWidgets('desde el panel, la derecha cae en la primera tarjeta',
+        (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(arbol(filas: 5, conRescate: true));
+      await t.pumpAndSettle();
+
+      // Se deja la zona recorrida y desplazada, como queda al volver: las
+      // zonas se conservan vivas con su desplazamiento.
+      nodo('f0-c0').requestFocus();
+      await t.pumpAndSettle();
+      for (var i = 0; i < 3; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await t.pumpAndSettle();
+      }
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await t.pumpAndSettle();
+      expect(enfocado(), startsWith('rail'));
+
+      // Y al volver a entrar, arriba del todo. «Siempre al entrar a una
+      // zona se coloca la selección en la primera card de arriba, no donde
+      // está.»
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await t.pumpAndSettle();
+
+      expect(enfocado(), 'f0-c0');
+    });
+  });
+
   group('lo vertical sigue funcionando', () {
     testWidgets('abajo baja de fila', (t) async {
       await t.pumpWidget(arbol());

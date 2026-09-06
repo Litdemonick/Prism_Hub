@@ -1263,7 +1263,21 @@ class _FilaMedianasTv extends StatelessWidget {
   Widget build(BuildContext context) {
     final cuantas = items.length < 4 ? items.length : 4;
     if (cuantas == 0) return const SizedBox.shrink();
-    return SizedBox(
+    // ── Marcada como FILA, aunque no se desplace ────────────────────────
+    //
+    // Sin esto, el mando no tenía forma de saber que estas cuatro son «la
+    // misma fila»: no cuelgan de ningún scroll horizontal del que agarrarse
+    // (es un `Row` común). Y sin fila que respetar, la flecha derecha en la
+    // última terminaba saltando abajo, que es justo lo que los topes vienen
+    // a evitar. Reportado en vivo, ya con las filas de abajo arregladas:
+    // «las 4 chicas y las 2 grandes, al ir a la derecha, salta y se va
+    // abajo».
+    //
+    // La marca va ACÁ ADENTRO y no en quien la usa: así viaja con la fila y
+    // no depende de que alguien se acuerde de ponerla —que es exactamente
+    // lo que había pasado, el hero la tenía y esta no.
+    return FranjaFijaTv(
+      child: SizedBox(
       height: alto,
       // ── Aire contra el rail, antes de la primera tarjeta ────────────────
       //
@@ -1290,6 +1304,7 @@ class _FilaMedianasTv extends StatelessWidget {
               ),
             ],
           ],
+        ),
         ),
       ),
     );
@@ -1529,6 +1544,12 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
                   // su portada, en vez de quedarse viva ocupando el techo de
                   // imágenes. Ninguna de estas tarjetas pide seguir viva.
                   addAutomaticKeepAlives: false,
+                  // El mismo margen que las filas de Inicio, y por el mismo
+                  // motivo: el marco de foco se dibuja por fuera de la
+                  // tarjeta, así que la primera necesita unos puntos antes
+                  // del recorte o su lado izquierdo se ve más fino que los
+                  // otros tres. Ver `_margenDeFilaTv`.
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   itemCount: widget.items.length,
                   separatorBuilder: (_, __) =>
                       const SizedBox(width: _huecoPosterTv),
@@ -1609,7 +1630,7 @@ class _ContenidoTV extends StatelessWidget {
               // veía cortado justo en esas dos. Reportado en vivo: «arriba
               // en la grande del inicio se corta, no hay aire» y «las cards
               // de abajo las estás cortando».
-              padding: const EdgeInsets.only(top: 20, bottom: 34),
+              padding: const EdgeInsets.only(top: 20, bottom: 56),
               // ── Se construye una pantalla POR DELANTE ─────────────────
               //
               // Cada fila pide su contenido cuando se construye, y de fábrica
@@ -1911,7 +1932,7 @@ class _ZonaTvState extends State<_ZonaTv> {
         // Mismo aire que en Inicio, y por el mismo motivo: la lista recorta
         // contra sus bordes y el marco de foco se dibuja por fuera de la
         // tarjeta. Ver el comentario en `_ContenidoTV`.
-        padding: const EdgeInsets.only(top: 20, bottom: 34),
+        padding: const EdgeInsets.only(top: 20, bottom: 56),
         scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
             const ScrollCacheExtent.viewport(1),
         // Ver el mismo comentario en la tira de pósters: la fila que sale

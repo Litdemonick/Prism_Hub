@@ -71,7 +71,7 @@ class FocoConTopes extends DirectionalFocusAction {
       super.invoke(intent);
       return;
     }
-    final antes = primaryFocus;
+    final antes = _dondeEstamosDeVerdad();
     // ── En horizontal, el movimiento lo decidimos NOSOTROS ──────────────
     //
     // Todo lo de más abajo es "dejá que Flutter mueva y después deshacelo si
@@ -118,7 +118,7 @@ class FocoConTopes extends DirectionalFocusAction {
         if (vecino != null) {
           _anotar('${aLaDerecha ? "derecha" : "izquierda"}: '
               'a la vecina de la fila (${vecino.debugLabel})');
-          vecino.requestFocus();
+          _irA(vecino);
           return;
         }
         // No hay vecino en la fila.
@@ -144,14 +144,13 @@ class FocoConTopes extends DirectionalFocusAction {
         if (alPanel != null) {
           _anotar('izquierda: al panel de categorías '
               '(${alPanel.debugLabel})');
-          alPanel.requestFocus();
+          _irA(alPanel);
           return;
         }
         _anotar('izquierda: principio de la fila y no hay panel; '
             'no se mueve nada');
         return;
-      } else if (aLaDerecha &&
-          RegionDeFocoTv.de(antes.context) != RegionDeFocoTv.rail) {
+      } else if (aLaDerecha) {
         // ── Entrar a la columna de al lado: por su PRIMERA opción ────────
         //
         // En una pantalla de dos columnas (Ajustes, el repositorio, el
@@ -167,14 +166,17 @@ class FocoConTopes extends DirectionalFocusAction {
         // ir seleccionando». Se entra por arriba de la columna siguiente,
         // sea cual sea la altura desde la que se venía.
         //
-        // Solo hacia la derecha, y no desde el rail de categorías: ese ya
-        // tiene su propio camino, probado, y entrar al contenido por la
-        // tarjeta de arriba no es lo que se pidió ahí.
+        // Vale también DESDE el panel de categorías, y es a propósito:
+        // entrar a una zona tiene que dejar la selección en su primera
+        // tarjeta, no en donde hubiera quedado la vez anterior (las zonas
+        // se conservan vivas, con su desplazamiento). Pedido explícito:
+        // «siempre al entrar a una zona se coloca la selección en la
+        // primera card de arriba, no donde está».
         final primero = _primeroDeLaColumnaSiguiente(antes);
         if (primero != null) {
           _anotar('derecha: a la primera de la columna siguiente '
               '(${primero.debugLabel})');
-          primero.requestFocus();
+          _irA(primero);
           return;
         }
         _anotar('derecha: no hay columna a la derecha');
@@ -574,6 +576,62 @@ class FocoConTopes extends DirectionalFocusAction {
   /// usuario está navegando: no cuesta nada y ahorra una release entera de
   /// ida y vuelta.
   static void _anotar(String queHizo) => logger.fine('[mando] $queHizo');
+
+  /// El último sitio al que ESTE código pidió mover el foco, y cuándo.
+  ///
+  /// Ver `_dondeEstamosDeVerdad`.
+  static FocusNode? _ultimoPedido;
+  static FocusNode? _desdeDondeSePidio;
+  static DateTime? _cuandoSePidio;
+
+  /// Cuánto se confía en el pedido propio antes de volver a creerle a
+  /// `primaryFocus`. Alcanza para dos pulsaciones seguidas del mando —que es
+  /// el caso— y es mucho menos que cualquier pausa humana entre teclas.
+  static const _validezDelPedido = Duration(milliseconds: 250);
+
+  /// Desde dónde se está moviendo el usuario AHORA.
+  ///
+  /// ── Por qué no alcanza con `primaryFocus` ────────────────────────────
+  ///
+  /// Flutter no aplica los cambios de foco en el acto: los anota y los
+  /// resuelve al final del cuadro. Apretando rápido —que con un mando es lo
+  /// normal, se mantiene la flecha— la tecla siguiente llega ANTES de que
+  /// se haya aplicado la anterior, así que `primaryFocus` todavía devuelve
+  /// la tarjeta de la que ya nos fuimos. Resultado: ese paso se calcula
+  /// desde el sitio equivocado y se pierde.
+  ///
+  /// Reportado en vivo: «si voy lento llego a la primera tarjeta y de ahí
+  /// al panel; presionando [rápido] no llega directo al panel».
+  ///
+  /// Como los movimientos de acá los pedimos nosotros, se recuerda el
+  /// último y se lo prefiere mientras siga fresco y siga siendo un destino
+  /// válido. Si pasó tiempo, o si el foco lo movió otra cosa, manda
+  /// `primaryFocus` como siempre.
+  static FocusNode? _dondeEstamosDeVerdad() {
+    final actual = primaryFocus;
+    final pedido = _ultimoPedido;
+    final desde = _desdeDondeSePidio;
+    final cuando = _cuandoSePidio;
+    if (pedido == null || cuando == null) return actual;
+    if (DateTime.now().difference(cuando) > _validezDelPedido) return actual;
+    // La condición fina: solo se prefiere el pedido propio mientras el foco
+    // siga estando EXACTAMENTE donde estaba cuando se pidió. Eso es «Flutter
+    // todavía no aplicó lo mío». Si ya se aplicó, o si lo movió cualquier
+    // otra cosa (un `autofocus`, el rescate, la pantalla que cambió), manda
+    // `primaryFocus` — si no, se estaría navegando desde un sitio inventado.
+    if (!identical(actual, desde)) return actual;
+    if (pedido.context == null || !pedido.canRequestFocus) return actual;
+    return pedido;
+  }
+
+  /// Mueve el foco y deja constancia, para que la pulsación siguiente sepa
+  /// de dónde parte aunque Flutter todavía no lo haya aplicado.
+  static void _irA(FocusNode destino) {
+    _ultimoPedido = destino;
+    _desdeDondeSePidio = primaryFocus;
+    _cuandoSePidio = DateTime.now();
+    destino.requestFocus();
+  }
 
   /// Qué fila horizontal es la de [ctx], o null si no está en ninguna.
   ///

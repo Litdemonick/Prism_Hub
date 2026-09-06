@@ -49,6 +49,18 @@ class PantallaTv extends StatelessWidget {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
       body: Stack(
+        // ── El contenido ocupa la pantalla, no lo que midan sus hijos ────
+        //
+        // Un hijo de `Stack` sin posicionar recibe restricciones SUELTAS:
+        // puede quedarse tan chico como su contenido. Al buscador eso le
+        // pasaba factura — su columna de teclado mide lo que mide, así que
+        // la pantalla entera se encogía contra el borde de arriba y abajo
+        // quedaba una franja muerta. Reportado con foto: «el fondo se movió
+        // arriba y no está en toda la pantalla».
+        //
+        // Con `expand`, el contenido recibe el tamaño completo y cada
+        // pantalla reparte su alto como quiera.
+        fit: StackFit.expand,
         children: [
           Positioned.fill(child: fondo ?? const FondoTv()),
           SafeArea(
