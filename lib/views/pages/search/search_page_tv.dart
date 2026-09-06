@@ -74,12 +74,12 @@ class _SearchTVState extends State<SearchTV> {
 
   /// Cuánto puede llegar a medir el bloque de "últimas búsquedas".
   ///
-  /// Es un TOPE, no una estimación: `_BusquedasRecientesTv` no deja que sus
-  /// chips crezcan más allá de esto (ver `maxHeight` ahí). Con un número que
-  /// de verdad se cumple, el teclado puede confiar en él para saber cuánto
-  /// le queda a él — a diferencia de adivinar cuántas líneas ocupan los
-  /// chips, que dependía de qué se hubiera buscado antes.
-  static const _altoMaximoDeRecientes = 96.0;
+  /// Confiable porque `_BusquedasRecientesTv` ahora acota cuántos CHIPS
+  /// pide (ver `_maximoDeChips` ahí) en vez de cuánto ALTO les da — así
+  /// nunca envuelve a más de dos líneas largas, y este número alcanza de
+  /// sobra para esas dos líneas más el encabezado. El teclado usa esto
+  /// para saber cuánto le queda a él, sin tener que adivinar.
+  static const _altoMaximoDeRecientes = 130.0;
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +154,6 @@ class _SearchTVState extends State<SearchTV> {
                           accent: widget.accent,
                           onElegir: _buscar,
                           onBorrar: _borrarRecientes,
-                          alturaMaxima: _altoMaximoDeRecientes,
                         ),
                       ),
                     TecladoTv(
@@ -198,7 +197,6 @@ class _BusquedasRecientesTv extends StatelessWidget {
     required this.accent,
     required this.onElegir,
     required this.onBorrar,
-    required this.alturaMaxima,
   });
 
   final List<String> terminos;
@@ -206,131 +204,118 @@ class _BusquedasRecientesTv extends StatelessWidget {
   final ValueChanged<String> onElegir;
   final VoidCallback onBorrar;
 
-  /// Tope real, no una sugerencia: ver `SearchTV._altoMaximoDeRecientes`.
+  /// Cuántas se muestran como mucho.
   ///
-  /// Con muchas búsquedas recientes de nombres largos, los chips pueden
-  /// envolver a más líneas de las que caben en el lugar que el teclado le
-  /// dejó reservado. Antes de esto, esa diferencia se la comía el
-  /// teclado —empujado hacia abajo, sin entrar entero—. Recortando ACÁ en
-  /// cambio, lo que no entra son las últimas búsquedas más viejas, que
-  /// siguen estando (se guardan igual) y vuelven a aparecer apenas hay
-  /// lugar; el teclado nunca se entera de que faltó algo.
-  final double alturaMaxima;
+  /// ── Por qué un número de chips y no un alto ──────────────────────────
+  ///
+  /// Un alto fijo con scroll dejaba a la vista un renglón A MEDIAS —el de
+  /// más abajo, cortado por la mitad— apenas había más búsquedas de las
+  /// que entraban de una. Reportado en vivo con foto: «así no, que se vea
+  /// bien, sin cortes». Un renglón entero o nada: acotando cuántos chips
+  /// se PIDEN en vez de cuánto ALTO se les da, lo que se dibuja siempre
+  /// son líneas completas — nunca una a medio cortar.
+  ///
+  /// Con ocho todavía se pasaba: un término largo ocupa buena parte del
+  /// ancho disponible (180 como mucho, ver el tope más abajo), así que en
+  /// la práctica entraban solo dos por línea — ocho eran cuatro líneas, no
+  /// las dos que se habían calculado, y el teclado de abajo se quedaba sin
+  /// lugar otra vez. Reportado en vivo con foto: «no debe agregar más
+  /// para que no tenga que hacer scroll». Con cuatro, incluso en el peor
+  /// caso (todos términos largos, dos por línea) entran en dos líneas de
+  /// verdad. Siguen siendo las más recientes: se guardan todas igual,
+  /// esto solo decide cuántas se OFRECEN de entrada.
+  static const _maximoDeChips = 4;
 
   @override
   Widget build(BuildContext context) {
-    // ── Alto FIJO, no un tope que igual desborda ────────────────────────
-    //
-    // Un `ConstrainedBox(maxHeight)` alrededor de un `Column` no evita el
-    // desborde: si los chips envuelven a más líneas de las que entran, es
-    // el propio `Column` el que sigue midiendo de más y Flutter lo avisa
-    // con el cartel de "RenderFlex overflowed" — el `ClipRect` de afuera
-    // solo tapa lo que se ve, no la medida. Reportado en vivo, con foto:
-    // "BOTTOM OVERFLOWED BY 89 PIXELS" justo debajo de los chips.
-    //
-    // Con un alto EXACTO en vez de un tope, y el renglón de las últimas
-    // búsquedas puesto en un `Expanded` con su propio scroll, lo que no
-    // entra se desplaza ahí adentro en vez de desbordar: un
-    // `SingleChildScrollView` nunca mide de más, sea cual sea su
-    // contenido.
-    return SizedBox(
-      height: alturaMaxima,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── El encabezado, con aire para su propio marco de foco ───────
-          //
-          // El botón de borrar es una `FocusableCard` como cualquier otra:
-          // su anillo se dibuja unos píxeles hacia afuera. Pegado al borde
-          // de arriba de este bloque —que es, a su vez, el borde de arriba
-          // del scroll que lo contiene— quedaba mordido. Reportado en vivo
-          // con foto: «el botón de borrar se corta con los bordes
-          // rosados». Un poco de aire alrededor alcanza para que el anillo
-          // entre entero.
-          Padding(
-            padding: const EdgeInsets.all(4),
-            child: Row(
-              children: [
-                Text(
-                  'search.recent'.i18n,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: HomeTheme.textMuted,
-                  ),
-                ),
-                const Spacer(),
-                FocusableCard(
-                  borderRadius: 8,
-                  onTap: onBorrar,
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Icon(
-                      Icons.delete_outline_rounded,
-                      size: 18,
-                      color: HomeTheme.textMuted,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-          // ── Los chips, con su propio scroll ─────────────────────────────
-          //
-          // `Expanded` le da a esto lo que quede del alto FIJO de arriba
-          // (ver el porqué en el comentario grande de más arriba), y el
-          // `SingleChildScrollView` nunca desborda sea cual sea la
-          // cantidad de búsquedas guardadas: lo que no entra se desplaza
-          // acá adentro en vez de tirar el "RenderFlex overflowed" contra
-          // el teclado de abajo.
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(4),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final termino in terminos)
-                    FocusableCard(
-                      borderRadius: 999,
-                      accent: accent,
-                      onTap: () => onElegir(termino),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 9),
-                        decoration: BoxDecoration(
-                          color: HomeTheme.cardSurface,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: HomeTheme.border),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.history_rounded,
-                                size: 15, color: HomeTheme.textMuted),
-                            const SizedBox(width: 6),
-                            Text(
-                              termino,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w600,
-                                color: HomeTheme.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Text(
+              'search.recent'.i18n,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: HomeTheme.textMuted,
               ),
             ),
-          ),
-        ],
-      ),
+            const Spacer(),
+            FocusableCard(
+              borderRadius: 8,
+              onTap: onBorrar,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: HomeTheme.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final termino in terminos.take(_maximoDeChips))
+              FocusableCard(
+                borderRadius: 999,
+                accent: accent,
+                onTap: () => onElegir(termino),
+                // ── Con un tope de ancho, no confiando solo en la elipsis ──
+                //
+                // `Text(overflow: ellipsis)` recorta el texto que le sobra,
+                // pero necesita que ALGUIEN le diga hasta dónde llegar. Un
+                // `Wrap` no achica a sus hijos: si el término guardado era
+                // larguísimo —alguien mantuvo apretada una tecla— el chip
+                // entero pedía el ancho que hiciera falta y se salía de la
+                // pantalla por la derecha, elipsis y todo ignorados.
+                // Reportado en vivo con foto: "RIGHT OVERFLOWED BY 2.9
+                // PIXELS" con un término de más de treinta letras.
+                //
+                // Con un ancho máximo puesto ACÁ, el chip nunca pide más de
+                // la cuenta y la elipsis por fin tiene contra qué recortar.
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 180),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: HomeTheme.cardSurface,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: HomeTheme.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.history_rounded,
+                            size: 15, color: HomeTheme.textMuted),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            termino,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: HomeTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
