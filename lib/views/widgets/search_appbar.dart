@@ -44,6 +44,48 @@ class SearchAppBar extends StatefulWidget implements PreferredSizeWidget {
 }
 
 class _SearchAppBarState extends State<SearchAppBar> {
+  // ── El texto de TV, con SU PROPIO scroll ────────────────────────────
+  //
+  // Un `TextField` de verdad —aunque sea de solo lectura— confía en su
+  // propio manejo interno de foco/selección para desplazarse y mantener
+  // el cursor a la vista. Acá `canRequestFocus` está apagado (el teclado
+  // en pantalla es el que escribe, no este campo) y el texto lo pone
+  // OTRO widget mutando el controller desde afuera — ni una cosa ni la
+  // otra terminan de darle al `TextField` un motivo real para
+  // desplazarse. Poniendo el cursor al final a mano (ver más abajo) no
+  // alcanzó: reportado en vivo, con foto, seguía sin moverse.
+  //
+  // Mismo remedio que ya funcionó en `_CampoDeBusqueda` (el cartel del
+  // teclado en pantalla): en TV, ni `TextField` ni su lógica de
+  // auto-scroll — un `Text` sin ánimo de editarse, dentro de un scroll
+  // horizontal propio, que salta al extremo cada vez que el texto
+  // cambia. Sin ambigüedad de foco de por medio, siempre se ve el final.
+  final _scrollTv = ScrollController();
+
+  void _seguirElTexto() {
+    if (!PlatformTv.esTelevisionSync) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scrollTv.hasClients) {
+        _scrollTv.jumpTo(_scrollTv.position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // El texto lo cambia OTRO widget, mutando este controller desde
+    // afuera — hay que escucharlo para saber cuándo desplazar.
+    widget.textEditingController.addListener(_seguirElTexto);
+  }
+
+  @override
+  void dispose() {
+    widget.textEditingController.removeListener(_seguirElTexto);
+    _scrollTv.dispose();
+    super.dispose();
+  }
+
   // En TV el campo se muestra SIEMPRE.
   //
   // En teléfono/escritorio arranca cerrado y se abre con la lupa, porque ahí
@@ -109,37 +151,18 @@ class _SearchAppBarState extends State<SearchAppBar> {
                   return;
                 }
               },
-              child: _envolverEnTv(
-                TextField(
-                  controller: widget.textEditingController,
-                  decoration: InputDecoration(
-                    hintText: widget.hintText ?? widget.title,
-                    border: InputBorder.none,
-                    isDense: PlatformTv.esTelevisionSync,
-                    contentPadding: PlatformTv.esTelevisionSync
-                        ? const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10)
-                        : null,
-                  ),
-                  style: PlatformTv.esTelevisionSync
-                      ? const TextStyle(fontSize: 17)
-                      : null,
-                  // En TV este campo solo MUESTRA lo que se va escribiendo: se
-                  // escribe con el teclado en pantalla (ver TecladoTv). Sin
-                  // esto, el campo pedía el foco al abrir y Android levantaba
-                  // su propio teclado encima de los resultados — justo lo que
-                  // el teclado propio viene a evitar.
-                  readOnly: PlatformTv.esTelevisionSync,
-                  canRequestFocus: !PlatformTv.esTelevisionSync,
-                  // Y sin autofocus en TV: al volver de una ficha, esta barra
-                  // se reconstruye y su autofocus se llevaba el foco puesto,
-                  // así que la tarjeta desde la que habías salido dejaba de
-                  // estar marcada y el mando arrancaba de nuevo desde arriba.
-                  autofocus: !PlatformTv.esTelevisionSync,
-                  onChanged: widget.onChanged,
-                  onSubmitted: widget.onSubmitted,
-                ),
-              ),
+              child: PlatformTv.esTelevisionSync
+                  ? _campoDeTv()
+                  : TextField(
+                      controller: widget.textEditingController,
+                      decoration: InputDecoration(
+                        hintText: widget.hintText ?? widget.title,
+                        border: InputBorder.none,
+                      ),
+                      autofocus: true,
+                      onChanged: widget.onChanged,
+                      onSubmitted: widget.onSubmitted,
+                    ),
             )
           : Text(
               widget.title,
@@ -199,8 +222,7 @@ class _SearchAppBarState extends State<SearchAppBar> {
   ///
   /// Fuera de TV no cambia nada: ahí el campo ya se distingue solo, con
   /// el cursor parpadeando apenas se lo toca.
-  Widget _envolverEnTv(Widget campo) {
-    if (!PlatformTv.esTelevisionSync) return campo;
+  Widget _campoDeTv() {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: HomeTheme.cardSurface,
@@ -210,7 +232,38 @@ class _SearchAppBarState extends State<SearchAppBar> {
           width: 1.6,
         ),
       ),
-      child: campo,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        // `ListenableBuilder` porque el texto lo cambia OTRO widget,
+        // mutando `widget.textEditingController` desde afuera — sin
+        // escucharlo acá, este `Text` se quedaría mostrando lo que había
+        // cuando se construyó, aunque el scroll sí se moviera.
+        child: ListenableBuilder(
+          listenable: widget.textEditingController,
+          builder: (context, _) {
+            final texto = widget.textEditingController.text;
+            if (texto.isEmpty) {
+              return Text(
+                widget.hintText ?? widget.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 17, color: HomeTheme.textPlaceholder),
+              );
+            }
+            return SingleChildScrollView(
+              controller: _scrollTv,
+              scrollDirection: Axis.horizontal,
+              physics: const NeverScrollableScrollPhysics(),
+              child: Text(
+                texto,
+                maxLines: 1,
+                softWrap: false,
+                style: const TextStyle(fontSize: 17),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
