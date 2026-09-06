@@ -26,6 +26,7 @@ import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/tv/fondo_tv.dart';
 import 'package:prismhub/views/widgets/tv/teclado_tv.dart';
 import 'package:prismhub/views/widgets/home/refresh_button.dart';
 import 'package:prismhub/views/widgets/infinite_scroller.dart';
@@ -1255,7 +1256,12 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
 
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
-      backgroundColor: HomeTheme.bg,
+      // En televisor esta pantalla va DENTRO de la de arriba, que ya pinta
+      // el fondo de la app: con su propio color opaco encima, la mitad
+      // derecha se veía de otro tono que la del teclado. Transparente, el
+      // carbón se ve entero de lado a lado.
+      backgroundColor:
+          PlatformTv.esTelevisionSync ? Colors.transparent : HomeTheme.bg,
       // Buscador en la AppBar (arriba): el teclado se superpone en vez de
       // encoger el body, si no en horizontal la grilla se queda sin alto y
       // desborda.
@@ -1316,10 +1322,12 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
             : null,
       ),
       body: Container(
-        color: HomeTheme.bg,
+        color: PlatformTv.esTelevisionSync ? null : HomeTheme.bg,
         child: Stack(
           children: [
-            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            // En televisor lo pinta la pantalla de arriba, una sola vez.
+            if (!PlatformTv.esTelevisionSync)
+              const Positioned.fill(child: AnimatedBackgroundGlow()),
             // Mientras no se sepa si hace falta actualizar (null) o si SÍ
             // hace falta (true), ni se pide ni se muestra ninguna card —
             // antes esto era solo un banner arriba con la grilla
@@ -1843,7 +1851,18 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     if (PlatformTv.esTelevisionSync) {
       return Scaffold(
         backgroundColor: HomeTheme.bg,
-        body: SafeArea(
+        // ── Con el fondo de la app, no con el color plano ────────────────
+        //
+        // Esta rama armaba su Scaffold a mano y se quedaba en el color base,
+        // así que era la única pantalla de televisor sin el gris carbón: al
+        // entrar desde una fila se notaba el salto. Reportado en vivo: «todo
+        // el fondo de "ver todo" de una extensión no usa el mismo fondo
+        // carbón». Ver `FondoTv`.
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            const Positioned.fill(child: FondoTv()),
+            SafeArea(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1866,6 +1885,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               Expanded(child: _buildAndroid(context)),
             ],
           ),
+            ),
+          ],
         ),
       );
     }
@@ -2206,8 +2227,19 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                     ),
                     const SizedBox(height: 12),
                     Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
+                      // ── En televisor, sitio para el marco de foco ──────
+                      //
+                      // El marco se dibuja POR FUERA del chip. Con diez
+                      // puntos entre uno y otro, el de la opción enfocada
+                      // llegaba pisando a la fila de abajo y se veía
+                      // cortado. Reportado con foto, sobre el filtro:
+                      // «el borde rosado se corta».
+                      spacing: PlatformTv.esTelevisionSync
+                          ? HomeTheme.aireDeFocoTv
+                          : 10,
+                      runSpacing: PlatformTv.esTelevisionSync
+                          ? HomeTheme.aireDeFocoTv + 4
+                          : 10,
                       children: [
                         // _opcionesDe y no las opciones crudas: fuera de la
                         // Zona +18 se sacan las que abren contenido para

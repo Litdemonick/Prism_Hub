@@ -98,6 +98,12 @@ class DesvanecidoDeFila extends StatefulWidget {
 }
 
 class _DesvanecidoDeFilaState extends State<DesvanecidoDeFila> {
+  /// Cuánto mide el borde difuminado, en puntos.
+  ///
+  /// Suficiente para que la tarjeta del costado se lea como «sigue» sin que
+  /// llegue a apagarse: es un borde, no una sombra encima de la tarjeta.
+  static const _anchoDelBorde = 28.0;
+
   @override
   void initState() {
     super.initState();
@@ -147,24 +153,41 @@ class _DesvanecidoDeFilaState extends State<DesvanecidoDeFila> {
     final izquierda = widget.scroll == null || _quedaAtras;
     final derecha = widget.scroll == null || _quedaAdelante;
     return ShaderMask(
-      shaderCallback: (rect) => LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: const [
-          Color(0x00000000),
-          Color(0xFF000000),
-          Color(0xFF000000),
-          Color(0x00000000),
-        ],
-        // Un lado sin nada más allá no difumina: su parada se pega al borde
-        // y el degradado de ese extremo deja de existir.
-        stops: [
-          0,
-          izquierda ? 0.04 : 0,
-          derecha ? 0.96 : 1,
-          1,
-        ],
-      ).createShader(rect),
+      shaderCallback: (rect) {
+        // ── El borde se mide en PÍXELES, no en porcentaje ───────────────
+        //
+        // Estaba en un 4% del ancho de la fila. En el Inicio, que ocupa la
+        // pantalla entera, eso son unos pocos puntos y se ve como un borde
+        // suave. Pero en una fila angosta —los resultados del buscador
+        // viven en poco más de medio ancho— ese mismo 4% se come una
+        // tarjeta entera: en vez de un degradado se veía una sombra plana y
+        // fea encima de la primera y la última, y el marco de selección de
+        // esa tarjeta quedaba lavado. Reportado con foto: «la difuminación
+        // está mal, es una sombra toda estática fea; replicalo como en el
+        // Inicio».
+        //
+        // Con una medida fija el borde se ve igual en cualquier fila, sea
+        // del ancho que sea, y nunca alcanza a apagar una tarjeta entera.
+        final borde = (_anchoDelBorde / rect.width).clamp(0.0, 0.12);
+        return LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: const [
+            Color(0x00000000),
+            Color(0xFF000000),
+            Color(0xFF000000),
+            Color(0x00000000),
+          ],
+          // Un lado sin nada más allá no difumina: su parada se pega al
+          // borde y el degradado de ese extremo deja de existir.
+          stops: [
+            0,
+            izquierda ? borde : 0,
+            derecha ? 1 - borde : 1,
+            1,
+          ],
+        ).createShader(rect);
+      },
       blendMode: BlendMode.dstIn,
       child: widget.child,
     );

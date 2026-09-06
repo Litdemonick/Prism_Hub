@@ -203,11 +203,42 @@ double _anchoPosterTv(BuildContext context) {
       _aireDerechoTv;
   final ancho =
       (util - _huecoPosterTv * (_postersPorFilaTv - 1)) / _postersPorFilaTv;
-  // El tope baja de 200 a 170 por lo mismo: la tarjeta es 2:3 más el
-  // título, así que cada punto de ancho son uno y medio de alto. Con 200 la
-  // fila medía más de lo que quedaba libre debajo del destacado.
-  return ancho.clamp(96.0, 170.0);
+  // ── Y acotado por el ALTO que queda libre, no solo por el ancho ──────
+  //
+  // Esta cuenta miraba únicamente el ancho de la pantalla, así que la fila
+  // salía del tamaño que "entraba a lo ancho" sin preguntarse si entraba a
+  // lo alto. Debajo del destacado y las medianas no le quedaba sitio, y de
+  // sus pósters se veía solo la parte de arriba, cortados contra el borde.
+  // Reportado con foto varias veces, y cada vez se corregía bajando un
+  // número a mano —que volvía a fallar en cuanto cambiaba algo del reparto.
+  //
+  // Preguntando por el alto libre, la tarjeta se ajusta sola: si el
+  // destacado crece, los pósters se achican lo justo para seguir entrando
+  // enteros. La tarjeta es 2:3 más el título (ver `altoDeUnaLineaDeAncho`),
+  // así que del alto disponible sale el ancho máximo invirtiendo esa
+  // cuenta.
+  final alto = MediaQuery.sizeOf(context).height;
+  final libre = alto -
+      _altoBarraTv -
+      _altoGrandesTv(context) -
+      _altoMedianasTv(context) -
+      _altoDeLoQueRodeaLaFila;
+  final porElAlto = (libre - 25) * 2 / 3;
+  final tope = porElAlto.isFinite && porElAlto > 96 ? porElAlto : 96.0;
+  return ancho.clamp(96.0, tope < 170 ? tope : 170.0);
 }
+
+/// Lo que se llevan, alrededor de la primera fila, las cosas que no son la
+/// tarjeta: el relleno de la lista arriba y abajo, los huecos del destacado
+/// y de las medianas, y el nombre de la extensión encima de la tira.
+///
+/// Sale de sumar lo que ya está escrito más abajo (20 + 56 de la lista, 6 y
+/// 13 alrededor de las medianas, y unos 34 del encabezado de la fila). No
+/// hace falta que sea exacto: es el margen con el que se decide cuánto
+/// puede medir la tarjeta, y quedarse corto solo la achica un poco.
+const double _altoDeLoQueRodeaLaFila = 130;
+
+
 
 /// El margen "TV-safe" contra el borde de la pantalla (overscan).
 ///
@@ -700,7 +731,34 @@ class _SidebarTVState extends State<_SidebarTV> {
     // Con esto, al cuadro siguiente el panel se acomoda a lo que de verdad
     // pasó: si el foco quedó adentro sigue abierto (sin ningún salto), y si
     // no, se contrae como corresponde.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _alCambiarElFoco());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _comprobarAlArrancar());
+  }
+
+  /// La comprobación del primer cuadro, pero sin adelantarse.
+  ///
+  /// ── Por qué no alcanza con mirar una vez ─────────────────────────────
+  ///
+  /// Al arrancar, el `autofocus` de la categoría no se aplica en el primer
+  /// cuadro: todavía no hay NADA enfocado en la pantalla. Comprobando ahí
+  /// mismo, la respuesta es «ninguna categoría tiene el foco» y el panel se
+  /// contraía… para volver a abrirse un instante después, cuando el foco sí
+  /// llegaba. Desde el sillón eso es un salto feo justo al abrir la app.
+  /// Reportado en vivo: «al abrir la app el panel izquierdo se buguea y se
+  /// mueve; cuando carga se corrige y se pone donde va».
+  ///
+  /// Mientras no haya foco en ningún lado no se decide nada: se vuelve a
+  /// mirar al cuadro siguiente. En cuanto hay alguien enfocado —sea una
+  /// categoría o una tarjeta— la respuesta ya significa algo y se aplica.
+  void _comprobarAlArrancar() {
+    if (!mounted) return;
+    final actual = FocusManager.instance.primaryFocus;
+    final hayAlguienEnfocado =
+        actual != null && actual is! FocusScopeNode && actual.context != null;
+    if (!hayAlguienEnfocado) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _comprobarAlArrancar());
+      return;
+    }
+    _alCambiarElFoco();
   }
 
   void _alCambiarElFoco() {
