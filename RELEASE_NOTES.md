@@ -1,4 +1,4 @@
-## PrismHub v1.0.111 — Que la primera fila de extensiones entre entera
+## PrismHub v1.0.112 — Las tarjetas entran enteras, y el fondo es el mismo en todas partes
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,16 +12,28 @@
 
 ### 📺 Android TV
 
-- **De la primera fila de extensiones ya no asoma una franja fina.** Con el
-  destacado llevándose el 44% del alto y las medianas el 16%, a esa fila le
-  quedaba menos que el alto de una sola tarjeta: se veía apenas el borde
-  superior de cada póster contra el filo de la pantalla.
+- **Las tarjetas de la primera fila ya no salen cortadas por abajo, y esta
+  vez de raíz.** El tamaño del póster salía solo del ancho de la pantalla:
+  se elegía lo que entraba a lo ancho, sin preguntarse si entraba a lo
+  alto. Por eso cada arreglo aguantaba hasta que cambiaba algo del reparto
+  de arriba. Ahora la cuenta mira cuánto alto queda libre debajo del
+  destacado y ajusta el póster a eso — si el destacado crece, los pósters
+  se achican lo justo para seguir entrando enteros.
 
-  El reparto tenía que dar para los tres bloques —el destacado, las
-  medianas y una fila entera con su título—, así que ahora es 36% y 13%, y
-  el ancho máximo de los pósters baja de 200 a 170, que en una tarjeta 2:3
-  son casi cincuenta puntos menos de alto.
+- **El fondo de "ver todo" de una extensión, igual que el resto.** Era la
+  única pantalla de televisor sin el gris carbón: armaba su fondo con un
+  color plano y encima el panel de la derecha traía otro, así que se veían
+  dos tonos partidos por la mitad.
 
-- **Aire entre las tarjetas de la rejilla** del buscador por extensión. El
-  marco de selección se dibuja por fuera de la tarjeta, y con doce puntos
-  entre una y otra llegaba pisando a su vecina.
+- **El difuminado de los bordes, arreglado.** Estaba medido en porcentaje
+  del ancho de la fila: en Inicio son unos pocos puntos y se ve como un
+  borde suave, pero en el panel angosto del buscador ese mismo porcentaje
+  se comía una tarjeta entera y quedaba como una sombra plana encima. Ahora
+  es una medida fija y se ve igual en cualquier fila.
+
+- **Aire entre las opciones del filtro**, que el marco de la enfocada
+  llegaba pisando la fila de abajo.
+
+- **El panel de categorías ya no salta al abrir la app.** La comprobación
+  del primer cuadro corría cuando todavía no había nada seleccionado, así
+  que el panel se contraía y volvía a abrirse un instante después.
