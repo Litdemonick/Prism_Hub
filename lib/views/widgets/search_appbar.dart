@@ -58,18 +58,33 @@ class _SearchAppBarState extends State<SearchAppBar> {
   Widget build(BuildContext context) {
     return AppBar(
       backgroundColor: widget.backgroundColor,
-      leading: _showSearch
-          ? IconButton(
-              onPressed: () {
-                setState(() {
-                  widget.textEditingController.clear();
-                  widget.onSubmitted?.call('');
-                  _showSearch = false;
-                });
-              },
-              icon: const Icon(Icons.arrow_back),
-            )
-          : widget.leading,
+      // ── En TV, nunca el botón de cerrar la búsqueda ─────────────────
+      //
+      // `_showSearch` nace en `true` en TV a propósito —el campo se
+      // muestra siempre, sin lupa que tocar primero (ver el comentario de
+      // arriba)—, pero eso hacía que ESTE botón (el de cerrar la
+      // búsqueda y volver al título) también saliera siempre: un
+      // `IconButton` de Material, sin marco de foco, plantado en la
+      // esquina de una pantalla que ya tiene el teclado a un lado.
+      // Reportado en vivo con foto: «dejá la flecha a la izquierda, no
+      // pegada al teclado». Acá no hay "cerrar la búsqueda" que valga —en
+      // TV el campo no se cierra nunca— así que directamente no compite
+      // por ese lugar: se deja lo que quien use el AppBar haya puesto en
+      // `leading` (nada, casi siempre).
+      leading: PlatformTv.esTelevisionSync
+          ? widget.leading
+          : (_showSearch
+              ? IconButton(
+                  onPressed: () {
+                    setState(() {
+                      widget.textEditingController.clear();
+                      widget.onSubmitted?.call('');
+                      _showSearch = false;
+                    });
+                  },
+                  icon: const Icon(Icons.arrow_back),
+                )
+              : widget.leading),
       title: _showSearch
           ? PopScope(
               canPop: false,

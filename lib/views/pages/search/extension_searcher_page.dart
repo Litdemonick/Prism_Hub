@@ -1267,6 +1267,20 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       // desborda.
       resizeToAvoidBottomInset: false,
       appBar: SearchAppBar(
+        // ── Sin la flechita de volver del sistema, en TV ────────────────
+        //
+        // Esta pantalla, en TV, vive DENTRO de la de arriba —el teclado a
+        // la izquierda, esto a la derecha—, y el `AppBar` de acá adentro
+        // seguía agregando su propia flecha de volver, sola, pegada
+        // contra el borde de la columna de al lado. Reportado con foto:
+        // «deja la flecha a la izquierda, no pegada al teclado». Un botón
+        // de Material sin marco de foco, encima, compitiendo con el
+        // teclado por ser "lo de la izquierda".
+        //
+        // El mando ya vuelve con la tecla de atrás del control remoto —no
+        // hace falta ningún botón en pantalla para eso—, así que en TV
+        // directamente no se dibuja ninguno.
+        leading: PlatformTv.esTelevisionSync ? const SizedBox.shrink() : null,
         // El contador va pegado al nombre porque SearchAppBar recibe un texto,
         // no un widget. Ver _cargados.
         title: _cargados == 0
