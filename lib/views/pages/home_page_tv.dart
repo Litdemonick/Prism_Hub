@@ -1234,6 +1234,35 @@ class _HeroSecundarioTv extends StatelessWidget {
                   headers: _cabeceras(package),
                   placeholder: const Esqueleto(radio: 20),
                 ),
+                // ── El mismo velo que ya lleva la mediana ─────────────────
+                //
+                // Acá no había ninguno: el título se apoyaba solo en la
+                // sombra del propio texto, y contra una portada clara esa
+                // sombra no alcanza — se lee un corte entre el texto y la
+                // imagen en vez de una transición. Reportado con foto: «la
+                // sombra del título todavía no llega hasta abajo, se ve una
+                // línea fea».
+                //
+                // Con paradas intermedias (ver el porqué en `_MedianaTv`,
+                // que lo tenía primero) la opacidad baja despacio desde el
+                // borde de abajo hasta perderse arriba, sin dibujar un
+                // borde recto.
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Color(0xCC000000),
+                        Color(0x99000000),
+                        Color(0x4D000000),
+                        Color(0x1A000000),
+                        Color(0x00000000),
+                      ],
+                      stops: [0, 0.22, 0.45, 0.68, 1],
+                    ),
+                  ),
+                ),
                 Align(
                   alignment: Alignment.bottomLeft,
                   child: Padding(
