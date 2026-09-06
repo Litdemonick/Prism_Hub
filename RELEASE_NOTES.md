@@ -1,4 +1,4 @@
-## PrismHub v1.0.105 — Aire para el marco al subir, y el mando queda registrado
+## PrismHub v1.0.106 — Ajustes se navega entero, y los bordes de fila ya no se comen las tarjetas
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,16 +12,29 @@
 
 ### 📺 Android TV
 
-- **Al subir a las tarjetas grandes, la pantalla ahora se corre lo que
-  falta para que el marco se vea entero.** La cuenta que decidía si algo
-  "ya se ve" miraba el rectángulo de la tarjeta, y el marco de selección no
-  vive ahí dentro: se dibuja unos píxeles por fuera. Con la tarjeta pegada
-  al borde, la tarjeta entraba pero el marco quedaba mordido.
+- **En Ajustes ya se puede pasar a las opciones de la derecha desde
+  cualquier categoría.** Eran dos fallos encima del mismo síntoma. Por un
+  lado, la regla que impide que la selección se escape de una fila de
+  tarjetas se estaba aplicando también acá, donde no hay filas. Por el
+  otro, el recorrido busca lo más cercano *a la misma altura*, así que
+  estando en la última categoría —con el botón allá arriba— no encontraba
+  nada.
 
-- **Cada flecha del mando queda anotada en el registro.** Dice qué camino
-  tomó y por qué: si se fue a la tarjeta de al lado, si era el final de la
-  fila y no se movió nada, o si el movimiento se deshizo. El recorrido con
-  el mando es lo que más veces volvió, y hasta ahora cada vuelta se iba en
-  adivinar qué había pasado — desde el sillón solo se ve "se movió raro".
-  Ahora se reproduce el fallo, se exporta el registro desde Ajustes y ahí
-  está escrito.
+  Ahora, al cruzar hacia la derecha se entra por **la primera opción** de
+  esa columna, vengas de la altura que vengas. Vale igual para el
+  repositorio de extensiones y el historial, que tienen la misma forma.
+
+- **La pantalla ya no corta la fila por arriba al subir.** Lo que se traía
+  a la vista era la tira de tarjetas, y el nombre de la extensión vive
+  encima de ella: con la tira entrando justa, la cuenta decía "ya se ve" y
+  la fila aparecía sin su título.
+
+- **El difuminado de los bordes, ahora también en Películas, Series y
+  Anime.** Estaba solo en Inicio, así que en las zonas la tarjeta del borde
+  terminaba en un filo recto.
+
+- **Y ese difuminado dejó de atenuar donde no hay nada más.** Cada lado se
+  desvanece solo si por ahí sigue habiendo fila: la primera tarjeta al
+  principio y la última al final se ven nítidas, con su marco entero.
+
+Las pruebas automáticas de navegación son ahora 21 casos.
