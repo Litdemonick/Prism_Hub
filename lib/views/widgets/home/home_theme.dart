@@ -377,7 +377,17 @@ class HomeTheme {
   /// perder el alto de una fila entera.
   static EdgeInsets margenTv(BuildContext context) {
     final m = overscanTv(context);
-    return EdgeInsets.fromLTRB(m, m / 3, m, m / 3);
+    // ── Y abajo, todavía menos ────────────────────────────────────────────
+    //
+    // El margen de abajo no protege de nada: lo que hay ahí es contenido
+    // que sigue, y cada punto que se le da es un punto MENOS de la tarjeta
+    // que asoma — justo la señal de «hay más para abajo». Reportado con
+    // foto, señalando la franja muerta bajo la última fila: «hasta ahí debe
+    // verse la imagen, para que se vea que hay más cosas abajo».
+    //
+    // Arriba se conserva el tercio: ahí sí hay borde de pantalla y nada que
+    // se pierda por dejarlo.
+    return EdgeInsets.fromLTRB(m, m / 3, m, m / 6);
   }
 
   /// El título de una ficha, o de un destacado grande. Mucho más grande que

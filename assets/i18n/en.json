@@ -334,7 +334,10 @@
         "installed-all": "All",
         "installed-installed": "Installed",
         "installed-available": "Not installed",
-        "installed-new": "New"
+        "installed-new": "New",
+        "tv-quitar": "Remove",
+        "tv-confirmar-quitar": "Remove “{nombre}” from the TV?",
+        "tv-confirmar-quitar-detalle": "Its settings are lost. To get it back you have to install it again."
     },
     "extension-searcher": {
         "tab-normal": "Normal",

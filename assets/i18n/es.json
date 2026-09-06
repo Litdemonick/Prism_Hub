@@ -330,7 +330,10 @@
         "installed-all": "Todas",
         "installed-installed": "Instaladas",
         "installed-available": "Sin instalar",
-        "installed-new": "Nuevas"
+        "installed-new": "Nuevas",
+        "tv-quitar": "Quitar",
+        "tv-confirmar-quitar": "¿Sacar «{nombre}» del televisor?",
+        "tv-confirmar-quitar-detalle": "Sus ajustes se pierden. Para volver a tenerla hay que instalarla de nuevo."
     },
     "extension-searcher": {
         "tab-normal": "Normal",

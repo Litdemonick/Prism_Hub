@@ -987,6 +987,15 @@ class _WideMenuButton extends StatelessWidget {
     // esto, PopupMenuButton revienta con "No Material widget found" en
     // Windows/Linux mientras en Android anda, porque ahí la raíz es
     // GetMaterialApp. MaterialLocalizations sí las da FluentApp.
+    // ── En televisor no va ────────────────────────────────────────────
+    //
+    // Los tres puntitos son una afordancia de dedo y de ratón: abren un
+    // menú al que, con un mando, no hay forma cómoda de llegar —está dentro
+    // de la tarjeta, compitiendo con el foco de la tarjeta misma— y encima
+    // aprietan el título contra el borde. Pedido explícito: «quitá los tres
+    // puntitos». Lo que ofrecían (ocultar, borrar, ver detalle) se hace
+    // desde la ficha, que es a donde lleva la tarjeta al confirmar.
+    if (PlatformTv.esTelevisionSync) return const SizedBox.shrink();
     return Material(
       type: MaterialType.transparency,
       child: SizedBox(

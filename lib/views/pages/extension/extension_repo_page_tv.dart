@@ -83,7 +83,13 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
           ? Get.find<ExtensionRepoPageController>()
           : Get.put(ExtensionRepoPageController());
 
-  _Vista _vista = _Vista.disponibles;
+  /// Con qué vista se entra.
+  ///
+  /// «Ya instaladas» y no «Para instalar»: en un televisor el repositorio se
+  /// abre casi siempre para ver qué hay puesto —o para sacar algo—, no para
+  /// mirar un catálogo que en su mayoría ya se tiene. Pedido explícito: «al
+  /// entrar al repositorio de extensiones, ubicalo en ya instaladas».
+  _Vista _vista = _Vista.instaladas;
   ZonaPrincipal? _zona;
   String _busqueda = '';
   bool _escribiendo = false;
@@ -156,6 +162,75 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
 
   // ─── Instalar ──────────────────────────────────────────────────────────
 
+  /// Pregunta antes de sacar una extensión, con el mando.
+  ///
+  /// Con dos botones grandes y enfocables: en un televisor no hay «cancelar
+  /// tocando afuera», así que la salida tiene que estar a la vista y ser
+  /// alcanzable con las flechas. El foco arranca en Cancelar a propósito —
+  /// si alguien llegó acá de más, el OK siguiente no borra nada.
+  Future<bool> _confirmarQuitar(EntradaDelRepo e) async {
+    final quitar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: HomeTheme.cardSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(HomeTheme.radioTv),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  FlutterI18n.translate(
+                    ctx,
+                    'extension-repo.tv-confirmar-quitar',
+                    translationParams: {'nombre': e.name},
+                  ),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: HomeTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'extension-repo.tv-confirmar-quitar-detalle'.i18n,
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.5,
+                    color: HomeTheme.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _BotonDeDialogoTv(
+                      texto: 'common.cancel'.i18n,
+                      autofocus: true,
+                      onTap: () => Navigator.of(ctx).pop(false),
+                    ),
+                    const SizedBox(width: 14),
+                    _BotonDeDialogoTv(
+                      texto: 'extension-repo.tv-quitar'.i18n,
+                      destacado: true,
+                      onTap: () => Navigator.of(ctx).pop(true),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    return quitar ?? false;
+  }
+
   Map? _entradaCruda(String package) {
     for (final e in c.extensions) {
       if (e is Map && e['package']?.toString() == package) return e;
@@ -168,9 +243,16 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
     // instala disparaba una descarga por cada toque.
     if (_enVuelo.contains(e.package)) return;
     if (e.instalada) {
-      // Ya está: acá el botón desinstala. Es la única acción que queda para
-      // una instalada, y tenerla acá evita ir a la otra pantalla solo para
+      // Ya está: acá la acción es sacarla. Es la única que queda para una
+      // instalada, y tenerla acá evita ir a la otra pantalla solo para
       // sacar algo que se acaba de poner.
+      //
+      // Pero PREGUNTANDO antes. Con un mando, el botón de OK es el mismo
+      // que se viene apretando para todo, así que una fila que desinstala
+      // en el acto se lleva puesta una extensión con un toque de más.
+      // Pedido explícito: «que al darle OK pregunte si quiere
+      // desinstalarla».
+      if (!await _confirmarQuitar(e)) return;
       await ExtensionUtils.uninstall(e.package);
       if (mounted) setState(() {});
       return;
@@ -408,7 +490,14 @@ class _ExtensionRepoPageTvState extends State<ExtensionRepoPageTv> {
     return ListView.separated(
       controller: _scroll,
       scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
-      padding: const EdgeInsets.only(top: 4, bottom: 24),
+      // Ver el mismo comentario en la lista de instaladas: el marco de
+      // foco se dibuja por fuera y la lista recorta.
+      padding: const EdgeInsets.fromLTRB(
+        HomeTheme.aireDeFocoTv,
+        HomeTheme.aireDeFocoTv,
+        HomeTheme.aireDeFocoTv,
+        32,
+      ),
       itemCount: visibles.length,
       separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (context, i) => _FilaDelRepo(
@@ -621,13 +710,31 @@ class _FilaDelRepo extends StatelessWidget {
   }
 
   Widget _estado(bool instalada) {
-    final (texto, color) = instalando
-        ? ('extension-repo.tv-instalando'.i18n, HomeTheme.accentPink)
+    // ── La píldora dice QUÉ VA A PASAR, no en qué estado está ───────────
+    //
+    // Decía «PUESTA», que describe la extensión pero no ayuda: el usuario
+    // ya la ve en la lista de instaladas. Lo que hace falta saber es qué
+    // pasa si aprieta OK ahí, y ahí lo que pasa es que se saca. Pedido
+    // explícito: «¿por qué dice "puesta"? Poné un ícono de desinstalar».
+    final (texto, color, icono) = instalando
+        ? ('extension-repo.tv-instalando'.i18n, HomeTheme.accentPink, null)
         : entrada.unstable
-            ? ('extension-repo.tv-rota'.i18n, HomeTheme.accentRed)
+            ? (
+                'extension-repo.tv-rota'.i18n,
+                HomeTheme.accentRed,
+                Icons.warning_amber_rounded
+              )
             : instalada
-                ? ('extension-repo.tv-puesta'.i18n, HomeTheme.accentPink)
-                : ('common.install'.i18n, HomeTheme.textMuted);
+                ? (
+                    'extension-repo.tv-quitar'.i18n,
+                    HomeTheme.accentPink,
+                    Icons.delete_outline_rounded
+                  )
+                : (
+                    'common.install'.i18n,
+                    HomeTheme.textMuted,
+                    Icons.download_rounded
+                  );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
@@ -635,14 +742,23 @@ class _FilaDelRepo extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
-      child: Text(
-        texto.toUpperCase(),
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
-          color: color,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icono != null) ...[
+            Icon(icono, size: 16, color: color),
+            const SizedBox(width: 7),
+          ],
+          Text(
+            texto.toUpperCase(),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -677,6 +793,46 @@ class _FilaDelRepo extends StatelessWidget {
         height: lado,
         fit: BoxFit.cover,
         cacheWidth: (lado * MediaQuery.devicePixelRatioOf(context)).ceil(),
+      ),
+    );
+  }
+}
+
+/// Un botón del diálogo de confirmación, enfocable con el mando.
+class _BotonDeDialogoTv extends StatelessWidget {
+  const _BotonDeDialogoTv({
+    required this.texto,
+    required this.onTap,
+    this.destacado = false,
+    this.autofocus = false,
+  });
+
+  final String texto;
+  final VoidCallback onTap;
+  final bool destacado;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableCard(
+      borderRadius: 10,
+      autofocus: autofocus,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
+        decoration: BoxDecoration(
+          color: destacado ? HomeTheme.accentPink : HomeTheme.bg,
+          borderRadius: BorderRadius.circular(10),
+          border: destacado ? null : Border.all(color: HomeTheme.border),
+        ),
+        child: Text(
+          texto,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: destacado ? Colors.white : HomeTheme.textPrimary,
+          ),
+        ),
       ),
     );
   }

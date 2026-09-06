@@ -351,7 +351,16 @@ class _ExtensionPageTvState extends State<ExtensionPageTv>
       // modesto, media pantalla de filas con su icono ya descargado es
       // memoria que el sistema puede venir a pedir en cualquier momento.
       scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas,
-      padding: const EdgeInsets.only(top: 4, bottom: 24),
+      // Con aire a los costados y arriba: el marco de foco se dibuja por
+      // fuera de la fila y una lista recorta contra sus bordes, así que sin
+      // esto quedaba mordido. Reportado con foto, junto con el repositorio:
+      // «se corta el borde rosado en toda esa zona».
+      padding: const EdgeInsets.fromLTRB(
+        HomeTheme.aireDeFocoTv,
+        HomeTheme.aireDeFocoTv,
+        HomeTheme.aireDeFocoTv,
+        32,
+      ),
       itemCount: visibles.length,
       separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (context, i) => _FilaDeExtension(

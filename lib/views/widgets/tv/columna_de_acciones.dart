@@ -49,7 +49,9 @@ class ColumnaDeAcciones extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: ancho,
-      padding: const EdgeInsets.fromLTRB(20, 20, 12, 20),
+      // El margen horizontal se reparte: una parte acá y otra DENTRO del
+      // scroll (ver su `padding`). Ver el porqué allá.
+      padding: const EdgeInsets.fromLTRB(8, 20, 0, 20),
       decoration: BoxDecoration(
         border: Border(
           right: BorderSide(color: HomeTheme.border),
@@ -59,6 +61,23 @@ class ColumnaDeAcciones extends StatelessWidget {
       // mostrarlo todo: es preferible que se pueda bajar a que la última
       // opción quede cortada contra el borde.
       child: SingleChildScrollView(
+        // ── Y el resto del margen va ACÁ ADENTRO ──────────────────────────
+        //
+        // Un `SingleChildScrollView` RECORTA lo que se sale de él. Con todo
+        // el margen puesto por fuera, el marco de foco de la opción —que se
+        // dibuja unos píxeles hacia afuera de la tarjeta— caía justo sobre
+        // ese recorte y se veía cortado a izquierda y derecha. Reportado
+        // con foto: «en el repositorio se corta a los lados la selección».
+        //
+        // Poniéndolo adentro, el marco queda dentro de lo que el scroll
+        // dibuja y entra entero. A la vista la columna sigue en el mismo
+        // sitio: lo que cambia es de qué lado del recorte está el margen.
+        //
+        // Vale para todas las pantallas que usan esta columna: el
+        // repositorio, el historial, el registro.
+        padding: const EdgeInsets.symmetric(
+          horizontal: HomeTheme.aireDeFocoTv,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

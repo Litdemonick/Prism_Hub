@@ -117,7 +117,19 @@ const double _aireDelRailTv = 22;
 ///
 /// Con este aire la fila sigue asomando la siguiente —el recorte pasa a
 /// estar unos píxeles antes, que no se nota— y el marco entra entero.
-const double _aireDerechoTv = 22;
+/// ── Y vuelve a ser cero ─────────────────────────────────────────────────
+///
+/// Se le habían dado 22 para que el marco de la última tarjeta no quedara
+/// mordido contra el filo. Pero ese margen es una FRANJA MUERTA pegada al
+/// borde: la tarjeta que asoma se corta antes de llegar a él y se ve como
+/// un recuadro sobrando. Reportado con foto, marcando esa franja: «la
+/// imagen debe verse hasta la derecha, no taparla con la franja; sin
+/// límite, porque con esa franja se ve raro».
+///
+/// El aire del marco no hacía falta pedirlo acá: la fila ya reserva el suyo
+/// por dentro (el relleno del `ListView`, `HomeTheme.aireDeFocoTv`), así que
+/// la última tarjeta tiene su sitio igual y la fila puede llegar al borde.
+const double _aireDerechoTv = 0;
 
 /// El hueco entre las tarjetas grandes de Inicio. Casi pegadas.
 const double _huecoGrandeTv = 6;
@@ -180,7 +192,12 @@ double _altoGrandesTv(BuildContext context) {
 /// El alto de la fila de medianas: ídem, bajó del 24% al 16%.
 double _altoMedianasTv(BuildContext context) {
   final util = MediaQuery.sizeOf(context).height - _altoBarraTv;
-  return (util * 0.13).clamp(64.0, 120.0);
+  // Un poco más altas: con el 13% quedaban como una tira fina y las
+  // portadas no se leían. Reportado: «las pequeñas dale un poco más
+  // grande, son muy delgadas de altura». El póster de abajo se ajusta solo
+  // a lo que quede (ver `_anchoPosterTv`), así que subir esto no vuelve a
+  // dejar la fila cortada.
+  return (util * 0.17).clamp(80.0, 150.0);
 }
 
 /// Lo que se lleva la barra de arriba.
@@ -1316,15 +1333,31 @@ class _MedianaTv extends StatelessWidget {
                 headers: _cabeceras(package),
                 placeholder: const Esqueleto(radio: 3),
               ),
-              // El velo: solo lo justo para que el titulo se lea, apagandose
-              // antes de la mitad. Mismos numeros del boceto.
+              // ── El velo, con una curva que no deja borde ────────────────
+              //
+              // Iba de opaco a transparente en dos paradas: en una tarjeta
+              // ancha y baja como esta, ese cambio se ve como una LÍNEA
+              // horizontal cruzando la portada, más que como una sombra.
+              // Reportado con foto: «se ve como una línea transparente ahí
+              // abajo en las chicas».
+              //
+              // Con paradas intermedias la opacidad baja despacio y el velo
+              // se funde con la imagen: sigue haciendo su trabajo —que el
+              // título se lea sobre cualquier portada— sin dibujar un
+              // borde.
               const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
-                    colors: [Color(0xCC000000), Color(0x00000000)],
-                    stops: [0, 0.58],
+                    colors: [
+                      Color(0xCC000000),
+                      Color(0x99000000),
+                      Color(0x4D000000),
+                      Color(0x1A000000),
+                      Color(0x00000000),
+                    ],
+                    stops: [0, 0.22, 0.45, 0.68, 1],
                   ),
                 ),
               ),
@@ -1743,7 +1776,7 @@ class _ContenidoTV extends StatelessWidget {
               // veía cortado justo en esas dos. Reportado en vivo: «arriba
               // en la grande del inicio se corta, no hay aire» y «las cards
               // de abajo las estás cortando».
-              padding: const EdgeInsets.only(top: 20, bottom: 56),
+              padding: const EdgeInsets.only(top: 20, bottom: 24),
               // ── Se construye una pantalla POR DELANTE ─────────────────
               //
               // Cada fila pide su contenido cuando se construye, y de fábrica
@@ -1801,6 +1834,15 @@ class _ContenidoTV extends StatelessWidget {
                     // el borde».
                     child: Padding(
                       padding: const EdgeInsets.only(top: 6, right: 6),
+                      // El MISMO margen lateral que la fila de medianas de
+                    // abajo. Sin esto el destacado arrancaba unos puntos más
+                    // a la izquierda y las dos filas no quedaban alineadas —
+                    // reportado con foto: «la primera card está más a la
+                    // izquierda que la de abajo, centrala bien».
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: HomeTheme.aireDeFocoTv,
+                      ),
                       child: SizedBox(
                       height: _altoGrandesTv(context),
                       child: heroSecundario == null
@@ -1836,6 +1878,7 @@ class _ContenidoTV extends StatelessWidget {
                                 ],
                               ),
                             ),
+                      ),
                       ),
                     ),
                   ),
@@ -2045,7 +2088,7 @@ class _ZonaTvState extends State<_ZonaTv> {
         // Mismo aire que en Inicio, y por el mismo motivo: la lista recorta
         // contra sus bordes y el marco de foco se dibuja por fuera de la
         // tarjeta. Ver el comentario en `_ContenidoTV`.
-        padding: const EdgeInsets.only(top: 20, bottom: 56),
+        padding: const EdgeInsets.only(top: 20, bottom: 24),
         scrollCacheExtent: PrismHubMas.cuantoSeConstruyeDeMas ??
             const ScrollCacheExtent.viewport(1),
         // Ver el mismo comentario en la tira de pósters: la fila que sale
