@@ -149,7 +149,18 @@ void main() {
                   padding: const EdgeInsets.only(left: 80),
                   child: ListView(
                     children: [
-                      for (var f = 0; f < filas; f++)
+                      for (var f = 0; f < filas; f++) ...[
+                        // El nombre de la extensión, arriba de la tira. No
+                        // es decorado: vive FUERA de lo que la cámara mide
+                        // para traer la fila a la vista, así que es
+                        // justamente lo que se cortaba.
+                        SizedBox(
+                          height: 34,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('titulo-f$f'),
+                          ),
+                        ),
                         SizedBox(
                           height: 190,
                           child: ListView(
@@ -163,6 +174,7 @@ void main() {
                             ],
                           ),
                         ),
+                      ],
                     ],
                   ),
                 ),
@@ -446,6 +458,105 @@ void main() {
     });
   });
 
+  group('pantallas de dos columnas (Ajustes, repositorio, historial)', () {
+    /// ── Por qué son un caso aparte ───────────────────────────────────────
+    ///
+    /// No tienen filas de tarjetas: son una columna de opciones a la
+    /// izquierda y un panel a la derecha. Las reglas de «quedate en el mismo
+    /// renglón» no tienen nada que decir acá —no hay renglones— y aplicarlas
+    /// igual bloquea el cruce de una columna a la otra.
+    ///
+    /// Reportado en vivo: «bug crítico en Ajustes, no me deja desplazar a la
+    /// derecha a las opciones de la derecha».
+    Widget dosColumnas() {
+      return MaterialApp(
+        home: Actions(
+          actions: <Type, Action<Intent>>{
+            DirectionalFocusIntent: FocoConTopes(),
+          },
+          child: RescateDeFoco(
+            child: Scaffold(
+              body: Row(
+                children: [
+                  // El menú, CENTRADO en vertical y con las tarjetas de
+                  // verdad — igual que en Ajustes. Ese centrado es parte del
+                  // fallo: el panel de al lado arranca arriba, así que las
+                  // alturas no coinciden.
+                  SizedBox(
+                    width: 250,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          for (var i = 0; i < 6; i++)
+                            FocusableCard(
+                              focusNode: nodo('opcion$i'),
+                              onTap: () {},
+                              child: Container(
+                                height: 56,
+                                margin: const EdgeInsets.all(6),
+                                color: Colors.indigo,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (var i = 0; i < 10; i++)
+                          FocusableCard(
+                            focusNode: nodo('panel$i'),
+                            onTap: () {},
+                            child: Container(
+                              height: 60,
+                              margin: const EdgeInsets.all(8),
+                              color: Colors.brown,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('la derecha pasa de las opciones al panel', (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(dosColumnas());
+      await t.pumpAndSettle();
+
+      nodo('opcion4').requestFocus();
+      await t.pumpAndSettle();
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await t.pumpAndSettle();
+
+      expect(enfocado(), startsWith('panel'));
+    });
+
+    testWidgets('y la izquierda vuelve a las opciones', (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(dosColumnas());
+      await t.pumpAndSettle();
+
+      nodo('panel4').requestFocus();
+      await t.pumpAndSettle();
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await t.pumpAndSettle();
+
+      expect(enfocado(), startsWith('opcion'));
+    });
+  });
+
   group('dentro del panel, arriba y abajo no sacan de ahí', () {
     // «Si estoy en el panel izquierdo y estoy subiendo y bajando, no me debe
     // sacar a otro lugar: estoy eligiendo a qué zona entrar. No me puede
@@ -524,6 +635,43 @@ void main() {
         expect(enfocado(), startsWith('rail'));
       });
     }
+  });
+
+  group('la cámara no corta la fila por arriba', () {
+    testWidgets('subiendo de a una, el título de la fila se sigue viendo',
+        (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(arbol(filas: 6, conRescate: true));
+      await t.pumpAndSettle();
+
+      // Se baja hasta el fondo y se vuelve subiendo de a una fila, que es
+      // como se reportó: «al ir subiendo poco a poco, la cámara corta las
+      // cosas hacia arriba».
+      nodo('f0-c0').requestFocus();
+      await t.pumpAndSettle();
+      for (var i = 0; i < 5; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await t.pumpAndSettle();
+      }
+
+      for (var i = 4; i >= 0; i--) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await t.pumpAndSettle();
+        final donde = enfocado();
+        if (donde == null || !donde.startsWith('f')) continue;
+        final fila = donde.split('-').first; // «f2»
+        // El título de la fila enfocada tiene que estar DENTRO de la
+        // pantalla, no por encima del borde.
+        final titulo = find.text('titulo-$fila');
+        expect(titulo, findsOneWidget, reason: 'no se construyó $fila');
+        expect(
+          t.getTopLeft(titulo).dy,
+          greaterThanOrEqualTo(0),
+          reason: 'el título de $fila quedó cortado por arriba',
+        );
+      }
+    });
   });
 
   group('lo vertical sigue funcionando', () {

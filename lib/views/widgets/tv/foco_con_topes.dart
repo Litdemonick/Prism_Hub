@@ -389,9 +389,28 @@ class FocoConTopes extends DirectionalFocusAction {
     // de más arriba, que a los costados es como se cruza a propósito entre
     // las dos regiones. Reportado en vivo: «no me deja entrar al panel
     // izquierdo, estando pegado del todo a la izquierda».
+    // ── Y las reglas de fila SOLO valen si se venía de una fila ──────────
+    //
+    // «Quedate en el mismo renglón» existe para no salirse de una FILA DE
+    // TARJETAS. En una pantalla que no tiene filas —Ajustes, el repositorio,
+    // el historial: una columna de opciones a la izquierda y un panel a la
+    // derecha— no hay ningún renglón que respetar, y exigirlo igual bloquea
+    // el cruce de una columna a la otra.
+    //
+    // Reportado en vivo: «bug crítico en Ajustes, no me deja desplazarme a
+    // la derecha a las opciones de la derecha». El menú de Ajustes está
+    // centrado en vertical y el panel arranca arriba, así que el destino
+    // legítimo casi nunca cae dentro de los 40 puntos de tolerancia del
+    // renglón — y el salto se deshacía.
+    //
+    // Antes esto no se notaba porque estas guardas no llegaban a
+    // ejecutarse nunca (ver el comentario largo en `invoke`). Al arreglar
+    // eso, empezaron a aplicarse también donde no correspondía.
+    final veniaDeUnaFila = _scrollHorizontalDe(antes.context) != null ||
+        FranjaHorizontalTv.de(antes.context) != null;
     final seFue = !seMovioComoDebia ||
         (horizontal
-            ? (cambioDeRegion == true
+            ? (cambioDeRegion == true || !veniaDeUnaFila
                 ? false
                 : (!_mismaFilaHorizontal(antes.context, despues.context) ||
                     !_mismoRenglon(desde, hasta) ||

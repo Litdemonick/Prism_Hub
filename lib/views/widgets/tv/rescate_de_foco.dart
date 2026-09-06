@@ -452,13 +452,30 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
       );
       return;
     }
-    final alFinal = viewport.getOffsetToReveal(objetivo, 1).offset;
-    final alPrincipio = viewport.getOffsetToReveal(objetivo, 0).offset;
+    // ── Bajando por vertical se pide MÁS de lo que mide el objetivo ──────
+    //
+    // Lo que se trae a la vista, al acomodar la lista vertical, es la TIRA
+    // de tarjetas — el nombre de la extensión vive arriba de ella, fuera de
+    // esa medida. Con la tira entrando justo, la cuenta dice «ya se ve» y no
+    // mueve nada: la tira se ve entera y el título queda del otro lado del
+    // borde. Subiendo de a una fila, cada parada aparecía decapitada.
+    // Reportado en vivo con foto: «al ir subiendo poco a poco, la cámara
+    // corta las cosas hacia arriba».
+    //
+    // Pidiendo el rectángulo estirado hacia arriba, la cuenta pasa a
+    // considerar también ese renglón, y la fila entra con su título puesto.
+    final margen = posicion.axis == Axis.vertical ? 64.0 : 16.0;
+    final caja = objetivo.paintBounds;
+    final conElTitulo = posicion.axis == Axis.vertical
+        ? Rect.fromLTRB(caja.left, caja.top - margen, caja.right, caja.bottom)
+        : caja;
+    final alFinal = viewport.getOffsetToReveal(objetivo, 1, rect: conElTitulo).offset;
+    final alPrincipio =
+        viewport.getOffsetToReveal(objetivo, 0, rect: conElTitulo).offset;
     final actual = posicion.pixels;
     // Lo que se deja asomar de la vecina. Sale del tamaño de la propia
     // tarjeta en el eje que corresponde, no de un número fijo, así vale
     // igual para un póster angosto que para una fila alta.
-    final caja = objetivo.paintBounds;
     final asomo =
         (posicion.axis == Axis.vertical ? caja.height : caja.width) * 0.35;
     // ── Los dos límites, ordenados ──────────────────────────────────────
@@ -485,18 +502,37 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
     //
     // Estrechando los límites por ese margen, una tarjeta pegada al borde
     // deja de contar como visible y la lista se corre lo poco que falta.
-    const margenDelMarco = 16.0;
+    //
+    // ── Y en vertical el margen es MUCHO mayor, por el título ────────────
+    //
+    // Lo que este cálculo trae a la vista no es la fila entera: es la tira
+    // de tarjetas. El nombre de la extensión vive ARRIBA de esa tira, fuera
+    // de lo que se está midiendo. Dejando la tira pegada al filo de arriba,
+    // el título queda del otro lado del borde y la fila aparece decapitada
+    // —y, subiendo de a poco, cada parada corta un poco más—. Reportado en
+    // vivo con foto: «al ir subiendo poco a poco, la cámara corta las cosas
+    // hacia arriba».
+    //
+    // Con el alto de un título más su aire, la tira nunca aterriza contra
+    // el borde: siempre queda sitio para el renglón que la encabeza.
+    // Con algo casi tan grande como la pantalla, los dos límites quedan
+    // pegados y no hay margen que dar: pedirlo igual haría que la lista se
+    // corriera de un lado al otro sin parar. Ahí se vuelve al criterio de
+    // siempre, que es lo único que cabe.
+    final hayLugarParaElMargen = (limiteAlto - limiteBajo) > margen * 2;
     final double destino;
-    if (actual < limiteBajo - margenDelMarco) {
+    if (actual < limiteBajo - margen) {
       destino = limiteBajo + asomo; // quedó pasado el filo de salida
-    } else if (actual > limiteAlto + margenDelMarco) {
+    } else if (actual > limiteAlto + margen) {
       destino = limiteAlto - asomo; // quedó antes del filo de entrada
-    } else if (actual < limiteBajo) {
-      destino = limiteBajo; // entra, pero con el marco contra el filo
-    } else if (actual > limiteAlto) {
-      destino = limiteAlto;
+    } else if (hayLugarParaElMargen && actual < limiteBajo) {
+      // Entra, pero con el marco (o el título) contra el filo: se corre
+      // hasta dejar ese aire, no hasta el ras.
+      destino = limiteBajo + margen;
+    } else if (hayLugarParaElMargen && actual > limiteAlto) {
+      destino = limiteAlto - margen;
     } else {
-      return; // ya se ve entero, marco incluido: no se toca nada
+      return; // ya se ve entero, con su aire: no se toca nada
     }
     final acotado =
         destino.clamp(posicion.minScrollExtent, posicion.maxScrollExtent);
