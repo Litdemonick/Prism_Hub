@@ -1263,6 +1263,48 @@ class _HeroSecundarioTv extends StatelessWidget {
                     ),
                   ),
                 ),
+                // ── De qué extensión viene, fija arriba a la izquierda ─────
+                //
+                // Antes vivía DENTRO de la columna del título, justo encima:
+                // con un título de una línea quedaba a una altura, y con uno
+                // de dos —o de otra tarjeta vecina, para comparar de un
+                // vistazo— a otra. Reportado: «que siempre esté arriba, no
+                // importa cuánto texto tenga el título».
+                //
+                // Y el color dependía solo de una sombra por detrás, que
+                // contra una portada clara se lava y el nombre deja de
+                // leerse. Reportado: «ponele un color sólido que se vea».
+                //
+                // Con un `Positioned` propio y un fondo opaco de verdad, la
+                // insignia queda siempre en el mismo sitio y se lee sobre
+                // cualquier portada, sea cual sea el título.
+                if (tieneFoco)
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: HomeTheme.accentPink,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        child: Text(
+                          ExtensionUtils.runtimes[package]?.extension.name ??
+                              '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 Align(
                   alignment: Alignment.bottomLeft,
                   child: Padding(
@@ -1271,29 +1313,6 @@ class _HeroSecundarioTv extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // De qué extensión viene: solo al enfocar, igual
-                        // que en el resto de las tarjetas del televisor.
-                        if (tieneFoco)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 5),
-                            child: Text(
-                              ExtensionUtils
-                                      .runtimes[package]?.extension.name ??
-                                  '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.6,
-                                color: HomeTheme.accentPink,
-                                shadows: const [
-                                  Shadow(
-                                      blurRadius: 4, color: Color(0xE6000000)),
-                                ],
-                              ),
-                            ),
-                          ),
                         Text(
                           item.title,
                           maxLines: 2,
