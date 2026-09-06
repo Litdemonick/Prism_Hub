@@ -366,6 +366,22 @@ class _CampoDeBusquedaState extends State<_CampoDeBusqueda>
     duration: const Duration(milliseconds: 1100),
   );
 
+  /// Para que se vea lo último tecleado, no lo primero.
+  ///
+  /// ── El problema ─────────────────────────────────────────────────────
+  ///
+  /// Con `overflow: ellipsis`, una palabra larga se corta con "…" y ESO
+  /// queda fijo — lo que se está escribiendo AHORA, al final, queda
+  /// tapado. Reportado en vivo: «cuando se escribe no deben salir los
+  /// puntos, debe seguir viéndose que se está escribiendo». En un chip de
+  /// búsqueda reciente eso está bien (ahí no cambia más, se lee de un
+  /// vistazo); en el campo que se está escribiendo AHORA MISMO, no.
+  ///
+  /// Con un scroll horizontal en vez de elipsis, y saltando solo al
+  /// extremo cada vez que el texto cambia, el cursor queda siempre a la
+  /// vista — igual que cualquier campo de texto de verdad.
+  final _scroll = ScrollController();
+
   bool get _quieto => PrismHubMas.nivel == NivelDeAparato.bajo;
 
   @override
@@ -375,8 +391,21 @@ class _CampoDeBusquedaState extends State<_CampoDeBusqueda>
   }
 
   @override
+  void didUpdateWidget(_CampoDeBusqueda viejo) {
+    super.didUpdateWidget(viejo);
+    if (viejo.texto != widget.texto) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scroll.hasClients) {
+          _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _latido.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -408,16 +437,30 @@ class _CampoDeBusquedaState extends State<_CampoDeBusqueda>
           // Flexible y no Expanded: con poco texto, el cursor queda pegado a
           // la última letra en vez de irse al otro extremo del cuadro.
           Flexible(
-            child: Text(
-              vacio ? 'search.hint-text'.i18n : widget.texto,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 17,
-                color:
-                    vacio ? HomeTheme.textPlaceholder : HomeTheme.textPrimary,
-              ),
-            ),
+            child: vacio
+                ? Text(
+                    'search.hint-text'.i18n,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 17,
+                      color: HomeTheme.textPlaceholder,
+                    ),
+                  )
+                : SingleChildScrollView(
+                    controller: _scroll,
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    child: Text(
+                      widget.texto,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontSize: 17,
+                        color: HomeTheme.textPrimary,
+                      ),
+                    ),
+                  ),
           ),
           const SizedBox(width: 3),
           _cursor(acento),
