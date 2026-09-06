@@ -75,16 +75,26 @@ class _HorizontalListState extends State<HorizontalList> {
       );
     }
     return FranjaFijaTv(
-      child: FocusableCard(
-        borderRadius: 8,
-        onTap: widget.onClickMore,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Text(
-            'common.show-all'.i18n,
-            style: TextStyle(
-              color: HomeTheme.accentPink,
-              fontWeight: FontWeight.w700,
+      // ── Aire para el marco de foco ──────────────────────────────────
+      //
+      // El botón vive pegado contra lo que tenga alrededor —el título de
+      // la fila a un lado, el borde de lo que sea que lo contenga arriba
+      // y abajo—, y el marco de foco se dibuja unos píxeles hacia afuera.
+      // Sin aire, quedaba mordido. Reportado en vivo con foto: «se corta
+      // el botón con el borde rosado».
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: FocusableCard(
+          borderRadius: 8,
+          onTap: widget.onClickMore,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Text(
+              'common.show-all'.i18n,
+              style: TextStyle(
+                color: HomeTheme.accentPink,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
