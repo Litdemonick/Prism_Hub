@@ -1,4 +1,4 @@
-## PrismHub v1.0.108 — Las medianas con tope, y aire para que nada se corte
+## PrismHub v1.0.109 — La izquierda rápida, y entrar al contenido enfrente
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,27 +12,19 @@
 
 ### 📺 Android TV
 
-- **Las cuatro tarjetas medianas de arriba ya frenan al final.** El
-  destacado grande estaba marcado como fila y ellas no, así que seguían
-  saltando abajo con la flecha derecha. Ahora esa marca viaja dentro de la
-  propia fila, para que no vuelva a quedarse ninguna afuera.
+- **Yendo rápido con la flecha izquierda ya no se salta al panel a mitad de
+  fila.** La tarjeta a la que se acaba de mover puede no estar medida
+  todavía, y sin esa medida la búsqueda de la vecina no encontraba ninguna:
+  se leía como "se acabó la fila" y se entraba al panel antes de tiempo.
+  Ahora, sin medida no se mueve nada — perder una pulsación no se nota,
+  saltar al panel sin haber llegado al principio sí.
 
-- **Ya no se pierde un paso al apretar rápido.** El sistema aplica el
-  cambio de selección al final del cuadro, así que manteniendo la flecha la
-  tecla siguiente llegaba antes y se calculaba desde la tarjeta que ya
-  habías dejado. Por eso "yendo lento" llegabas al panel y apurando no.
+- **Desde el panel se entra por lo que está enfrente, no por arriba del
+  todo.** Entrando siempre por la primera tarjeta, desde una categoría de
+  abajo la lista se desplazaba por todas las filas hasta el principio, y
+  eso se ve como que la pantalla se movió sola. Ahora se entra justo
+  enfrente y nada se mueve. Estando en las primeras categorías eso sigue
+  siendo la fila de arriba, como antes.
 
-- **Al entrar a una zona se empieza por la primera tarjeta**, no donde
-  hubiera quedado la vez anterior.
-
-- **El buscador vuelve a ocupar toda la pantalla.** Se encogía contra el
-  borde de arriba y abajo quedaba una franja muerta.
-
-- **Aire alrededor de todo lo que se puede seleccionar.** El marco de
-  selección se dibuja por fuera de la tarjeta, así que donde el contenido
-  llegaba justo al filo quedaba mordido — y eso volvía una y otra vez en un
-  sitio distinto: la primera de la fila, la última contra el borde derecho,
-  la de arriba, la de abajo. Ahora es un mínimo con nombre que respetan
-  todas las pantallas, en vez de un número puesto a mano en cada sitio.
-
-Las pruebas automáticas de navegación son ahora 26 casos.
+- **Aire a los dos lados en la fila de tarjetas medianas**, que la última
+  llegaba al borde derecho y ahí su marco se veía cortado.
