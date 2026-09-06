@@ -72,15 +72,31 @@ class _SearchTVState extends State<SearchTV> {
     if (mounted) setState(() => _recientes = BusquedasRecientes.obtener());
   }
 
+  /// Cuánto puede llegar a medir el bloque de "últimas búsquedas".
+  ///
+  /// Es un TOPE, no una estimación: `_BusquedasRecientesTv` no deja que sus
+  /// chips crezcan más allá de esto (ver `maxHeight` ahí). Con un número que
+  /// de verdad se cumple, el teclado puede confiar en él para saber cuánto
+  /// le queda a él — a diferencia de adivinar cuántas líneas ocupan los
+  /// chips, que dependía de qué se hubiera buscado antes.
+  static const _altoMaximoDeRecientes = 78.0;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, cajaCompleta) {
       // ── Medido ACÁ, antes de entrar a ningún scroll ────────────────────
       //
-      // Adentro de un `SingleChildScrollView` cualquier medición de alto da
-      // "sin límite" —así es como puede desplazarse—, así que el alto de
-      // verdad hay que sacarlo de afuera, antes de entrar a él.
+      // Ver el porqué largo en `TecladoTv.alturaDisponible`: adentro de un
+      // `SingleChildScrollView` cualquier medición de alto da "sin límite"
+      // —así es como puede desplazarse—, así que el alto de verdad hay que
+      // sacarlo de afuera, antes de entrar a él.
       final alturaTotal = cajaCompleta.maxHeight;
+      final hayRecientes = _texto.isEmpty && _recientes.isNotEmpty;
+      final alturaParaElTeclado = alturaTotal.isFinite
+          ? alturaTotal -
+              (hayRecientes ? _altoMaximoDeRecientes + 16 : 0.0) -
+              HomeTheme.aireDeFocoTv * 2
+          : null;
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -90,82 +106,65 @@ class _SearchTVState extends State<SearchTV> {
             // el borde del scroll — ver el porqué en el padding, unas
             // líneas abajo.
             width: 380 + HomeTheme.aireDeFocoTv * 2,
-            height: alturaTotal.isFinite ? alturaTotal : null,
             child: SingleChildScrollView(
               // ── Red de seguridad, no la forma normal de llegar ─────────
               //
-              // El `FittedBox` de abajo achica todo el bloque —recientes más
-              // teclado— para que entre ENTERO en el alto disponible, así
-              // que en el uso normal esto nunca llega a desplazarse. Queda
-              // puesto por si algún televisor midiera algo raro: es
-              // preferible poder bajar un pelo a perder una tecla del todo.
+              // El achicado de `TecladoTv` (ver `alturaDisponible`) hace
+              // que en el uso normal esto no llegue a desplazarse. Queda
+              // puesto por si algún televisor midiera algo que no se
+              // previó: preferible poder bajar un pelo a perder una tecla
+              // del todo.
               //
-              // Aire adentro del scroll, no afuera: un `SingleChildScrollView`
-              // RECORTA lo que se sale de él, y el marco de foco se dibuja
-              // unos píxeles hacia afuera de cada tecla — mismo criterio que
-              // ya usa `ColumnaDeAcciones` para el mismo problema. Reportado
-              // en vivo con foto.
+              // Aire a los CUATRO lados, no solo a los costados: un
+              // `SingleChildScrollView` RECORTA lo que se sale de él, y el
+              // marco de foco se dibuja unos píxeles hacia afuera de cada
+              // tecla — sin aire arriba, la primera fila ("123"/borrar)
+              // quedaba con el marco mordido contra ese borde. Reportado
+              // en vivo con foto. Mismo criterio que ya usa
+              // `ColumnaDeAcciones` para el mismo problema.
               padding: const EdgeInsets.symmetric(
                 horizontal: HomeTheme.aireDeFocoTv,
+                vertical: HomeTheme.aireDeFocoTv,
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: alturaTotal.isFinite ? alturaTotal : 0,
+                  minHeight: alturaTotal.isFinite
+                      ? alturaTotal - HomeTheme.aireDeFocoTv * 2
+                      : 0,
                 ),
-                // ── Se achica para entrar entero, no se desplaza ─────────
-                //
-                // El bloque completo (recientes + teclado) podía medir más
-                // que el alto útil de un televisor chico, o de uno con las
-                // últimas búsquedas ocupando lugar arriba. Antes esto se
-                // resolvía centrando y dejando que lo que no entrara se
-                // desplazara — y desplazarse para tocar una tecla es
-                // justamente lo que no se puede hacer con un mando de un
-                // tirón. Pedido explícito, varias veces: «que se vean todos
-                // los botones sin hacer scroll».
-                //
-                // `FittedBox` mide el tamaño NATURAL del contenido (sin
-                // ningún límite) y lo escala entero, de una sola vez, para
-                // que entre en el espacio real — sea cual sea la cantidad
-                // de búsquedas recientes o el alto del televisor. No hace
-                // falta adivinar ningún número: si entra, queda a tamaño
-                // normal y centrado; si no entra, se achica lo justo.
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: SizedBox(
-                    width: 380,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // ── Las últimas búsquedas, arriba del teclado ────
-                        //
-                        // Solo mientras el campo está vacío: son un punto
-                        // de partida para no escribir nada, y una vez que
-                        // ya se está escribiendo o hay resultados en
-                        // pantalla, dejan de aportar y solo ocuparían
-                        // lugar. Escribir letra por letra con un control
-                        // remoto es lo peor de cualquier app de TV — un
-                        // botón con lo ya buscado vale por diez letras.
-                        if (_texto.isEmpty && _recientes.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: _BusquedasRecientesTv(
-                              terminos: _recientes,
-                              accent: widget.accent,
-                              onElegir: _buscar,
-                              onBorrar: _borrarRecientes,
-                            ),
-                          ),
-                        TecladoTv(
-                          texto: _texto,
-                          onCambio: _buscar,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ── Las últimas búsquedas, arriba del teclado ────────
+                    //
+                    // Solo mientras el campo está vacío: son un punto de
+                    // partida para no escribir nada, y una vez que ya se
+                    // está escribiendo o hay resultados en pantalla, dejan
+                    // de aportar y solo ocuparían lugar. Escribir letra
+                    // por letra con un control remoto es lo peor de
+                    // cualquier app de TV — un botón con lo ya buscado
+                    // vale por diez letras.
+                    if (hayRecientes)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _BusquedasRecientesTv(
+                          terminos: _recientes,
                           accent: widget.accent,
-                          ancho: 380,
+                          onElegir: _buscar,
+                          onBorrar: _borrarRecientes,
+                          alturaMaxima: _altoMaximoDeRecientes,
                         ),
-                      ],
+                      ),
+                    TecladoTv(
+                      texto: _texto,
+                      onCambio: _buscar,
+                      accent: widget.accent,
+                      ancho: 380,
+                      alturaDisponible: alturaParaElTeclado,
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -199,6 +198,7 @@ class _BusquedasRecientesTv extends StatelessWidget {
     required this.accent,
     required this.onElegir,
     required this.onBorrar,
+    required this.alturaMaxima,
   });
 
   final List<String> terminos;
@@ -206,78 +206,95 @@ class _BusquedasRecientesTv extends StatelessWidget {
   final ValueChanged<String> onElegir;
   final VoidCallback onBorrar;
 
+  /// Tope real, no una sugerencia: ver `SearchTV._altoMaximoDeRecientes`.
+  ///
+  /// Con muchas búsquedas recientes de nombres largos, los chips pueden
+  /// envolver a más líneas de las que caben en el lugar que el teclado le
+  /// dejó reservado. Antes de esto, esa diferencia se la comía el
+  /// teclado —empujado hacia abajo, sin entrar entero—. Recortando ACÁ en
+  /// cambio, lo que no entra son las últimas búsquedas más viejas, que
+  /// siguen estando (se guardan igual) y vuelven a aparecer apenas hay
+  /// lugar; el teclado nunca se entera de que faltó algo.
+  final double alturaMaxima;
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
+    return ClipRect(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: alturaMaxima),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'search.recent'.i18n,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: HomeTheme.textMuted,
-              ),
-            ),
-            const Spacer(),
-            FocusableCard(
-              borderRadius: 8,
-              onTap: onBorrar,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Icon(
-                  Icons.delete_outline_rounded,
-                  size: 18,
-                  color: HomeTheme.textMuted,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final termino in terminos)
-              FocusableCard(
-                borderRadius: 999,
-                accent: accent,
-                onTap: () => onElegir(termino),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: HomeTheme.cardSurface,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: HomeTheme.border),
+            Row(
+              children: [
+                Text(
+                  'search.recent'.i18n,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: HomeTheme.textMuted,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.history_rounded,
-                          size: 15, color: HomeTheme.textMuted),
-                      const SizedBox(width: 6),
-                      Text(
-                        termino,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                          color: HomeTheme.textPrimary,
-                        ),
+                ),
+                const Spacer(),
+                FocusableCard(
+                  borderRadius: 8,
+                  onTap: onBorrar,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Icon(
+                      Icons.delete_outline_rounded,
+                      size: 18,
+                      color: HomeTheme.textMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final termino in terminos)
+                  FocusableCard(
+                    borderRadius: 999,
+                    accent: accent,
+                    onTap: () => onElegir(termino),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: HomeTheme.cardSurface,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: HomeTheme.border),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.history_rounded,
+                              size: 15, color: HomeTheme.textMuted),
+                          const SizedBox(width: 6),
+                          Text(
+                            termino,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: HomeTheme.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
+              ],
+            ),
           ],
         ),
-      ],
+      ),
     );
   }
 }
