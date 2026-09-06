@@ -269,6 +269,37 @@ class FocoConTopes extends DirectionalFocusAction {
             'el origen no esta en una fila que se desplace');
       }
     }
+    // ── Y en vertical, lo mismo cuando se viene de una fila ─────────────
+    //
+    // Bajando o subiendo entre filas, `super.invoke` revela el destino — y
+    // al hacerlo desplaza LA FILA DE DESTINO de costado para dejar esa
+    // tarjeta a la vista. El resultado es que las filas se van
+    // descentrando solas mientras uno solo sube y baja. Reportado en vivo:
+    // «al subir se me mueven las cards, se descentran, no quedan en la
+    // misma línea; no debe mover nada si solo estoy bajando o subiendo».
+    //
+    // Eligiendo el destino nosotros —la tarjeta de la fila de al lado que
+    // esté más cerca en horizontal— no hace falta que nadie revele nada:
+    // la lista vertical la acomoda `RescateDeFoco`, que toca un solo eje.
+    //
+    // Solo desde una fila de tarjetas. El panel, los menús de Ajustes y
+    // demás siguen con el recorrido de siempre, que ahí funciona y está
+    // cubierto por pruebas.
+    if (vertical && antes != null && _identidadDeFila(antes.context) != null) {
+      final destino = _filaVecinaVertical(
+        antes,
+        haciaAbajo: intent.direction == TraversalDirection.down,
+      );
+      if (destino != null) {
+        _anotar('${intent.direction.name}: a la fila vecina '
+            '(${destino.debugLabel})');
+        _irA(destino);
+        return;
+      }
+      // Sin fila vecina se sigue por el camino de siempre: puede haber algo
+      // que no sea una tarjeta (el pie de la zona, la barra de arriba).
+      _anotar('${intent.direction.name}: no hay fila vecina, se busca fuera');
+    }
     // ── Que Flutter no mueva el eje que nadie tocó ──────────────────────
     //
     // `super.invoke` termina llamando a la política de foco de Flutter, y
@@ -569,7 +600,9 @@ class FocoConTopes extends DirectionalFocusAction {
                     !_mismoRenglon(desde, hasta) ||
                     !_mismaFranja(desde, hasta)))
             : (cambioDeRegion ??
-                _escapoALaIzquierda(desde, hasta, despues.context)));
+                ((!_vieneDelPanel(antes.context) &&
+                        !_seSolapanEnHorizontal(desde, hasta)) ||
+                    _escapoALaIzquierda(desde, hasta, despues.context))));
     _anotar('${intent.direction.name}: de ${antes.debugLabel} '
         'a ${despues.debugLabel} · region=${cambioDeRegion ?? "?"} '
         '· ${seFue ? "SE DESHACE" : "vale"}');
@@ -759,6 +792,64 @@ class FocoConTopes extends DirectionalFocusAction {
       final distancia = (caja.center.dy - origen.center.dy).abs();
       if (mejorDistancia == null || distancia < mejorDistancia) {
         mejorDistancia = distancia;
+        mejor = nodo;
+      }
+    }
+    return mejor;
+  }
+
+  /// La tarjeta de la fila de arriba o de abajo que queda más alineada.
+  ///
+  /// Primero se busca cuál es la fila más cercana en esa dirección —la
+  /// distancia vertical mínima— y después, entre las de ESA fila, la que
+  /// tenga el centro más cerca en horizontal. Así bajar cae enfrente de
+  /// donde uno venía en vez de al principio de la fila siguiente, y no hace
+  /// falta que nadie desplace nada de costado.
+  static FocusNode? _filaVecinaVertical(
+    FocusNode antes, {
+    required bool haciaAbajo,
+  }) {
+    final origen = _rectDe(antes);
+    if (origen == null) return null;
+    final ambito = antes.enclosingScope;
+    if (ambito == null) return null;
+    final region = RegionDeFocoTv.de(antes.context);
+    final candidatos = <(FocusNode, Rect)>[];
+    for (final nodo in ambito.traversalDescendants) {
+      if (identical(nodo, antes)) continue;
+      if (!nodo.canRequestFocus || nodo.skipTraversal) continue;
+      final ctx = nodo.context;
+      if (ctx == null || !ctx.mounted) continue;
+      // Sin cruzar de región: arriba y abajo se quedan donde están (ver el
+      // comentario de la clase).
+      if (RegionDeFocoTv.de(ctx) != region) continue;
+      // Y solo tarjetas de una fila: el pie de la zona o un botón suelto no
+      // son «la fila de al lado».
+      if (_identidadDeFila(ctx) == null) continue;
+      final caja = _rectDe(nodo);
+      if (caja == null) continue;
+      final salto = caja.center.dy - origen.center.dy;
+      // Ocho puntos de margen para no contar como «otra fila» a una vecina
+      // de la misma que quedó un poco más alta por el crecido del foco.
+      if (haciaAbajo ? salto <= 8 : salto >= -8) continue;
+      candidatos.add((nodo, caja));
+    }
+    if (candidatos.isEmpty) return null;
+    // La fila más cercana en esa dirección.
+    var masCerca = double.infinity;
+    for (final (_, caja) in candidatos) {
+      final d = (caja.center.dy - origen.center.dy).abs();
+      if (d < masCerca) masCerca = d;
+    }
+    // Y de esa fila, la más alineada en horizontal.
+    FocusNode? mejor;
+    var mejorDesvio = double.infinity;
+    for (final (nodo, caja) in candidatos) {
+      final d = (caja.center.dy - origen.center.dy).abs();
+      if (d > masCerca + _toleranciaDeRenglon) continue;
+      final desvio = (caja.center.dx - origen.center.dx).abs();
+      if (desvio < mejorDesvio) {
+        mejorDesvio = desvio;
         mejor = nodo;
       }
     }
@@ -1057,6 +1148,37 @@ class FocoConTopes extends DirectionalFocusAction {
       return identical(franjaA, franjaB);
     }
     return true;
+  }
+
+  /// Si se venía del panel de categorías.
+  ///
+  /// Desde ahí, subir en la primera categoría sale a la barra de arriba —que
+  /// está al otro lado de la pantalla y por lo tanto no comparte ancho con
+  /// el panel—. Ese salto es correcto y lo decide `_frenarEnLosBordes` en el
+  /// propio panel, así que la regla de la columna no aplica.
+  static bool _vieneDelPanel(BuildContext? ctx) =>
+      RegionDeFocoTv.de(ctx) == RegionDeFocoTv.rail;
+
+  /// ¿Comparten algo de ancho?
+  ///
+  /// ── Para qué, en un movimiento vertical ──────────────────────────────
+  ///
+  /// Arriba y abajo tienen que quedarse en la MISMA columna de la pantalla.
+  /// Si el destino no comparte ni un punto de ancho con el origen, no está
+  /// «arriba» ni «abajo» de donde uno estaba: está en otra columna, y llegar
+  /// ahí con una flecha vertical se siente como que la selección se escapó.
+  ///
+  /// Reportado en vivo en Extensiones instaladas —opciones a la izquierda,
+  /// lista a la derecha—: «si estoy a la derecha y subo hasta arriba, luego
+  /// sube la barra de la izquierda de las opciones». Al llegar al final de
+  /// la lista, lo más cercano hacia arriba era un botón de la otra columna.
+  ///
+  /// Entre filas de una misma grilla esto nunca molesta: por muy corridas
+  /// que estén, siempre comparten ancho.
+  static bool _seSolapanEnHorizontal(Rect a, Rect b) {
+    final desde = a.left > b.left ? a.left : b.left;
+    final hasta = a.right < b.right ? a.right : b.right;
+    return hasta - desde > 0;
   }
 
   static bool _mismaFranja(Rect a, Rect b) {

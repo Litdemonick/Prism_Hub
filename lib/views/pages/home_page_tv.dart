@@ -698,11 +698,18 @@ class _SidebarTVState extends State<_SidebarTV> {
   /// el único momento en que el nombre hace falta (el ícono solo no dice si
   /// "Series" es la de video o si hay una zona de anime distinta).
   ///
-  /// Arranca en `true` porque el foco inicial de la pantalla ES una
-  /// categoría del sidebar (ver `autofocus` más abajo): si arrancara
-  /// contraído, se abriría de golpe en el primer cuadro y se vería como un
-  /// salto en vez de como el estado de reposo.
-  bool _expandido = true;
+  /// ── Arranca CONTRAÍDO ─────────────────────────────────────────────────
+  ///
+  /// Arrancaba desplegado dando por sentado que el foco inicial cae en una
+  /// categoría. Pero mientras la app carga, un panel abierto tapa el
+  /// contenido a medio dibujar y se ve como un estorbo, no como el estado
+  /// de reposo. Pedido explícito: «cuando se abre la app el panel izquierdo
+  /// no debe estar abierto, debe estar ya contraído».
+  ///
+  /// Si el foco de verdad aterriza en una categoría, el oyente lo despliega
+  /// —y ese primer cambio va sin animación, así que aparece puesto en vez
+  /// de deslizarse. Ver `_yaSeAcomodo`.
+  bool _expandido = false;
 
   @override
   void initState() {

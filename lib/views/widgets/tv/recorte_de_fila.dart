@@ -102,7 +102,9 @@ class _DesvanecidoDeFilaState extends State<DesvanecidoDeFila> {
   ///
   /// Suficiente para que la tarjeta del costado se lea como «sigue» sin que
   /// llegue a apagarse: es un borde, no una sombra encima de la tarjeta.
-  static const _anchoDelBorde = 28.0;
+  /// Un poco más ancho que antes: con la curva suave, treinta y ocho
+  /// puntos se leen como un borde que se pierde, y no como una franja.
+  static const _anchoDelBorde = 38.0;
 
   @override
   void initState() {
@@ -169,21 +171,39 @@ class _DesvanecidoDeFilaState extends State<DesvanecidoDeFila> {
         // Con una medida fija el borde se ve igual en cualquier fila, sea
         // del ancho que sea, y nunca alcanza a apagar una tarjeta entera.
         final borde = (_anchoDelBorde / rect.width).clamp(0.0, 0.12);
+        // ── Y la curva, suave: no una rampa recta ───────────────────────
+        //
+        // Con solo dos paradas por lado, el degradado sube de golpe y sobre
+        // una portada clara se lee como una BANDA oscura pegada al borde,
+        // no como algo que se desvanece. Reportado con foto: «se ve esa
+        // sombra ahí, no se ve como en las cards de Inicio».
+        //
+        // Con paradas intermedias la opacidad arranca despacio y termina
+        // despacio, que es lo que hace que la tarjeta parezca perderse
+        // detrás del borde en vez de tener una sombra encima.
         return LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
           colors: const [
             Color(0x00000000),
+            Color(0x59000000),
+            Color(0xC4000000),
             Color(0xFF000000),
             Color(0xFF000000),
+            Color(0xC4000000),
+            Color(0x59000000),
             Color(0x00000000),
           ],
-          // Un lado sin nada más allá no difumina: su parada se pega al
+          // Un lado sin nada más allá no difumina: sus paradas se pegan al
           // borde y el degradado de ese extremo deja de existir.
           stops: [
             0,
+            izquierda ? borde * 0.35 : 0,
+            izquierda ? borde * 0.7 : 0,
             izquierda ? borde : 0,
             derecha ? 1 - borde : 1,
+            derecha ? 1 - borde * 0.7 : 1,
+            derecha ? 1 - borde * 0.35 : 1,
             1,
           ],
         ).createShader(rect);

@@ -1089,6 +1089,36 @@ void main() {
     });
   });
 
+  group('subir y bajar no descentra las filas', () {
+    testWidgets('bajando, las filas no se mueven de costado', (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(arbol(filas: 4, porFila: 15, conRescate: true));
+      await t.pumpAndSettle();
+
+      // Se avanza por la fila 0 para quedar en el medio de ella.
+      nodo('f0-c0').requestFocus();
+      await t.pumpAndSettle();
+      for (var i = 0; i < 4; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await t.pumpAndSettle();
+      }
+
+      // Dónde está la fila de abajo ANTES de bajar a ella.
+      final antesDeBajar = t.getTopLeft(find.text('f1-c0'));
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await t.pumpAndSettle();
+
+      // Se bajó a la fila de abajo...
+      expect(enfocado(), startsWith('f1-'));
+      // ...y esa fila NO se corrió de costado para revelar el destino.
+      // Reportado en vivo: «al subir se me mueven las cards, se descentran,
+      // no quedan en la misma línea».
+      expect(t.getTopLeft(find.text('f1-c0')).dx, antesDeBajar.dx);
+    });
+  });
+
   group('lo vertical sigue funcionando', () {
     testWidgets('abajo baja de fila', (t) async {
       await t.pumpWidget(arbol());
