@@ -50,3 +50,49 @@ class RecorteDeFila extends CustomClipper<Rect> {
   bool shouldReclip(covariant RecorteDeFila oldClipper) =>
       oldClipper.aireLateral != aireLateral;
 }
+
+/// Un desvanecido a los dos costados de una fila, para televisor.
+///
+/// ── Para qué ────────────────────────────────────────────────────────────
+///
+/// Sin esto, la tarjeta del borde termina en un filo recto contra el margen
+/// y la fila se lee como si ahí se acabara. Con el degradado se sigue viendo
+/// entera pero atenuada, como asomando — que es lo que dice «esto sigue para
+/// el costado». Pedido explícito: «dale ese degradado de que se pierden las
+/// cards», y después: «me gusta ese difuminado del Inicio, replicalo a las
+/// demás zonas».
+///
+/// No recorta nada nuevo: sobre lo que ya deja pasar [RecorteDeFila], baja
+/// la opacidad hacia los dos extremos.
+///
+/// ── Por qué vive acá ────────────────────────────────────────────────────
+///
+/// Nació dentro de la fila del Inicio y las zonas lo copiaban… o no: las de
+/// Películas, Series y Anime se quedaron sin él, y por eso ahí las tarjetas
+/// se cortaban en seco. Estando al lado del recorte que ya comparten las
+/// dos, la próxima fila que se escriba lo tiene disponible sin tener que
+/// acordarse de dónde estaba.
+class DesvanecidoDeFila extends StatelessWidget {
+  const DesvanecidoDeFila({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      shaderCallback: (rect) => const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Color(0x00000000),
+          Color(0xFF000000),
+          Color(0xFF000000),
+          Color(0x00000000),
+        ],
+        stops: [0, 0.04, 0.96, 1],
+      ).createShader(rect),
+      blendMode: BlendMode.dstIn,
+      child: child,
+    );
+  }
+}

@@ -1512,9 +1512,14 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
               // corta el borde de selección de la card». Con 24 sobra, y
               // sigue siendo menos que el aire que la fila tiene hasta el
               // rail.
-              child: ClipRect(
-                clipper: const RecorteDeFila(aireLateral: 24),
-                child: ListView.separated(
+              // Y el mismo desvanecido que las filas de Inicio: sin él, la
+              // tarjeta del borde termina en un filo recto y la fila se lee
+              // como si ahí se acabara. Pedido explícito: «me gusta ese
+              // difuminado del Inicio, replicalo a Anime, Películas, etc.».
+              child: DesvanecidoDeFila(
+                child: ClipRect(
+                  clipper: const RecorteDeFila(aireLateral: 24),
+                  child: ListView.separated(
                   controller: _scroll,
                   scrollDirection: Axis.horizontal,
                   clipBehavior: Clip.none,
@@ -1536,6 +1541,7 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
                       focusNode: i == 0 ? widget.focoPrimero : null,
                     );
                   },
+                  ),
                 ),
               ),
             ),
