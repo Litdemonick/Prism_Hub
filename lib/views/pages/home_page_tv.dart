@@ -117,7 +117,7 @@ const double _aireDelRailTv = 22;
 ///
 /// Con este aire la fila sigue asomando la siguiente —el recorte pasa a
 /// estar unos píxeles antes, que no se nota— y el marco entra entero.
-const double _aireDerechoTv = 14;
+const double _aireDerechoTv = 22;
 
 /// El hueco entre las tarjetas grandes de Inicio. Casi pegadas.
 const double _huecoGrandeTv = 6;

@@ -267,27 +267,25 @@ void main() {
       expect(enfocado(), startsWith('rail'));
     });
 
-    testWidgets('DESPLEGADO no se puede entrar: por eso tiene que contraerse',
+    testWidgets('también con el panel DESPLEGADO, tapando la tarjeta',
         (t) async {
-      // ── El motivo por el que el panel SE CONTRAE, escrito como prueba ──
+      // ── Y desplegado también, que antes era imposible ──────────────
       //
-      // Para mover el foco a la izquierda, Flutter exige que el CENTRO del
-      // destino quede más a la izquierda que el BORDE del origen
-      // (`_sortAndFilterHorizontally`). Con el panel desplegado sus botones
-      // son anchos, así que su centro cae a la DERECHA del borde de las
-      // tarjetas y Flutter los descarta: el panel se vuelve inalcanzable.
+      // Delegando en Flutter esto NO funcionaba: para mover el foco a la
+      // izquierda exige que el CENTRO del destino quede más a la izquierda
+      // que el BORDE del origen, y con el panel desplegado sus botones son
+      // anchos, así que su centro cae a la derecha del borde de las
+      // tarjetas y quedaban descartados.
       //
-      // Y ahí se muerde la cola: si no se puede entrar, nunca recibe el
-      // foco; si nunca recibe el foco, nunca se entera de que tiene que
-      // contraerse; y desplegado sigue siendo inalcanzable. Es exactamente
-      // lo reportado en vivo, con foto: «el panel queda abierto todo el rato
-      // y no me deja ni entrar».
+      // Eso se mordía la cola: si no se podía entrar, el panel nunca
+      // recibía el foco; sin foco nunca se enteraba de que tenía que
+      // contraerse; y desplegado seguía siendo inalcanzable. Reportado en
+      // vivo con foto: «el panel queda abierto todo el rato y no me deja ni
+      // entrar».
       //
-      // Por eso el arreglo no está acá sino en el panel (`_SidebarTVState`),
-      // que ahora comprueba contra la realidad si tiene el foco en vez de
-      // confiar en que su `autofocus` haya llegado a aplicarse. Este caso
-      // queda escrito para que se entienda que un panel desplegado de forma
-      // permanente NO es una opción de diseño: rompe la navegación.
+      // Ahora la entrada al panel se resuelve sin delegar —se busca el
+      // botón que esté a la altura de donde se venía— así que el ancho del
+      // panel deja de importar y el bloqueo no puede volver.
       await t.pumpWidget(arbol(anchoDelRail: 220));
       await t.pumpAndSettle();
 
@@ -297,7 +295,7 @@ void main() {
       await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       await t.pumpAndSettle();
 
-      expect(enfocado(), 'f0-c0');
+      expect(enfocado(), startsWith('rail'));
     });
 
     testWidgets('y desde el rail se vuelve al contenido con la derecha',
@@ -635,6 +633,38 @@ void main() {
     });
   });
 
+  group('la izquierda entra al panel SIN mover nada', () {
+    testWidgets('estando abajo, no salta las tarjetas hacia arriba',
+        (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(arbol(filas: 6, conRescate: true));
+      await t.pumpAndSettle();
+
+      // Se baja unas cuantas filas, para estar «allá abajo».
+      nodo('f0-c0').requestFocus();
+      await t.pumpAndSettle();
+      for (var i = 0; i < 3; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await t.pumpAndSettle();
+      }
+      expect(enfocado(), startsWith('f3-'));
+
+      final antesDeIrALaIzquierda = t.getTopLeft(find.text('f3-c0'));
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await t.pumpAndSettle();
+
+      // Entra al panel...
+      expect(enfocado(), startsWith('rail'));
+      // ...y las tarjetas se quedan EXACTAMENTE donde estaban. Reportado en
+      // vivo: «hacia la izquierda me sigue subiendo la selección y moviendo
+      // las cards; nunca me tiene que hacer el salto automático de todas
+      // las cards hacia arriba».
+      expect(t.getTopLeft(find.text('f3-c0')), antesDeIrALaIzquierda);
+    });
+  });
+
   group('dentro del panel, arriba y abajo no sacan de ahí', () {
     // «Si estoy en el panel izquierdo y estoy subiendo y bajando, no me debe
     // sacar a otro lugar: estoy eligiendo a qué zona entrar. No me puede
@@ -749,6 +779,151 @@ void main() {
           reason: 'el título de $fila quedó cortado por arriba',
         );
       }
+    });
+  });
+
+  group('los destacados de arriba: fila FIJA, con los mismos topes', () {
+    /// Los dos grandes y las cuatro medianas de Inicio no son una fila que se
+    /// desplaza: son `Row` comunes, marcados con `FranjaFijaTv`. Se recorren
+    /// igual que cualquier fila y tienen que frenar igual en las puntas.
+    /// Reportado en vivo: «las seis de arriba también necesitan topes».
+    Widget conDestacados() {
+      return MaterialApp(
+        home: Actions(
+          actions: <Type, Action<Intent>>{
+            DirectionalFocusIntent: FocoConTopes(),
+          },
+          child: RescateDeFoco(
+            child: Scaffold(
+              body: Stack(
+                children: [
+                  RegionDeFocoTv(
+                    nombre: RegionDeFocoTv.contenido,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 80),
+                      child: ListView(
+                        children: [
+                          FranjaFijaTv(
+                            child: Row(
+                              children: [
+                                for (var i = 0; i < 2; i++)
+                                  Expanded(
+                                    child: FocusableCard(
+                                      focusNode: nodo('grande$i'),
+                                      onTap: () {},
+                                      child: Container(
+                                        height: 220,
+                                        margin: const EdgeInsets.all(6),
+                                        color: Colors.deepPurple,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(
+                            height: 190,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                for (var c = 0; c < 6; c++)
+                                  _Tarjeta(
+                                      nombre: 'abajo-c$c',
+                                      foco: nodo('abajo-c$c')),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: RegionDeFocoTv(
+                      nombre: RegionDeFocoTv.rail,
+                      child: SizedBox(
+                        width: 60,
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < 4; i++)
+                              Focus(
+                                focusNode: nodo('rail$i'),
+                                child: Container(
+                                  width: 50,
+                                  height: 50,
+                                  margin: const EdgeInsets.all(5),
+                                  color: Colors.blueGrey,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('en el último destacado, la derecha no mueve nada', (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(conDestacados());
+      await t.pumpAndSettle();
+
+      nodo('grande1').requestFocus();
+      await t.pumpAndSettle();
+
+      final antesDeInsistir = t.getTopLeft(find.text('abajo-c0'));
+      for (var i = 0; i < 4; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await t.pumpAndSettle();
+      }
+
+      expect(enfocado(), 'grande1');
+      expect(t.getTopLeft(find.text('abajo-c0')), antesDeInsistir);
+    });
+
+    testWidgets('y del primero, la izquierda va al panel', (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(conDestacados());
+      await t.pumpAndSettle();
+
+      nodo('grande0').requestFocus();
+      await t.pumpAndSettle();
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await t.pumpAndSettle();
+
+      expect(enfocado(), startsWith('rail'));
+    });
+
+    testWidgets('dentro del panel, insistir con la izquierda no saca de ahí',
+        (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(conDestacados());
+      await t.pumpAndSettle();
+
+      nodo('rail1').requestFocus();
+      await t.pumpAndSettle();
+
+      final antesDeInsistir = t.getTopLeft(find.text('abajo-c0'));
+      // «Cuando entro al panel y sigo presionando izquierda, me saca del
+      // panel y comienza a scrollear toda la zona hacia abajo.»
+      for (var i = 0; i < 4; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await t.pumpAndSettle();
+      }
+
+      expect(enfocado(), 'rail1');
+      expect(t.getTopLeft(find.text('abajo-c0')), antesDeInsistir);
     });
   });
 

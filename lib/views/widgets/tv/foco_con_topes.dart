@@ -91,8 +91,28 @@ class FocoConTopes extends DirectionalFocusAction {
     // invoca a nadie — no se mueve el foco NI la pantalla. Ese es el tope
     // que se venía pidiendo.
     if (horizontal && antes != null) {
-      final fila = _scrollHorizontalDe(antes.context);
       final aLaDerecha = intent.direction == TraversalDirection.right;
+      // ── En el panel, la izquierda no lleva a ningún lado ──────────────
+      //
+      // El panel de categorías está pegado al borde: a su izquierda no hay
+      // nada. Pero delegando, Flutter busca «lo más cercano» con tal de
+      // mover el foco a algún lado y engancha una tarjeta del contenido —y
+      // de paso desplaza la zona entera. Reportado en vivo: «cuando entro al
+      // panel y sigo presionando izquierda, me saca del panel y comienza a
+      // scrollear toda la zona hacia abajo».
+      if (!aLaDerecha &&
+          RegionDeFocoTv.de(antes.context) == RegionDeFocoTv.rail) {
+        _anotar('izquierda: ya estás en el panel, no se mueve nada');
+        return;
+      }
+      // La «fila» puede ser una que se desplaza (las de pósters) o una fija
+      // (los destacados de arriba y las medianas, marcadas con
+      // `FranjaFijaTv`). Las dos se recorren igual: por sus vecinas, y con
+      // tope en las puntas. Antes solo entraban acá las que se desplazan, y
+      // por eso las de arriba seguían delegando en Flutter —con el
+      // desplazamiento indeseado que eso arrastra—. Reportado en vivo: «las
+      // seis de arriba también necesitan topes».
+      final fila = _identidadDeFila(antes.context);
       if (fila != null) {
         final vecino = _vecinoEnLaFila(antes, fila, aLaDerecha);
         if (vecino != null) {
@@ -101,16 +121,35 @@ class FocoConTopes extends DirectionalFocusAction {
           vecino.requestFocus();
           return;
         }
-        // No hay vecino en la fila. Hacia la DERECHA eso es el final: se
-        // consume la tecla y no pasa nada. Hacia la IZQUIERDA sí hay a
-        // dónde ir —el panel de categorías—, así que se deja seguir por el
-        // camino de siempre, que ya sabe distinguirlo (ver `cambioDeRegion`).
+        // No hay vecino en la fila.
         if (aLaDerecha) {
+          // Es el final: se consume la tecla y no pasa nada.
           _anotar('derecha: fin de la fila, no se mueve nada');
           return;
         }
-        _anotar('izquierda: sin vecina en la fila, se busca fuera '
-            '(deberia ser el panel)');
+        // ── Y a la izquierda, al panel: también sin delegar ──────────────
+        //
+        // Acá se dejaba seguir por el camino de siempre —`super.invoke` y
+        // después deshacer si no correspondía—, y eso arrastra el mismo
+        // problema que ya se arregló del lado derecho: aunque el foco
+        // vuelva, el intento de salto YA desplazó la pantalla. Reportado en
+        // vivo: «hacia la izquierda me sigue subiendo la selección y
+        // moviendo las cards; arreglalo como el lado derecho».
+        //
+        // Desde el principio de una fila, a la izquierda solo hay un
+        // destino legítimo: el panel de categorías. Se lo busca y se va
+        // ahí; si no hay ninguno —una pantalla sin panel—, no se mueve
+        // nada, que es preferible a que se desplace todo solo.
+        final alPanel = _entradaAlPanel(antes);
+        if (alPanel != null) {
+          _anotar('izquierda: al panel de categorías '
+              '(${alPanel.debugLabel})');
+          alPanel.requestFocus();
+          return;
+        }
+        _anotar('izquierda: principio de la fila y no hay panel; '
+            'no se mueve nada');
+        return;
       } else if (aLaDerecha &&
           RegionDeFocoTv.de(antes.context) != RegionDeFocoTv.rail) {
         // ── Entrar a la columna de al lado: por su PRIMERA opción ────────
@@ -536,6 +575,54 @@ class FocoConTopes extends DirectionalFocusAction {
   /// ida y vuelta.
   static void _anotar(String queHizo) => logger.fine('[mando] $queHizo');
 
+  /// Qué fila horizontal es la de [ctx], o null si no está en ninguna.
+  ///
+  /// Son dos cosas distintas con el mismo papel: una fila que se DESPLAZA
+  /// (las de pósters) se identifica por su objeto de scroll, y una fila FIJA
+  /// (los destacados de arriba, las medianas) por la marca `FranjaHorizontalTv`
+  /// que le pone quien la arma. Devolviendo cualquiera de las dos como
+  /// «identidad», el resto del código las trata igual: vecinas dentro, tope
+  /// en las puntas.
+  static Object? _identidadDeFila(BuildContext? ctx) =>
+      _scrollHorizontalDe(ctx) ?? FranjaHorizontalTv.de(ctx);
+
+  /// Por dónde se entra al panel de categorías desde [antes].
+  ///
+  /// El botón del panel que quede a la ALTURA más parecida a la de donde se
+  /// venía: así entrar y volver a salir deja la selección más o menos donde
+  /// estaba, en vez de mandarla siempre a la primera categoría.
+  ///
+  /// Null si esta pantalla no tiene panel marcado — ahí no hay a dónde ir y
+  /// quien llama decide (no moverse).
+  static FocusNode? _entradaAlPanel(FocusNode antes) {
+    final ctx = antes.context;
+    if (ctx == null) return null;
+    // Solo tiene sentido desde el contenido: estando YA en el panel, la
+    // izquierda no lo vuelve a buscar.
+    if (RegionDeFocoTv.de(ctx) == RegionDeFocoTv.rail) return null;
+    final origen = _rectDe(antes);
+    if (origen == null) return null;
+    final ambito = antes.enclosingScope;
+    if (ambito == null) return null;
+    FocusNode? mejor;
+    double? mejorDistancia;
+    for (final nodo in ambito.traversalDescendants) {
+      if (identical(nodo, antes)) continue;
+      if (!nodo.canRequestFocus || nodo.skipTraversal) continue;
+      final suCtx = nodo.context;
+      if (suCtx == null || !suCtx.mounted) continue;
+      if (RegionDeFocoTv.de(suCtx) != RegionDeFocoTv.rail) continue;
+      final caja = _rectDe(nodo);
+      if (caja == null) continue;
+      final distancia = (caja.center.dy - origen.center.dy).abs();
+      if (mejorDistancia == null || distancia < mejorDistancia) {
+        mejorDistancia = distancia;
+        mejor = nodo;
+      }
+    }
+    return mejor;
+  }
+
   /// Lo primero de la columna que sigue a la derecha, o null si no hay.
   ///
   /// «La columna que sigue» son los enfocables que empiezan después del
@@ -590,7 +677,7 @@ class FocoConTopes extends DirectionalFocusAction {
   /// justamente recorrer la fila.
   static FocusNode? _vecinoEnLaFila(
     FocusNode antes,
-    ScrollPosition fila,
+    Object fila,
     bool aLaDerecha,
   ) {
     final origen = _rectDe(antes);
@@ -604,7 +691,7 @@ class FocoConTopes extends DirectionalFocusAction {
       if (!nodo.canRequestFocus || nodo.skipTraversal) continue;
       final ctx = nodo.context;
       if (ctx == null || !ctx.mounted) continue;
-      final suFila = _scrollHorizontalDe(ctx);
+      final suFila = _identidadDeFila(ctx);
       if (suFila == null || !identical(suFila, fila)) continue;
       final caja = _rectDe(nodo);
       if (caja == null) continue;
