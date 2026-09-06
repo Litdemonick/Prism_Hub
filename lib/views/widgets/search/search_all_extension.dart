@@ -123,26 +123,48 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
         children: [
           if (widget.cabecera != null) widget.cabecera!,
           for (final entry in widget.runtimeList.asMap().entries)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SearchAllTile(
-                // Key estable por extensión — sin esto, Flutter reconcilia
-                // esta lista por POSICIÓN: cuando una extensión sube al frente
-                // (ver getResult(), las que traen resultados se insertan
-                // primero), cada índice de acá para abajo se corre, y Flutter
-                // termina actualizando el tile equivocado en cada posición en
-                // vez de simplemente mover el que ya existía.
-                key: ValueKey(entry.value.runitme.extension.package),
-                kw: widget.kw,
-                searchResult: entry.value,
-                onClickMore: () {
-                  widget.onClickMore(entry.key);
-                },
+            if (!_sinResultadoEnTv(entry.value))
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SearchAllTile(
+                  // Key estable por extensión — sin esto, Flutter reconcilia
+                  // esta lista por POSICIÓN: cuando una extensión sube al
+                  // frente (ver getResult(), las que traen resultados se
+                  // insertan primero), cada índice de acá para abajo se
+                  // corre, y Flutter termina actualizando el tile
+                  // equivocado en cada posición en vez de simplemente mover
+                  // el que ya existía.
+                  key: ValueKey(entry.value.runitme.extension.package),
+                  kw: widget.kw,
+                  searchResult: entry.value,
+                  onClickMore: () {
+                    widget.onClickMore(entry.key);
+                  },
+                ),
               ),
-            )
         ],
       ),
     );
+  }
+
+  /// Televisor: la extensión ya buscó y no encontró nada. Se omite la fila.
+  ///
+  /// ── Por qué solo en TV ────────────────────────────────────────────────
+  ///
+  /// En teléfono/escritorio la fila con "no se encontró nada en tal
+  /// extensión" queda a propósito (ver el comentario grande más arriba: sin
+  /// eso, una extensión sin resultados desaparece de la vista y parece que
+  /// nunca estuvo buscando). Ahí una fila de texto entre otras es barata.
+  ///
+  /// En un televisor no: con doce extensiones instaladas y una búsqueda
+  /// puntual, la pantalla se llenaba de filas diciendo lo mismo una y otra
+  /// vez, y había que bajar entre ellas para llegar a la que sí tenía algo.
+  /// Reportado en vivo: "si escribí algo en el buscador y una no encontró
+  /// nada, no debe mostrarla". Con resultado sigue mostrándose igual que
+  /// siempre; lo único que se saca es la fila que no aporta nada que ver.
+  bool _sinResultadoEnTv(SearchResult r) {
+    if (!PlatformTv.esTelevisionSync) return false;
+    return r.completed && r.error == null && (r.result?.isEmpty ?? false);
   }
 }
 
