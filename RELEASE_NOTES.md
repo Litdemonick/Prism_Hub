@@ -1,4 +1,4 @@
-## PrismHub v1.0.106 — Ajustes se navega entero, y los bordes de fila ya no se comen las tarjetas
+## PrismHub v1.0.107 — Topes también a la izquierda, en el panel y arriba
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,29 +12,31 @@
 
 ### 📺 Android TV
 
-- **En Ajustes ya se puede pasar a las opciones de la derecha desde
-  cualquier categoría.** Eran dos fallos encima del mismo síntoma. Por un
-  lado, la regla que impide que la selección se escape de una fila de
-  tarjetas se estaba aplicando también acá, donde no hay filas. Por el
-  otro, el recorrido busca lo más cercano *a la misma altura*, así que
-  estando en la última categoría —con el botón allá arriba— no encontraba
-  nada.
+Tres sitios donde la selección todavía se movía sola, y los tres eran el
+mismo agujero que ya se había tapado del lado derecho: se dejaba que el
+sistema decidiera el salto, y ese intento **ya desplaza la pantalla**
+aunque la selección después vuelva a su sitio.
 
-  Ahora, al cruzar hacia la derecha se entra por **la primera opción** de
-  esa columna, vengas de la altura que vengas. Vale igual para el
-  repositorio de extensiones y el historial, que tienen la misma forma.
+- **La izquierda al principio de una fila** ahora entra al panel de
+  categorías directo, por el botón que esté a la misma altura de donde
+  venías — así no se pierde el sitio. Nada se desplaza.
 
-- **La pantalla ya no corta la fila por arriba al subir.** Lo que se traía
-  a la vista era la tira de tarjetas, y el nombre de la extensión vive
-  encima de ella: con la tira entrando justa, la cuenta decía "ya se ve" y
-  la fila aparecía sin su título.
+- **Dentro del panel, insistir con la izquierda ya no saca de ahí.** A la
+  izquierda del panel no hay nada, pero el sistema enganchaba una tarjeta
+  del contenido y arrastraba la zona entera hacia abajo.
 
-- **El difuminado de los bordes, ahora también en Películas, Series y
-  Anime.** Estaba solo en Inicio, así que en las zonas la tarjeta del borde
-  terminaba en un filo recto.
+- **Los destacados de arriba tienen los mismos topes que las filas.** Los
+  dos grandes y las medianas no son filas que se desplazan sino bloques
+  fijos, así que quedaban fuera del mecanismo que ya frenaba a las filas de
+  pósters.
 
-- **Y ese difuminado dejó de atenuar donde no hay nada más.** Cada lado se
-  desvanece solo si por ahí sigue habiendo fila: la primera tarjeta al
-  principio y la última al final se ven nítidas, con su marco entero.
+Y un efecto secundario que cierra un fallo viejo: con el panel desplegado
+ahora también se puede entrar. Antes no —sus botones quedaban descartados
+por anchos— y eso se mordía la cola: sin poder entrar nunca recibía la
+selección, sin selección no se enteraba de que tenía que contraerse, y
+desplegado seguía siendo inalcanzable.
 
-Las pruebas automáticas de navegación son ahora 21 casos.
+Más aire contra el borde derecho, donde el marco de selección se veía
+cortado.
+
+Las pruebas automáticas de navegación son ahora 25 casos.
