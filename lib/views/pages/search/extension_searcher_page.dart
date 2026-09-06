@@ -1270,32 +1270,16 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       // desborda.
       resizeToAvoidBottomInset: false,
       appBar: SearchAppBar(
-        // ── En TV, una flecha de verdad, no la del sistema ───────────────
+        // ── En TV, sin flecha acá: vive en el teclado ────────────────────
         //
-        // Esta pantalla, en TV, vive DENTRO de la de arriba —el teclado a
-        // la izquierda, esto a la derecha—, y el `AppBar` de acá adentro
-        // agregaba su propia flecha de volver: un botón de Material sin
-        // marco de foco, pegado contra el borde de la columna de al lado.
-        // Reportado con foto: «dejá la flecha a la izquierda, no pegada
-        // al teclado».
-        //
-        // Sacarla del todo tampoco servía —reportado enseguida: «te faltó
-        // la flecha para volver atrás»—. Hace falta la flecha, con aire
-        // alrededor y con marco de foco de verdad.
-        leading: PlatformTv.esTelevisionSync
-            ? Padding(
-                padding: const EdgeInsets.all(6),
-                child: FocusableCard(
-                  borderRadius: 8,
-                  onTap: () => Get.back<void>(),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(Icons.arrow_back_rounded,
-                        color: HomeTheme.textPrimary),
-                  ),
-                ),
-              )
-            : null,
+        // Estuvo primero acá, con marco de foco, pero pegada contra el
+        // borde de la columna de al lado sin ningún aire — la barra de
+        // arriba de esta pantalla es angosta y no tiene mucho margen para
+        // darle. Pedido explícito: «esa flecha va a la izquierda, al lado
+        // del botón 123» — mudada a la fila de acciones del teclado (ver
+        // `accionIzquierda`, más abajo), que es donde vive el resto de lo
+        // enfocable de esta columna.
+        leading: null,
         // El contador va pegado al nombre porque SearchAppBar recibe un texto,
         // no un widget. Ver _cargados.
         title: _cargados == 0
@@ -1901,6 +1885,23 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                   // Sin cartel propio: el texto ya se ve en la barra de
                   // arriba de esta pantalla.
                   mostrarCampo: false,
+                  // La flecha de volver, al lado de "123" — ver el
+                  // porqué largo en `TecladoTv.accionIzquierda`.
+                  accionIzquierda: FocusableCard(
+                    borderRadius: 8,
+                    onTap: () => Get.back<void>(),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: HomeTheme.cardSurface,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.arrow_back_rounded,
+                          color: HomeTheme.textPrimary),
+                    ),
+                  ),
                   texto: _keyWord,
                   onCambio: (texto) {
                     _typedText = '';
@@ -1919,7 +1920,20 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                     // al instante, sin esperar nada— y la búsqueda de
                     // verdad recién se dispara cuando el mando se queda
                     // quieto un momento.
-                    _textEditingController.text = texto;
+                    //
+                    // Con `.text =` a secas el cursor queda en -1 ("sin
+                    // selección"): sin un cursor de verdad, el campo no
+                    // tiene ningún motivo para desplazarse y se queda
+                    // mostrando el PRINCIPIO de lo escrito, no el final —
+                    // que es justo lo que se está tecleando. Reportado en
+                    // vivo con foto: «no se ve, se corta y no sigue lo que
+                    // estoy escribiendo». Con el cursor puesto al final a
+                    // mano, el campo se desplaza solo para mantenerlo a
+                    // la vista, como cualquier campo de texto de verdad.
+                    _textEditingController.value = TextEditingValue(
+                      text: texto,
+                      selection: TextSelection.collapsed(offset: texto.length),
+                    );
                     _tvBusquedaDemorada?.cancel();
                     _tvBusquedaDemorada = Timer(
                       const Duration(milliseconds: 350),

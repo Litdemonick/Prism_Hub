@@ -50,7 +50,24 @@ class TecladoTv extends StatefulWidget {
     this.ancho = 380,
     this.mostrarCampo = true,
     this.alturaDisponible,
+    this.accionIzquierda,
   });
+
+  /// Un botón de más, antes de "123", en la misma fila de acciones.
+  ///
+  /// ── Para qué ────────────────────────────────────────────────────────
+  ///
+  /// El buscador de una extensión no muestra el cartel propio del teclado
+  /// (`mostrarCampo: false`: el texto ya se ve en la barra de arriba), así
+  /// que la flecha para volver atrás no tenía ningún lugar natural donde
+  /// vivir en esa columna — quedó primero en la barra de arriba, pegada al
+  /// teclado sin aire, y sacarla de ahí la dejaba sin ningún sitio.
+  /// Pedido explícito: «esa flecha va a la izquierda, al lado del botón
+  /// 123».
+  ///
+  /// Null (el valor de siempre) no agrega nada: el resto de las pantallas
+  /// que usan este teclado no lo necesitan.
+  final Widget? accionIzquierda;
 
   /// Cuánto alto tiene de verdad para acomodarse, si quien lo usa lo sabe.
   ///
@@ -174,6 +191,10 @@ class _TecladoTvState extends State<TecladoTv> {
               escapaALaDerecha: true,
               child: Row(
                 children: [
+                  if (widget.accionIzquierda != null) ...[
+                    widget.accionIzquierda!,
+                    SizedBox(width: hueco),
+                  ],
                   _tecla(
                     _numeros ? 'ABC' : '123',
                     onTap: () => setState(() => _numeros = !_numeros),
