@@ -1,4 +1,4 @@
-## PrismHub v1.0.113 — La izquierda rápida, y el panel quieto al arrancar
+## PrismHub v1.0.114 — Subir y bajar ya no mueve las filas ni salta de columna
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,20 +12,22 @@
 
 ### 📺 Android TV
 
-- **Yendo rápido con la flecha izquierda ya no se entra al panel a mitad de
-  fila.** Y esta vez con la causa real: una lista destruye las tarjetas que
-  salen de la vista, así que al volver rápido las del principio todavía no
-  se habían rehecho. No había vecina a la izquierda — pero tampoco era el
-  principio de la fila, y eso se leía como "se acabó".
+- **Las filas ya no se descentran al subir o bajar.** Al revelar la tarjeta
+  de destino, el sistema desplazaba esa fila de costado — así que subiendo
+  y bajando las filas se iban corriendo solas. Ahora la tarjeta de destino
+  se elige directamente: la de la fila de al lado que está más alineada, y
+  nada se mueve de costado.
 
-  Ahora se mira el desplazamiento de la fila, que sí sabe la verdad: si
-  queda recorrido hacia ese lado, hay más tarjetas aunque no estén puestas.
-  Se acerca la fila para que se construyan y la selección se queda donde
-  está. Queda cubierto por una prueba automática que, sin el arreglo, falla
-  en la décima pulsación.
+- **Un salto vertical ya no cambia de columna.** En Extensiones instaladas,
+  al llegar al final de la lista de la derecha, lo más cercano hacia arriba
+  era un botón de la columna izquierda, y la selección se iba ahí
+  arrastrando su barra.
 
-- **El panel de categorías ya no se mueve al abrir la app.** Nace
-  desplegado y se acomoda cuando se sabe dónde quedó la selección; ese
-  acomodo iba animado y se veía como que el panel se movía solo justo
-  mientras la app cargaba. Ahora aparece directamente donde va, y la
-  animación queda para cuando se abre y se cierra con el mando.
+- **El difuminado de los bordes, con una curva suave.** Subía de golpe y
+  sobre una portada clara se leía como una banda oscura pegada al borde en
+  vez de un degradado.
+
+- **El panel de categorías arranca contraído**, que abierto tapaba el
+  contenido a medio dibujar mientras la app carga.
+
+Las pruebas automáticas de navegación son ahora 31 casos.
