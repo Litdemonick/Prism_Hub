@@ -1,4 +1,4 @@
-## PrismHub v1.0.109 — La izquierda rápida, y entrar al contenido enfrente
+## PrismHub v1.0.110 — El buscador: bordes con aire, difuminado y teclado centrado
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,19 +12,20 @@
 
 ### 📺 Android TV
 
-- **Yendo rápido con la flecha izquierda ya no se salta al panel a mitad de
-  fila.** La tarjeta a la que se acaba de mover puede no estar medida
-  todavía, y sin esa medida la búsqueda de la vecina no encontraba ninguna:
-  se leía como "se acabó la fila" y se entraba al panel antes de tiempo.
-  Ahora, sin medida no se mueve nada — perder una pulsación no se nota,
-  saltar al panel sin haber llegado al principio sí.
+- **En el buscador, el marco de selección ya no se corta.** La fila de
+  resultados iba sin nada de lo que el resto de las filas ya tenía:
+  recortaba contra sus propios bordes y la primera tarjeta arrancaba pegada
+  al filo, así que el marco quedaba mordido arriba, abajo y a la izquierda.
 
-- **Desde el panel se entra por lo que está enfrente, no por arriba del
-  todo.** Entrando siempre por la primera tarjeta, desde una categoría de
-  abajo la lista se desplazaba por todas las filas hasta el principio, y
-  eso se ve como que la pantalla se movió sola. Ahora se entra justo
-  enfrente y nada se mueve. Estando en las primeras categorías eso sigue
-  siendo la fila de arriba, como antes.
+- **Difuminado en los bordes de esa fila**, igual que en Inicio y las
+  zonas: la tarjeta del costado se atenúa en vez de cortarse en seco, y
+  solo del lado por donde de verdad queda más.
 
-- **Aire a los dos lados en la fila de tarjetas medianas**, que la última
-  llegaba al borde derecho y ahí su marco se veía cortado.
+- **La columna del teclado, centrada.** Arrancaba pegada arriba y dejaba
+  media pantalla vacía debajo.
+
+- **La flecha izquierda vuelve al teclado.** El tope de fila buscaba el
+  panel de categorías para salir por la izquierda, y el buscador no tiene
+  panel: la tecla se quedaba muerta.
+
+Las pruebas automáticas de navegación son ahora 28 casos.
