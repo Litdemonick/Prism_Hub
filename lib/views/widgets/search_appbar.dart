@@ -58,6 +58,17 @@ class _SearchAppBarState extends State<SearchAppBar> {
   Widget build(BuildContext context) {
     return AppBar(
       backgroundColor: widget.backgroundColor,
+      // ── En TV, ninguna flecha puesta sola ────────────────────────────
+      //
+      // `AppBar` agrega su PROPIA flecha de volver cuando `leading` es
+      // null y la ruta puede hacer pop —de fábrica, sin que nadie la
+      // pida—. Pasar `leading: null` en TV para que quien use este
+      // widget ponga la flecha donde le corresponda (en el buscador de
+      // una extensión, junto al botón "123" del teclado) no alcanzaba:
+      // la de fábrica volvía a aparecer sola. Reportado en vivo con
+      // foto: dos flechas juntas. Apagando esto en TV, `leading: null`
+      // por fin significa "ninguna", no "la del sistema".
+      automaticallyImplyLeading: !PlatformTv.esTelevisionSync,
       // ── En TV, nunca el botón de cerrar la búsqueda ─────────────────
       //
       // `_showSearch` nace en `true` en TV a propósito —el campo se
@@ -98,26 +109,36 @@ class _SearchAppBarState extends State<SearchAppBar> {
                   return;
                 }
               },
-              child: TextField(
-                controller: widget.textEditingController,
-                decoration: InputDecoration(
-                  hintText: widget.hintText ?? widget.title,
-                  border: InputBorder.none,
+              child: _envolverEnTv(
+                TextField(
+                  controller: widget.textEditingController,
+                  decoration: InputDecoration(
+                    hintText: widget.hintText ?? widget.title,
+                    border: InputBorder.none,
+                    isDense: PlatformTv.esTelevisionSync,
+                    contentPadding: PlatformTv.esTelevisionSync
+                        ? const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10)
+                        : null,
+                  ),
+                  style: PlatformTv.esTelevisionSync
+                      ? const TextStyle(fontSize: 17)
+                      : null,
+                  // En TV este campo solo MUESTRA lo que se va escribiendo: se
+                  // escribe con el teclado en pantalla (ver TecladoTv). Sin
+                  // esto, el campo pedía el foco al abrir y Android levantaba
+                  // su propio teclado encima de los resultados — justo lo que
+                  // el teclado propio viene a evitar.
+                  readOnly: PlatformTv.esTelevisionSync,
+                  canRequestFocus: !PlatformTv.esTelevisionSync,
+                  // Y sin autofocus en TV: al volver de una ficha, esta barra
+                  // se reconstruye y su autofocus se llevaba el foco puesto,
+                  // así que la tarjeta desde la que habías salido dejaba de
+                  // estar marcada y el mando arrancaba de nuevo desde arriba.
+                  autofocus: !PlatformTv.esTelevisionSync,
+                  onChanged: widget.onChanged,
+                  onSubmitted: widget.onSubmitted,
                 ),
-                // En TV este campo solo MUESTRA lo que se va escribiendo: se
-                // escribe con el teclado en pantalla (ver TecladoTv). Sin
-                // esto, el campo pedía el foco al abrir y Android levantaba
-                // su propio teclado encima de los resultados — justo lo que
-                // el teclado propio viene a evitar.
-                readOnly: PlatformTv.esTelevisionSync,
-                canRequestFocus: !PlatformTv.esTelevisionSync,
-                // Y sin autofocus en TV: al volver de una ficha, esta barra
-                // se reconstruye y su autofocus se llevaba el foco puesto,
-                // así que la tarjeta desde la que habías salido dejaba de
-                // estar marcada y el mando arrancaba de nuevo desde arriba.
-                autofocus: !PlatformTv.esTelevisionSync,
-                onChanged: widget.onChanged,
-                onSubmitted: widget.onSubmitted,
               ),
             )
           : Text(
@@ -161,6 +182,35 @@ class _SearchAppBarState extends State<SearchAppBar> {
       ],
       bottom: widget.bottom,
       flexibleSpace: widget.flexibleSpace,
+    );
+  }
+
+  /// Un marco rosado alrededor del campo, para que se note DE UN VISTAZO
+  /// que ahí es donde se escribe.
+  ///
+  /// ── Por qué hacía falta ────────────────────────────────────────────
+  ///
+  /// Sin ningún borde ni fondo, este campo se leía como un título más de
+  /// la barra —letras sueltas contra el fondo, iguales a cualquier otro
+  /// texto de la pantalla—. Pedido explícito, con foto: «marca la zona
+  /// del campo de texto en rosado bonito para que se note que ahí se
+  /// escribe». Mismo lenguaje visual que ya usa `_CampoDeBusqueda`, del
+  /// teclado en pantalla, para lo mismo.
+  ///
+  /// Fuera de TV no cambia nada: ahí el campo ya se distingue solo, con
+  /// el cursor parpadeando apenas se lo toca.
+  Widget _envolverEnTv(Widget campo) {
+    if (!PlatformTv.esTelevisionSync) return campo;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: HomeTheme.accentPink.withValues(alpha: 0.75),
+          width: 1.6,
+        ),
+      ),
+      child: campo,
     );
   }
 }
