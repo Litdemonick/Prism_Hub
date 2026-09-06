@@ -145,6 +145,29 @@ class FocoConTopes extends DirectionalFocusAction {
         }
         // No hay vecino en la fila.
         if (aLaDerecha) {
+          // ── Salvo que esta franja deje escapar la derecha ──────────────
+          //
+          // El tope de fila es correcto para una fila de tarjetas, donde a
+          // la derecha del todo no hay nada más que ver. Pero el teclado en
+          // pantalla del buscador TAMBIÉN es una fila —cada renglón de
+          // letras, marcado con `FranjaFijaTv` para no saltar al campo de
+          // arriba— y ahí a la derecha SÍ hay algo: los resultados. Con el
+          // tope a secas, llegar al final de un renglón de letras y seguir
+          // a la derecha se quedaba muerto. Reportado en vivo: «no puedo ir
+          // a las cards que están a la derecha desde el teclado».
+          //
+          // Ver `FranjaHorizontalTv.escapaALaDerecha`: en falso por
+          // defecto, así que una fila de tarjetas sigue frenando en seco,
+          // exactamente como antes.
+          if (FranjaHorizontalTv.escapaALaDerechaDe(antes.context)) {
+            final alLado = _loQueEstaEnfrente(antes, soloContenido: false);
+            if (alLado != null) {
+              _anotar('derecha: fin del renglón, a lo de al lado '
+                  '(${alLado.debugLabel})');
+              _irA(alLado);
+              return;
+            }
+          }
           // Es el final: se consume la tecla y no pasa nada.
           _anotar('derecha: fin de la fila, no se mueve nada');
           return;

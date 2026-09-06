@@ -90,6 +90,7 @@ class FranjaHorizontalTv extends InheritedWidget {
   const FranjaHorizontalTv({
     super.key,
     required this.identidad,
+    this.escapaALaDerecha = false,
     required super.child,
   });
 
@@ -97,6 +98,26 @@ class FranjaHorizontalTv extends InheritedWidget {
   /// nunca comparten el mismo, así que alcanza con comparar identidad
   /// (`identical`), no igualdad de contenido.
   final Object identidad;
+
+  /// Al llegar al final de esta franja, ¿la derecha sigue buscando algo
+  /// afuera, o ahí se acaba el recorrido?
+  ///
+  /// ── Por qué hace falta distinguir ─────────────────────────────────────
+  ///
+  /// El tope de fila (ver `foco_con_topes.dart`) nació para las filas de
+  /// tarjetas: llegado al final, a la derecha no hay nada más que ver, así
+  /// que se frena ahí sin más — eso es lo pedido, muchas veces, para
+  /// Inicio y las zonas.
+  ///
+  /// El teclado en pantalla del buscador también es una fila —cada
+  /// renglón de letras, para no saltar al campo de arriba— pero ahí sí hay
+  /// algo real a la derecha: los resultados. Con el mismo tope a secas, el
+  /// final de un renglón se convertía en una pared. Reportado en vivo: «no
+  /// puedo ir a las cards que están a la derecha desde el teclado».
+  ///
+  /// En falso por defecto: las filas de tarjetas no tienen que pedir nada
+  /// para seguir frenando como siempre.
+  final bool escapaALaDerecha;
 
   static Object? de(BuildContext? ctx) {
     if (ctx == null || !ctx.mounted) return null;
@@ -106,9 +127,20 @@ class FranjaHorizontalTv extends InheritedWidget {
     return widget is FranjaHorizontalTv ? widget.identidad : null;
   }
 
+  /// Si la franja que envuelve a [ctx] deja escapar la derecha al final.
+  /// `false` cuando no hay ninguna franja — el caso normal, de tarjetas.
+  static bool escapaALaDerechaDe(BuildContext? ctx) {
+    if (ctx == null || !ctx.mounted) return false;
+    final elemento =
+        ctx.getElementForInheritedWidgetOfExactType<FranjaHorizontalTv>();
+    final widget = elemento?.widget;
+    return widget is FranjaHorizontalTv && widget.escapaALaDerecha;
+  }
+
   @override
   bool updateShouldNotify(FranjaHorizontalTv anterior) =>
-      !identical(anterior.identidad, identidad);
+      !identical(anterior.identidad, identidad) ||
+      anterior.escapaALaDerecha != escapaALaDerecha;
 }
 
 /// Envuelve una fila FIJA (sin scroll) de tarjetas para que el D-pad la
@@ -120,9 +152,16 @@ class FranjaHorizontalTv extends InheritedWidget {
 /// nunca fuera la misma fila. El `State` sobrevive a los rebuilds; un
 /// `Object()` creado en un método `build` normal no.
 class FranjaFijaTv extends StatefulWidget {
-  const FranjaFijaTv({super.key, required this.child});
+  const FranjaFijaTv({
+    super.key,
+    required this.child,
+    this.escapaALaDerecha = false,
+  });
 
   final Widget child;
+
+  /// Ver [FranjaHorizontalTv.escapaALaDerecha].
+  final bool escapaALaDerecha;
 
   @override
   State<FranjaFijaTv> createState() => _FranjaFijaTvState();
@@ -132,6 +171,9 @@ class _FranjaFijaTvState extends State<FranjaFijaTv> {
   final Object _identidad = Object();
 
   @override
-  Widget build(BuildContext context) =>
-      FranjaHorizontalTv(identidad: _identidad, child: widget.child);
+  Widget build(BuildContext context) => FranjaHorizontalTv(
+        identidad: _identidad,
+        escapaALaDerecha: widget.escapaALaDerecha,
+        child: widget.child,
+      );
 }

@@ -169,6 +169,9 @@ class _TecladoTvState extends State<TecladoTv> {
             // entre filas es siempre el de al lado, nunca uno de otra
             // parte de la pantalla.
             FranjaFijaTv(
+              // A la derecha del todo están los resultados, no un final de
+              // recorrido — ver `FranjaHorizontalTv.escapaALaDerecha`.
+              escapaALaDerecha: true,
               child: Row(
                 children: [
                   _tecla(
@@ -207,6 +210,7 @@ class _TecladoTvState extends State<TecladoTv> {
             for (final (indice, fila) in filas.indexed) ...[
               if (indice > 0) SizedBox(height: hueco),
               FranjaFijaTv(
+                escapaALaDerecha: true,
                 child: Row(
                   children: [
                     for (final letra in fila) ...[
