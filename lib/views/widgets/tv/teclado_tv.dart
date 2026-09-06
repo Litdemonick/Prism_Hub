@@ -4,6 +4,7 @@ import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/tv/region_de_foco.dart';
 
 // ─── El teclado en pantalla de TV ───────────────────────────────────────
 //
@@ -103,18 +104,30 @@ class _TecladoTvState extends State<TecladoTv> {
             _CampoDeBusqueda(texto: widget.texto, accent: widget.accent),
             const SizedBox(height: 14),
           ],
-          Row(
-            children: [
-              _tecla(
-                _numeros ? 'ABC' : '123',
-                onTap: () => setState(() => _numeros = !_numeros),
-                ancho: 74,
-              ),
-              const SizedBox(width: _hueco),
-              _teclaIcono(Icons.delete_outline_rounded, onTap: _borrarTodo),
-              const SizedBox(width: _hueco),
-              _teclaIcono(Icons.backspace_outlined, onTap: _borrarUno),
-            ],
+          // ── Cada fila, su propia franja fija ───────────────────────────
+          //
+          // Sin esto el mando la trata como un `Row` cualquiera, sin tope: al
+          // llegar al final de una fila —o al querer entrar a ella desde
+          // arriba o abajo— Flutter busca el foco más cercano en CUALQUIER
+          // parte de la pantalla, campo de búsqueda incluido. Reportado en
+          // vivo, con foto: «al navegar a la derecha sube arriba solo, al
+          // campo donde se escribe». Con la franja, cada fila se recorre
+          // como una unidad y el salto entre filas es siempre el de al lado,
+          // nunca uno de otra parte de la pantalla.
+          FranjaFijaTv(
+            child: Row(
+              children: [
+                _tecla(
+                  _numeros ? 'ABC' : '123',
+                  onTap: () => setState(() => _numeros = !_numeros),
+                  ancho: 74,
+                ),
+                const SizedBox(width: _hueco),
+                _teclaIcono(Icons.delete_outline_rounded, onTap: _borrarTodo),
+                const SizedBox(width: _hueco),
+                _teclaIcono(Icons.backspace_outlined, onTap: _borrarUno),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           // ── El espacio, al final de la última fila ─────────────────
@@ -134,27 +147,29 @@ class _TecladoTvState extends State<TecladoTv> {
           // se llega con una sola flecha abajo.
           for (final (indice, fila) in filas.indexed) ...[
             if (indice > 0) const SizedBox(height: _hueco),
-            Row(
-              children: [
-                for (final letra in fila) ...[
-                  _tecla(
-                    letra,
-                    onTap: () => _escribir(letra),
-                    // La "A" arranca con el foco puesto — mismo criterio
-                    // que el "1" del teclado numérico del PIN: sin esto, al
-                    // abrir el buscador el mando no tenía dónde empezar.
-                    autofocus: indice == 0 && letra == fila.first,
-                  ),
-                  const SizedBox(width: _hueco),
+            FranjaFijaTv(
+              child: Row(
+                children: [
+                  for (final letra in fila) ...[
+                    _tecla(
+                      letra,
+                      onTap: () => _escribir(letra),
+                      // La "A" arranca con el foco puesto — mismo criterio
+                      // que el "1" del teclado numérico del PIN: sin esto, al
+                      // abrir el buscador el mando no tenía dónde empezar.
+                      autofocus: indice == 0 && letra == fila.first,
+                    ),
+                    const SizedBox(width: _hueco),
+                  ],
+                  if (indice == filas.length - 1)
+                    _tecla(
+                      ' ',
+                      onTap: () => _escribir(' '),
+                      ancho: _anchoDelEspacio(fila.length),
+                      etiqueta: '␣',
+                    ),
                 ],
-                if (indice == filas.length - 1)
-                  _tecla(
-                    ' ',
-                    onTap: () => _escribir(' '),
-                    ancho: _anchoDelEspacio(fila.length),
-                    etiqueta: '␣',
-                  ),
-              ],
+              ),
             ),
           ],
         ],
