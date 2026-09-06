@@ -526,6 +526,81 @@ void main() {
       );
     }
 
+    /// El caso exacto de Ajustes: la categoría elegida está abajo del menú
+    /// («Acerca de») y lo único enfocable del panel está arriba («Actualizar
+    /// aplicación»). No comparten altura por ningún lado.
+    ///
+    /// Reportado en vivo: «estoy en Acerca de, le doy a la derecha y no me
+    /// deja tocar el botón de actualizar; tengo que subir hasta Reproductor
+    /// de vídeo y ahí sí la selección llega al botón».
+    Widget menuAbajoBotonArriba() {
+      return MaterialApp(
+        home: Actions(
+          actions: <Type, Action<Intent>>{
+            DirectionalFocusIntent: FocoConTopes(),
+          },
+          child: RescateDeFoco(
+            child: Scaffold(
+              body: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 250,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        for (var i = 0; i < 6; i++)
+                          FocusableCard(
+                            focusNode: nodo('opcion$i'),
+                            onTap: () {},
+                            child: Container(
+                              height: 56,
+                              margin: const EdgeInsets.all(6),
+                              color: Colors.indigo,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: FocusableCard(
+                        focusNode: nodo('boton-actualizar'),
+                        onTap: () {},
+                        child: Container(
+                          height: 60,
+                          width: 300,
+                          margin: const EdgeInsets.all(8),
+                          color: Colors.brown,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('desde la última categoría se llega al botón de arriba',
+        (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(menuAbajoBotonArriba());
+      await t.pumpAndSettle();
+
+      nodo('opcion5').requestFocus();
+      await t.pumpAndSettle();
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await t.pumpAndSettle();
+
+      expect(enfocado(), 'boton-actualizar');
+    });
+
     testWidgets('la derecha pasa de las opciones al panel', (t) async {
       await t.binding.setSurfaceSize(const Size(1280, 720));
       addTearDown(() => t.binding.setSurfaceSize(null));
@@ -538,7 +613,10 @@ void main() {
       await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await t.pumpAndSettle();
 
-      expect(enfocado(), startsWith('panel'));
+      // Y cae en la PRIMERA del panel, no en la que quede a la misma
+      // altura: «si ya estoy en esa zona, debe enfocar la primera para ir
+      // seleccionando».
+      expect(enfocado(), 'panel0');
     });
 
     testWidgets('y la izquierda vuelve a las opciones', (t) async {

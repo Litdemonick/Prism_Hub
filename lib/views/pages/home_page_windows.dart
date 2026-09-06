@@ -635,7 +635,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
   /// avisar de nada que el usuario no sepa.
   Widget _conDesvanecido(Widget fila) {
     if (!widget.conFocoTv) return fila;
-    return DesvanecidoDeFila(child: fila);
+    return DesvanecidoDeFila(scroll: _scroll, child: fila);
   }
 }
 

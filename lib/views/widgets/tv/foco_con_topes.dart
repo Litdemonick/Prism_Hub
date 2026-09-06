@@ -111,6 +111,34 @@ class FocoConTopes extends DirectionalFocusAction {
         }
         _anotar('izquierda: sin vecina en la fila, se busca fuera '
             '(deberia ser el panel)');
+      } else if (aLaDerecha &&
+          RegionDeFocoTv.de(antes.context) != RegionDeFocoTv.rail) {
+        // ── Entrar a la columna de al lado: por su PRIMERA opción ────────
+        //
+        // En una pantalla de dos columnas (Ajustes, el repositorio, el
+        // historial) el recorrido de fábrica busca «lo más cercano hacia la
+        // derecha», o sea lo que quede a la misma altura. Estando en la
+        // última categoría del menú, a esa altura no hay nada del panel, y
+        // el salto no llega. Reportado en vivo: «estoy en Acerca de, le doy
+        // a la derecha y no me deja tocar el botón de actualizar; tengo que
+        // subir hasta Reproductor de vídeo para que la selección llegue».
+        //
+        // Lo que se espera es lo que pidió el usuario, y además es lo
+        // predecible: «si ya estoy en esa zona, debe enfocar la primera para
+        // ir seleccionando». Se entra por arriba de la columna siguiente,
+        // sea cual sea la altura desde la que se venía.
+        //
+        // Solo hacia la derecha, y no desde el rail de categorías: ese ya
+        // tiene su propio camino, probado, y entrar al contenido por la
+        // tarjeta de arriba no es lo que se pidió ahí.
+        final primero = _primeroDeLaColumnaSiguiente(antes);
+        if (primero != null) {
+          _anotar('derecha: a la primera de la columna siguiente '
+              '(${primero.debugLabel})');
+          primero.requestFocus();
+          return;
+        }
+        _anotar('derecha: no hay columna a la derecha');
       } else {
         _anotar('${aLaDerecha ? "derecha" : "izquierda"}: '
             'el origen no esta en una fila que se desplace');
@@ -507,6 +535,49 @@ class FocoConTopes extends DirectionalFocusAction {
   /// usuario está navegando: no cuesta nada y ahorra una release entera de
   /// ida y vuelta.
   static void _anotar(String queHizo) => logger.fine('[mando] $queHizo');
+
+  /// Lo primero de la columna que sigue a la derecha, o null si no hay.
+  ///
+  /// «La columna que sigue» son los enfocables que empiezan después del
+  /// borde derecho del origen; de esos se toma el que arranque MÁS A LA
+  /// IZQUIERDA (la columna inmediata, no una de más allá) y, entre los de
+  /// esa columna, el de MÁS ARRIBA. Así entrar a un panel siempre cae en su
+  /// primera opción, venga uno de la altura que venga.
+  static FocusNode? _primeroDeLaColumnaSiguiente(FocusNode antes) {
+    final origen = _rectDe(antes);
+    if (origen == null) return null;
+    final ambito = antes.enclosingScope;
+    if (ambito == null) return null;
+    FocusNode? mejor;
+    Rect? mejorCaja;
+    for (final nodo in ambito.traversalDescendants) {
+      if (identical(nodo, antes)) continue;
+      if (!nodo.canRequestFocus || nodo.skipTraversal) continue;
+      final ctx = nodo.context;
+      if (ctx == null || !ctx.mounted) continue;
+      final caja = _rectDe(nodo);
+      if (caja == null) continue;
+      // Tiene que empezar después de donde termina el origen: si se
+      // superpone, no es «la columna de al lado».
+      if (caja.left < origen.right) continue;
+      if (mejorCaja == null) {
+        mejor = nodo;
+        mejorCaja = caja;
+        continue;
+      }
+      // Una columna más cerca gana; a igual columna, gana la de más arriba.
+      // La tolerancia es para que dos elementos de la misma columna, con
+      // sangrías distintas, no se lean como columnas separadas.
+      const mismaColumna = 24.0;
+      final masCerca = caja.left < mejorCaja.left - mismaColumna;
+      final igualDeCerca = (caja.left - mejorCaja.left).abs() <= mismaColumna;
+      if (masCerca || (igualDeCerca && caja.top < mejorCaja.top)) {
+        mejor = nodo;
+        mejorCaja = caja;
+      }
+    }
+    return mejor;
+  }
 
   /// La tarjeta de al lado DENTRO de la misma fila, o null si no hay.
   ///

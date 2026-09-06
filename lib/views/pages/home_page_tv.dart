@@ -1517,6 +1517,7 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
               // como si ahí se acabara. Pedido explícito: «me gusta ese
               // difuminado del Inicio, replicalo a Anime, Películas, etc.».
               child: DesvanecidoDeFila(
+                scroll: _scroll,
                 child: ClipRect(
                   clipper: const RecorteDeFila(aireLateral: 24),
                   child: ListView.separated(

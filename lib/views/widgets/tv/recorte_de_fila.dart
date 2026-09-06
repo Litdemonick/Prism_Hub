@@ -72,27 +72,101 @@ class RecorteDeFila extends CustomClipper<Rect> {
 /// se cortaban en seco. Estando al lado del recorte que ya comparten las
 /// dos, la próxima fila que se escriba lo tiene disponible sin tener que
 /// acordarse de dónde estaba.
-class DesvanecidoDeFila extends StatelessWidget {
-  const DesvanecidoDeFila({super.key, required this.child});
+/// ── Y solo del lado donde SIGUE habiendo fila ───────────────────────────
+///
+/// El degradado fijo atenúa los dos bordes siempre, también cuando de ese
+/// lado ya no queda nada: la PRIMERA tarjeta se ve apagada estando la fila
+/// al principio, y la ÚLTIMA igual, aunque no haya nada más que anunciar.
+/// Con el marco de foco encima se nota todavía más — se ve fino y comido.
+/// Reportado con foto: «a la izquierda se ve delgado» y «a la derecha, que
+/// se vea bien cuando es la última y no difumine tanto».
+///
+/// Pasándole el [scroll] de la fila, cada lado se desvanece solo si por ahí
+/// hay algo más. Al principio el borde izquierdo queda nítido, al final el
+/// derecho, y en el medio los dos difuminan como corresponde.
+class DesvanecidoDeFila extends StatefulWidget {
+  const DesvanecidoDeFila({super.key, required this.child, this.scroll});
 
   final Widget child;
 
+  /// El desplazamiento de la fila. Sin él se desvanecen los dos lados
+  /// siempre, que es como se comportaba antes.
+  final ScrollController? scroll;
+
+  @override
+  State<DesvanecidoDeFila> createState() => _DesvanecidoDeFilaState();
+}
+
+class _DesvanecidoDeFilaState extends State<DesvanecidoDeFila> {
+  @override
+  void initState() {
+    super.initState();
+    widget.scroll?.addListener(_alDesplazarse);
+  }
+
+  @override
+  void didUpdateWidget(DesvanecidoDeFila viejo) {
+    super.didUpdateWidget(viejo);
+    if (!identical(viejo.scroll, widget.scroll)) {
+      viejo.scroll?.removeListener(_alDesplazarse);
+      widget.scroll?.addListener(_alDesplazarse);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.scroll?.removeListener(_alDesplazarse);
+    super.dispose();
+  }
+
+  /// Solo se redibuja cuando de verdad cambia si hay o no hay más de un
+  /// lado, no en cada píxel del desplazamiento: en un televisor modesto
+  /// repintar la fila entera a cada paso se paga caro.
+  bool _quedaAtras = false;
+  bool _quedaAdelante = true;
+
+  void _alDesplazarse() {
+    final s = widget.scroll;
+    if (s == null || !s.hasClients || !mounted) return;
+    final p = s.position;
+    // Un par de píxeles de tolerancia: en los extremos el desplazamiento no
+    // cae siempre en el número exacto.
+    final atras = p.pixels > p.minScrollExtent + 2;
+    final adelante = p.pixels < p.maxScrollExtent - 2;
+    if (atras == _quedaAtras && adelante == _quedaAdelante) return;
+    setState(() {
+      _quedaAtras = atras;
+      _quedaAdelante = adelante;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Sin scroll del que colgarse, se desvanecen los dos lados: es lo que
+    // hacía antes y sigue siendo razonable para una fila que no se mueve.
+    final izquierda = widget.scroll == null || _quedaAtras;
+    final derecha = widget.scroll == null || _quedaAdelante;
     return ShaderMask(
-      shaderCallback: (rect) => const LinearGradient(
+      shaderCallback: (rect) => LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
-        colors: [
+        colors: const [
           Color(0x00000000),
           Color(0xFF000000),
           Color(0xFF000000),
           Color(0x00000000),
         ],
-        stops: [0, 0.04, 0.96, 1],
+        // Un lado sin nada más allá no difumina: su parada se pega al borde
+        // y el degradado de ese extremo deja de existir.
+        stops: [
+          0,
+          izquierda ? 0.04 : 0,
+          derecha ? 0.96 : 1,
+          1,
+        ],
       ).createShader(rect),
       blendMode: BlendMode.dstIn,
-      child: child,
+      child: widget.child,
     );
   }
 }
