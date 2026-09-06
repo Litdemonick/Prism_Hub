@@ -1362,16 +1362,22 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                                   // extremos quedaban cortadas contra el
                                   // borde del panel.
                                   padding: PlatformTv.esTelevisionSync
-                                      ? const EdgeInsets.fromLTRB(
-                                          26, 14, 26, 14)
+                                      ? const EdgeInsets.all(
+                                          HomeTheme.aireDeFocoTv * 2)
                                       : const EdgeInsets.symmetric(
                                           horizontal: 16),
                                   gridDelegate:
                                       SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: rejilla.columnas,
                                     childAspectRatio: rejilla.proporcion,
-                                    crossAxisSpacing: 16,
-                                    mainAxisSpacing: 16,
+                                    crossAxisSpacing:
+                                        PlatformTv.esTelevisionSync
+                                            ? HomeTheme.aireDeFocoTv * 2
+                                            : 16,
+                                    mainAxisSpacing:
+                                        PlatformTv.esTelevisionSync
+                                            ? HomeTheme.aireDeFocoTv * 2
+                                            : 16,
                                   ),
                                   itemCount: _data.length,
                                   itemBuilder: (context, index) {
@@ -1407,8 +1413,18 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   /// Aparte y no en medio del árbol de widgets: ahí vive a doce niveles de
   /// sangrado y cualquier cambio queda ilegible.
   Widget _grillaEscritorio() {
-    const separacion = 12.0;
-    const relleno = 8.0;
+    // ── En televisor, el doble de aire entre tarjetas ──────────────────
+    //
+    // El marco de selección se dibuja POR FUERA de la tarjeta y lleva un
+    // resplandor todavía más ancho. Con doce puntos entre una y otra, el
+    // marco de la enfocada llegaba pisando a su vecina y se leía como si
+    // estuviera cortado. Reportado en vivo: «aire en el borde rosado de las
+    // cards». Fuera de televisor no cambia nada: ahí no hay marco.
+    final separacion = PlatformTv.esTelevisionSync
+        ? HomeTheme.aireDeFocoTv * 2
+        : 12.0;
+    final relleno =
+        PlatformTv.esTelevisionSync ? HomeTheme.aireDeFocoTv : 8.0;
     return LayoutBuilder(
       builder: (ctx, constraints) {
         // El aviso llega cuando se descubre qué forma tienen las portadas de
@@ -1428,9 +1444,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               child: GridView.builder(
                 // Ver el mismo caso arriba: en TV la tarjeta enfocada crece
                 // y necesita aire para no quedar cortada.
-                padding: PlatformTv.esTelevisionSync
-                    ? const EdgeInsets.all(relleno + 10)
-                    : const EdgeInsets.all(relleno),
+                padding: EdgeInsets.all(relleno),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: rejilla.columnas,
                   childAspectRatio: rejilla.proporcion,

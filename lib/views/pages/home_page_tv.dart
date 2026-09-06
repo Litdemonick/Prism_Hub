@@ -164,13 +164,23 @@ const int _postersPorFilaTv = 7;
 /// esperar a que el usuario baje.
 double _altoGrandesTv(BuildContext context) {
   final util = MediaQuery.sizeOf(context).height - _altoBarraTv;
-  return (util * 0.44).clamp(150.0, 340.0);
+  // ── Por qué siguió bajando, del 44% al 36% ────────────────────────────
+  //
+  // Con el 44% aquí más el 16% de las medianas, a la primera fila de
+  // extensiones le quedaba menos que el alto de UNA tarjeta: de sus pósters
+  // solo asomaba una franja fina contra el borde de abajo. Reportado con
+  // foto: «quitá esa franja, dejá que las cards se vean hacia abajo».
+  //
+  // Los tres bloques tienen que entrar en la pantalla: el destacado, las
+  // medianas y una fila entera con su título. Esta es la parte del
+  // destacado en ese reparto.
+  return (util * 0.36).clamp(140.0, 300.0);
 }
 
 /// El alto de la fila de medianas: ídem, bajó del 24% al 16%.
 double _altoMedianasTv(BuildContext context) {
   final util = MediaQuery.sizeOf(context).height - _altoBarraTv;
-  return (util * 0.16).clamp(70.0, 140.0);
+  return (util * 0.13).clamp(64.0, 120.0);
 }
 
 /// Lo que se lleva la barra de arriba.
@@ -193,7 +203,10 @@ double _anchoPosterTv(BuildContext context) {
       _aireDerechoTv;
   final ancho =
       (util - _huecoPosterTv * (_postersPorFilaTv - 1)) / _postersPorFilaTv;
-  return ancho.clamp(96.0, 200.0);
+  // El tope baja de 200 a 170 por lo mismo: la tarjeta es 2:3 más el
+  // título, así que cada punto de ancho son uno y medio de alto. Con 200 la
+  // fila medía más de lo que quedaba libre debajo del destacado.
+  return ancho.clamp(96.0, 170.0);
 }
 
 /// El margen "TV-safe" contra el borde de la pantalla (overscan).
