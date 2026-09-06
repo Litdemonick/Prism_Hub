@@ -1,10 +1,10 @@
-## PrismHub v1.0.115 — Aire para la selección, y detalles visuales
+## PrismHub v1.0.116 — Fluidez al recorrer con el mando, y el actualizador que sí instala
 
 <!-- solo-plataforma: androidtv -->
 
 > 📺 **Esta versión es solo para televisor.** Windows, Linux, teléfono y
-> tablet siguen en la 1.0.97: nada de lo que cambia acá los toca, así que no
-> tiene sentido hacerlos actualizar.
+> tablet siguen en la 1.0.97 — salvo el arreglo del actualizador, que les
+> llega en la próxima versión de cada uno.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
@@ -12,32 +12,24 @@
 
 ### 📺 Android TV
 
-- **El marco de selección ya no se corta a los lados en las columnas de
-  opciones.** La columna que comparten el repositorio, el historial,
-  favoritos y el registro ponía todo su margen por fuera de la zona que se
-  desplaza — y eso recorta, así que el marco caía justo encima. Mismo
-  arreglo en las listas de extensiones instaladas y del repositorio.
+- **Recorrer las filas con el mando ya no se traba en televisores
+  modestos.** Para saber a qué fila pertenece cada tarjeta, la app
+  preguntaba de una forma que además *suscribe* a quien pregunta a los
+  cambios de esa lista — y eso se hacía por cada tarjeta de la pantalla y
+  en cada pulsación. El resultado era un árbol lleno de suscripciones que
+  se despertaban con cada desplazamiento. Ahora la misma búsqueda se hace
+  de solo lectura.
 
-- **El repositorio abre en "Ya instaladas"**, que es a lo que se entra
-  desde un televisor.
+  Cuadra con lo que se veía: en el buscador, con una fila y pocas tarjetas,
+  iba fluido; en Inicio, con el destacado, las medianas y una fila por
+  extensión, se notaba.
 
-- **La píldora dice "Quitar" con su ícono**, en vez de "Puesta" — que es lo
-  que pasa si apretás OK ahí. Y antes de sacar una extensión, ahora
-  pregunta: con un mando el OK es el mismo botón para todo, así que una
-  fila que desinstala en el acto se lleva una extensión con un toque de
-  más. La selección arranca en Cancelar.
+### 🔄 Actualizaciones (Android y Android TV)
 
-- **Se van los tres puntitos de las tarjetas**, que son para dedo y ratón y
-  además apretaban el título contra el borde.
-
-- **El destacado queda alineado con las tarjetas medianas**, y esas son un
-  poco más altas.
-
-- **La franja muerta del borde derecho, fuera.** Cortaba la tarjeta que
-  asoma antes de llegar al filo y se veía como un recuadro sobrando.
-
-- **Menos espacio muerto abajo**, para que se vea más de la fila que
-  asoma.
-
-- **El velo del título de las medianas ya no dibuja una línea** sobre la
-  portada.
+- **Al conceder el permiso de instalar, la instalación arranca sola.** Todo
+  el proceso colgaba de un único aviso del sistema —"volviste a la app"—
+  que no siempre llega: en varias cajas de televisor la pantalla de
+  permisos no se abre como una ventana aparte, así que la app nunca se
+  enteraba de la vuelta y había que darle a Actualizar por segunda vez.
+  Ahora, además de ese aviso, el permiso se comprueba cada segundo y medio
+  mientras dura la espera.
