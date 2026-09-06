@@ -57,61 +57,61 @@ Future<void> showBetaNoticeIfNeeded(BuildContext context) async {
       barrierDismissible: false,
       content: _BetaContent(version: info.version),
       actions: [
-              // Justo donde se avisa que puede haber fallos: es el momento en
-              // que el usuario más va a necesitar saber dónde reportarlos.
-              Builder(
-                builder: (ctx) => PlatformTextButton(
-                  onPressed: () => launchUrl(
-                    Uri.parse('https://github.com/Litdemonick/Prism_Hub/issues'),
-                    mode: LaunchMode.externalApplication,
+        // Justo donde se avisa que puede haber fallos: es el momento en
+        // que el usuario más va a necesitar saber dónde reportarlos.
+        Builder(
+          builder: (ctx) => PlatformTextButton(
+            onPressed: () => launchUrl(
+              Uri.parse('https://github.com/Litdemonick/Prism_Hub/issues'),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: Text('beta.feedback'.i18n),
+          ),
+        ),
+        Builder(
+          builder: (ctx) => PlatformFilledButton(
+            // Repregunta antes de cerrar: este aviso no vuelve a salir
+            // nunca más, así que quien lo cierre de un toque sin leer
+            // se pierde lo de los anuncios, las funciones a medias y el
+            // aviso legal.
+            onPressed: () async {
+              final seguro = await showPlatformDialog(
+                context: ctx,
+                title: 'beta.confirm-title'.i18n,
+                maxWidth: 420,
+                content: Text(
+                  'beta.confirm-body'.i18n,
+                  style: TextStyle(
+                    color: HomeTheme.textMuted,
+                    fontSize: 13,
+                    height: 1.45,
                   ),
-                  child: Text('beta.feedback'.i18n),
                 ),
-              ),
-              Builder(
-                builder: (ctx) => PlatformFilledButton(
-                  // Repregunta antes de cerrar: este aviso no vuelve a salir
-                  // nunca más, así que quien lo cierre de un toque sin leer
-                  // se pierde lo de los anuncios, las funciones a medias y el
-                  // aviso legal.
-                  onPressed: () async {
-                    final seguro = await showPlatformDialog(
-                      context: ctx,
-                      title: 'beta.confirm-title'.i18n,
-                      maxWidth: 420,
-                      content: Text(
-                        'beta.confirm-body'.i18n,
-                        style: TextStyle(
-                          color: HomeTheme.textMuted,
-                          fontSize: 13,
-                          height: 1.45,
-                        ),
-                      ),
-                      actions: [
-                        Builder(
-                          builder: (c2) => PlatformTextButton(
-                            onPressed: () => Navigator.of(c2).pop(false),
-                            child: Text('beta.confirm-read-again'.i18n),
-                          ),
-                        ),
-                        Builder(
-                          builder: (c2) => PlatformFilledButton(
-                            onPressed: () => Navigator.of(c2).pop(true),
-                            child: Text('beta.confirm-yes'.i18n),
-                          ),
-                        ),
-                      ],
-                    );
-                    // Solo se cierra si confirmó; cualquier otra cosa lo deja
-                    // abierto donde estaba, sin perder el desplazamiento.
-                    if (seguro == true && ctx.mounted) {
-                      Navigator.of(ctx).pop(true);
-                    }
-                  },
-                  child: Text('beta.accept'.i18n),
-                ),
-              ),
-            ],
+                actions: [
+                  Builder(
+                    builder: (c2) => PlatformTextButton(
+                      onPressed: () => Navigator.of(c2).pop(false),
+                      child: Text('beta.confirm-read-again'.i18n),
+                    ),
+                  ),
+                  Builder(
+                    builder: (c2) => PlatformFilledButton(
+                      onPressed: () => Navigator.of(c2).pop(true),
+                      child: Text('beta.confirm-yes'.i18n),
+                    ),
+                  ),
+                ],
+              );
+              // Solo se cierra si confirmó; cualquier otra cosa lo deja
+              // abierto donde estaba, sin perder el desplazamiento.
+              if (seguro == true && ctx.mounted) {
+                Navigator.of(ctx).pop(true);
+              }
+            },
+            child: Text('beta.accept'.i18n),
+          ),
+        ),
+      ],
     );
 
     if (confirmado == true) {
@@ -253,8 +253,7 @@ class _BetaContentState extends State<_BetaContent> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.gavel_rounded,
-                  size: 18, color: HomeTheme.textMuted),
+              Icon(Icons.gavel_rounded, size: 18, color: HomeTheme.textMuted),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -426,91 +425,110 @@ class _BetaTvState extends State<_BetaTv> {
   @override
   Widget build(BuildContext context) {
     final actual = I18nUtils.currentLanguageCode;
+    // ── Alto acotado, y con scroll si no alcanza ────────────────────────
+    //
+    // El `Column` daba por sentado que el texto (intro + los tres puntos,
+    // uno de ellos el bloque legal) siempre entraba en la pantalla. En un
+    // televisor con menos alto útil que el que se probó —reportado con un
+    // registro real, en el emulador de Android TV de Android Studio: 960×540
+    // puntos, bastante menos que un televisor físico típico— no entraba, y
+    // sin nada que lo desplazara Flutter tiraba "A RenderFlex overflowed by
+    // 266 pixels on the bottom" contra un usuario nuevo, en su primer
+    // arranque: lo primero que iba a ver de la app era eso.
+    //
+    // Con un tope de alto y un `SingleChildScrollView` adentro, lo que no
+    // entra se desplaza en vez de desbordar — el mismo criterio que ya usa
+    // la columna de acciones (ver `ColumnaDeAcciones`), y el botón de
+    // aceptar sigue alcanzable: `RescateDeFoco` trae a la vista cualquier
+    // cosa que reciba el foco dentro de cualquier scroll.
+    final altoMaximo = MediaQuery.sizeOf(context).height - 80;
     return Dialog(
       backgroundColor: HomeTheme.cardSurface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 64, vertical: 40),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'beta.title'.i18n,
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: HomeTheme.textPrimary,
+        constraints: BoxConstraints(maxWidth: 720, maxHeight: altoMaximo),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'beta.title'.i18n,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          color: HomeTheme.textPrimary,
+                        ),
                       ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: HomeTheme.accentPink),
-                    ),
-                    child: Text(
-                      'v${widget.version}',
-                      style: TextStyle(
-                        color: HomeTheme.accentPink,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: HomeTheme.accentPink),
+                      ),
+                      child: Text(
+                        'v${widget.version}',
+                        style: TextStyle(
+                          color: HomeTheme.accentPink,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'beta.intro'.i18n,
-                style: TextStyle(
-                  color: HomeTheme.textPrimary,
-                  fontSize: 16,
-                  height: 1.45,
+                  ],
                 ),
-              ),
-              const SizedBox(height: 22),
-              _punto(Icons.extension_outlined, 'beta.point-extensions'.i18n),
-              _punto(Icons.update, 'beta.point-updates'.i18n),
-              _punto(Icons.gavel_rounded, 'beta.legal'.i18n),
-              const SizedBox(height: 8),
-              // Idioma y aceptar, en la misma fila: son las dos únicas cosas
-              // que se pueden hacer acá, y juntas el recorrido del mando es
-              // una línea recta en vez de un salto a otra zona de la
-              // pantalla.
-              Row(
-                children: [
-                  _BotonBetaTv(
-                    texto: 'Español',
-                    elegido: actual == 'es',
-                    onTap: () => _cambiarIdioma('es'),
+                const SizedBox(height: 20),
+                Text(
+                  'beta.intro'.i18n,
+                  style: TextStyle(
+                    color: HomeTheme.textPrimary,
+                    fontSize: 16,
+                    height: 1.45,
                   ),
-                  const SizedBox(width: 12),
-                  _BotonBetaTv(
-                    texto: 'English',
-                    elegido: actual == 'en',
-                    onTap: () => _cambiarIdioma('en'),
-                  ),
-                  const Spacer(),
-                  _BotonBetaTv(
-                    texto: 'beta.accept'.i18n,
-                    elegido: true,
-                    principal: true,
-                    autofocus: true,
-                    focusNode: _foco,
-                    onTap: () => Navigator.of(context).pop(true),
-                  ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 22),
+                _punto(Icons.extension_outlined, 'beta.point-extensions'.i18n),
+                _punto(Icons.update, 'beta.point-updates'.i18n),
+                _punto(Icons.gavel_rounded, 'beta.legal'.i18n),
+                const SizedBox(height: 8),
+                // Idioma y aceptar, en la misma fila: son las dos únicas cosas
+                // que se pueden hacer acá, y juntas el recorrido del mando es
+                // una línea recta en vez de un salto a otra zona de la
+                // pantalla.
+                Row(
+                  children: [
+                    _BotonBetaTv(
+                      texto: 'Español',
+                      elegido: actual == 'es',
+                      onTap: () => _cambiarIdioma('es'),
+                    ),
+                    const SizedBox(width: 12),
+                    _BotonBetaTv(
+                      texto: 'English',
+                      elegido: actual == 'en',
+                      onTap: () => _cambiarIdioma('en'),
+                    ),
+                    const Spacer(),
+                    _BotonBetaTv(
+                      texto: 'beta.accept'.i18n,
+                      elegido: true,
+                      principal: true,
+                      autofocus: true,
+                      focusNode: _foco,
+                      onTap: () => Navigator.of(context).pop(true),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
