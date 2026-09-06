@@ -615,6 +615,26 @@ class FocoConTopes extends DirectionalFocusAction {
     // eso, empezaron a aplicarse también donde no correspondía.
     final veniaDeUnaFila = _scrollHorizontalDe(antes.context) != null ||
         FranjaHorizontalTv.de(antes.context) != null;
+    // ── Subiendo, a lo que no está en ninguna región no se le exige ──────
+    //
+    // La barra de arriba (Buscar, Extensiones, Favoritos, Ajustes…) no
+    // vive dentro de `RegionDeFocoTv.contenido` NI de `rail` — está afuera
+    // de las dos, siempre visible pase lo que pase debajo. Sin marca
+    // ninguna, `_cambioDeRegion` no puede decidir nada y el chequeo caía
+    // en el mismo que protege contra escaparse al rail: exigir que el
+    // destino comparta ancho con la tarjeta de origen. Contra un botón
+    // angosto de la barra, lejos de donde esté esa tarjeta, casi nunca lo
+    // comparte — y la subida se deshacía. Reportado en vivo: «si quiero ir
+    // arriba no me deja subir a los botones de arriba».
+    //
+    // Se le da el mismo permiso que ya tiene salir DESDE el panel: no
+    // hace falta compartir ancho. Solo al subir —bajar de la barra nunca
+    // pasa por acá, ya se está en un renglón real— y solo cuando el
+    // destino de verdad no está en ninguna región, así que un escape real
+    // al rail (que si está marcado) sigue exigiendo el solape de siempre.
+    final subiendoALaBarra = !horizontal &&
+        intent.direction == TraversalDirection.up &&
+        RegionDeFocoTv.de(despues.context) == null;
     final seFue = !seMovioComoDebia ||
         (horizontal
             ? (cambioDeRegion == true || !veniaDeUnaFila
@@ -624,6 +644,7 @@ class FocoConTopes extends DirectionalFocusAction {
                     !_mismaFranja(desde, hasta)))
             : (cambioDeRegion ??
                 ((!_vieneDelPanel(antes.context) &&
+                        !subiendoALaBarra &&
                         !_seSolapanEnHorizontal(desde, hasta)) ||
                     _escapoALaIzquierda(desde, hasta, despues.context))));
     _anotar('${intent.direction.name}: de ${antes.debugLabel} '
