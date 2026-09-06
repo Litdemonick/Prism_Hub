@@ -163,8 +163,31 @@ class FocoConTopes extends DirectionalFocusAction {
           _irA(alPanel);
           return;
         }
-        _anotar('izquierda: principio de la fila y no hay panel; '
-            'no se mueve nada');
+        // ── Y si esta pantalla no tiene panel, lo que haya a la izquierda ──
+        //
+        // El buscador es el caso: a la izquierda de los resultados está la
+        // columna del teclado, que no es un «panel de categorías» y por lo
+        // tanto no estaba marcada como tal. Con el tope puesto y sin panel
+        // que encontrar, la izquierda se quedaba muerta. Reportado en vivo:
+        // «cuando quiero volver al lado izquierdo, donde está la zona para
+        // escribir, no me deja».
+        //
+        // Se busca lo que quede a la izquierda a la altura más parecida —el
+        // mismo criterio que al entrar a una zona desde el panel— y se va
+        // ahí. Sigue sin delegar, así que la pantalla no se desplaza sola.
+        final aLaIzquierda = _loQueEstaEnfrente(
+          antes,
+          aLaDerecha: false,
+          soloContenido: false,
+        );
+        if (aLaIzquierda != null) {
+          _anotar('izquierda: no hay panel, a lo de al lado '
+              '(${aLaIzquierda.debugLabel})');
+          _irA(aLaIzquierda);
+          return;
+        }
+        _anotar('izquierda: principio de la fila y no hay nada a la '
+            'izquierda; no se mueve nada');
         return;
       } else if (aLaDerecha) {
         // ── Entrar a la columna de al lado: por su PRIMERA opción ────────
@@ -718,7 +741,11 @@ class FocoConTopes extends DirectionalFocusAction {
   ///
   /// Entre los que empiezan a la derecha del origen, gana el de centro
   /// vertical más parecido; a igual altura, el que esté más cerca.
-  static FocusNode? _loQueEstaEnfrente(FocusNode antes) {
+  static FocusNode? _loQueEstaEnfrente(
+    FocusNode antes, {
+    bool aLaDerecha = true,
+    bool soloContenido = true,
+  }) {
     final origen = _rectDe(antes);
     if (origen == null) return null;
     final ambito = antes.enclosingScope;
@@ -731,16 +758,23 @@ class FocoConTopes extends DirectionalFocusAction {
       if (!nodo.canRequestFocus || nodo.skipTraversal) continue;
       final ctx = nodo.context;
       if (ctx == null || !ctx.mounted) continue;
-      // Solo CONTENIDO: ni otro botón del propio panel —eso no es «entrar
-      // a la zona»— ni la barra de arriba, que no pertenece a ninguna de
-      // las dos regiones y quedaba enganchada por estar a la derecha y a
-      // una altura parecida.
-      if (RegionDeFocoTv.de(ctx) != RegionDeFocoTv.contenido) continue;
+      // Saliendo del panel hacia el contenido se exige justamente eso: ni
+      // otro botón del propio panel —eso no es «entrar a la zona»— ni la
+      // barra de arriba, que no pertenece a ninguna de las dos regiones y
+      // quedaba enganchada por estar a la derecha y a una altura parecida.
+      if (soloContenido &&
+          RegionDeFocoTv.de(ctx) != RegionDeFocoTv.contenido) {
+        continue;
+      }
       final caja = _rectDe(nodo);
       if (caja == null) continue;
-      if (caja.left < origen.right) continue;
+      // Tiene que estar del lado hacia el que se apretó, sin superponerse.
+      if (aLaDerecha ? caja.left < origen.right : caja.right > origen.left) {
+        continue;
+      }
       final altura = (caja.center.dy - origen.center.dy).abs();
-      final distancia = caja.left - origen.right;
+      final distancia =
+          aLaDerecha ? caja.left - origen.right : origen.left - caja.right;
       if (mejorAltura == null ||
           altura < mejorAltura - 1 ||
           ((altura - mejorAltura).abs() <= 1 && distancia < mejorDistancia!)) {

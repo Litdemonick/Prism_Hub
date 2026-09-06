@@ -17,11 +17,18 @@ import 'package:prismhub/views/widgets/tv/recorte_de_fila.dart';
 ///
 /// Corta a los costados y deja pasar arriba y abajo, que es por donde sale
 /// el marco de selección. Ver `RecorteDeFila`.
-Widget _envolverParaTv(bool tv, Widget fila) {
+/// Y el mismo desvanecido de los bordes que el resto de las filas: la
+/// tarjeta del costado se ve atenuada en vez de cortarse en seco, que es lo
+/// que dice «esto sigue para el lado». Solo se atenúa el lado por donde de
+/// verdad queda fila (ver `DesvanecidoDeFila`).
+Widget _envolverParaTv(bool tv, ScrollController scroll, Widget fila) {
   if (!tv) return fila;
-  return ClipRect(
-    clipper: const RecorteDeFila(aireLateral: 24),
-    child: fila,
+  return DesvanecidoDeFila(
+    scroll: scroll,
+    child: ClipRect(
+      clipper: const RecorteDeFila(aireLateral: 24),
+      child: fila,
+    ),
   );
 }
 
@@ -135,7 +142,18 @@ class _SearchAllTileState extends State<SearchAllTile> {
   /// todavía en el teléfono (290 contra 233). El número de acá es el que
   /// pide el esqueleto, con la MISMA fórmula que EsqueletoTarjeta.
   static double get altoFila =>
-      anchoTarjeta * 3 / 2 + 8 + 12 + 6 + 12;
+      anchoTarjeta * 3 / 2 +
+      8 +
+      12 +
+      6 +
+      12 +
+      // ── Y en televisor, sitio para el marco de selección ──────────────
+      //
+      // Esta cuenta da el alto EXACTO de la tarjeta. El marco se dibuja por
+      // fuera de ella, así que con el alto justo la parte de abajo quedaba
+      // mordida. Reportado con foto: «en el buscador, la parte de abajo de
+      // la card se corta, dale aire».
+      (PlatformTv.esTelevisionSync ? HomeTheme.aireDeFocoTv : 0);
 
   Widget _cargando() {
     final alto = altoFila;
@@ -310,6 +328,7 @@ class _SearchAllTileState extends State<SearchAllTile> {
           // televisor todo queda como estaba.
           child: _envolverParaTv(
             tv,
+            controller,
             ListView.builder(
             scrollDirection: Axis.horizontal,
             clipBehavior: tv ? Clip.none : Clip.hardEdge,

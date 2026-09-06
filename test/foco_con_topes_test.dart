@@ -960,6 +960,95 @@ void main() {
     });
   });
 
+  group('el buscador: teclado a la izquierda, resultados a la derecha', () {
+    /// No tiene panel de categorías: a la izquierda de los resultados está
+    /// la columna del teclado. El tope de fila no puede dejar la izquierda
+    /// muerta ahí. Reportado en vivo: «cuando quiero volver al lado
+    /// izquierdo, donde está la zona para escribir, no me deja».
+    Widget buscador() {
+      return MaterialApp(
+        home: Actions(
+          actions: <Type, Action<Intent>>{
+            DirectionalFocusIntent: FocoConTopes(),
+          },
+          child: RescateDeFoco(
+            child: Scaffold(
+              body: Row(
+                children: [
+                  SizedBox(
+                    width: 380,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        for (var i = 0; i < 5; i++)
+                          FocusableCard(
+                            focusNode: nodo('tecla$i'),
+                            onTap: () {},
+                            child: Container(
+                              height: 52,
+                              margin: const EdgeInsets.all(6),
+                              color: Colors.blueGrey,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SizedBox(
+                      height: 260,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          for (var c = 0; c < 6; c++)
+                            _Tarjeta(
+                              nombre: 'res-c$c',
+                              foco: nodo('res-c$c'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('de la primera tarjeta, la izquierda vuelve al teclado',
+        (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(buscador());
+      await t.pumpAndSettle();
+
+      nodo('res-c0').requestFocus();
+      await t.pumpAndSettle();
+
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await t.pumpAndSettle();
+
+      expect(enfocado(), startsWith('tecla'));
+    });
+
+    testWidgets('y en la última, la derecha no se escapa', (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(buscador());
+      await t.pumpAndSettle();
+
+      nodo('res-c0').requestFocus();
+      await t.pumpAndSettle();
+      for (var i = 0; i < 10; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await t.pumpAndSettle();
+      }
+
+      expect(enfocado(), 'res-c5');
+    });
+  });
+
   group('lo vertical sigue funcionando', () {
     testWidgets('abajo baja de fila', (t) async {
       await t.pumpWidget(arbol());

@@ -95,8 +95,25 @@ class _SearchTVState extends State<SearchTV> {
           // sola cualquier tecla que reciba el foco dentro de CUALQUIER
           // scroll — el mismo mecanismo que ya usa toda la app, no algo
           // nuevo que mantener acá.
+          // ── Centrado en vertical, no pegado arriba ────────────────────
+          //
+          // El teclado ocupa bastante menos que el alto de la pantalla, así
+          // que arrancando arriba quedaba media pantalla vacía debajo y la
+          // columna se leía como si se hubiera caído hacia el borde.
+          // Pedido explícito: «el coso donde se escribe y los botones,
+          // centralos».
+          //
+          // Sigue siendo desplazable: en un televisor de poca altura útil,
+          // el `Center` deja de centrar y la columna se recorre como
+          // cualquier otra, que es lo que evita que las últimas teclas
+          // queden fuera de alcance.
           child: SingleChildScrollView(
-            child: Column(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.sizeOf(context).height * 0.72,
+              ),
+              child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -125,6 +142,7 @@ class _SearchTVState extends State<SearchTV> {
                   ancho: 380,
                 ),
               ],
+            ),
             ),
           ),
         ),
