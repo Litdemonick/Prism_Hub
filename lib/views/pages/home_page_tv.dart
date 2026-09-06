@@ -1294,7 +1294,13 @@ class _FilaMedianasTv extends StatelessWidget {
         // Solo el de la izquierda: el de la derecha lo pone `_aireDerechoTv`
         // para todo el contenido por igual, así las medianas quedan
         // alineadas con las filas de abajo.
-        padding: const EdgeInsets.only(left: HomeTheme.aireDeFocoTv),
+        // A los DOS lados: la última mediana llega al borde derecho del
+        // contenido, y sin aire propio su marco se ve cortado ahí.
+        // Reportado en vivo: «la card chica de la derecha, la última, dale
+        // aire, se corta el borde rosado».
+        padding: const EdgeInsets.symmetric(
+          horizontal: HomeTheme.aireDeFocoTv,
+        ),
         child: Row(
           children: [
             for (var i = 0; i < cuantas; i++) ...[

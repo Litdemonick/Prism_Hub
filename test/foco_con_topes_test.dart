@@ -927,8 +927,8 @@ void main() {
     });
   });
 
-  group('al entrar a una zona se empieza por la primera', () {
-    testWidgets('desde el panel, la derecha cae en la primera tarjeta',
+  group('al entrar desde el panel no se mueve la pantalla', () {
+    testWidgets('la derecha entra por lo que está enfrente',
         (t) async {
       await t.binding.setSurfaceSize(const Size(1280, 720));
       addTearDown(() => t.binding.setSurfaceSize(null));
@@ -947,13 +947,16 @@ void main() {
       await t.pumpAndSettle();
       expect(enfocado(), startsWith('rail'));
 
-      // Y al volver a entrar, arriba del todo. «Siempre al entrar a una
-      // zona se coloca la selección en la primera card de arriba, no donde
-      // está.»
+      // Y al volver a entrar, se entra por lo que está ENFRENTE, sin que
+      // la pantalla se desplace. «Cuando estoy en el panel y presiono la
+      // derecha me redirige abajo automáticamente con otras cards pasando;
+      // tiene que detectar en qué línea estoy y seguir por ahí.»
+      final antesDeEntrar = t.getTopLeft(find.text('f1-c0'));
       await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await t.pumpAndSettle();
 
-      expect(enfocado(), 'f0-c0');
+      expect(enfocado(), startsWith('f'));
+      expect(t.getTopLeft(find.text('f1-c0')), antesDeEntrar);
     });
   });
 

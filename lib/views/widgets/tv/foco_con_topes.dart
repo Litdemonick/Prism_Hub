@@ -114,6 +114,22 @@ class FocoConTopes extends DirectionalFocusAction {
       // seis de arriba también necesitan topes».
       final fila = _identidadDeFila(antes.context);
       if (fila != null) {
+        // ── Sin medida del origen no se decide nada ────────────────────
+        //
+        // Apretando rápido, la tarjeta a la que se acaba de mover puede no
+        // estar medida todavía. Sin su rectángulo, la búsqueda de la vecina
+        // no encuentra ninguna — y eso se leía como «se acabó la fila», así
+        // que la izquierda se iba DERECHO al panel a mitad de camino.
+        // Reportado en vivo: «yendo rápido con la izquierda pasa
+        // directamente al panel y no llega hasta la primera tarjeta».
+        //
+        // Perder una pulsación no se nota; saltar al panel sin haber
+        // llegado al principio, sí. Así que sin medida no se mueve nada.
+        if (_rectDe(antes) == null) {
+          _anotar('${aLaDerecha ? "derecha" : "izquierda"}: '
+              'el origen todavía no está medido, se espera');
+          return;
+        }
         final vecino = _vecinoEnLaFila(antes, fila, aLaDerecha);
         if (vecino != null) {
           _anotar('${aLaDerecha ? "derecha" : "izquierda"}: '
@@ -166,13 +182,26 @@ class FocoConTopes extends DirectionalFocusAction {
         // ir seleccionando». Se entra por arriba de la columna siguiente,
         // sea cual sea la altura desde la que se venía.
         //
-        // Vale también DESDE el panel de categorías, y es a propósito:
-        // entrar a una zona tiene que dejar la selección en su primera
-        // tarjeta, no en donde hubiera quedado la vez anterior (las zonas
-        // se conservan vivas, con su desplazamiento). Pedido explícito:
-        // «siempre al entrar a una zona se coloca la selección en la
-        // primera card de arriba, no donde está».
-        final primero = _primeroDeLaColumnaSiguiente(antes);
+        // ── Desde el PANEL se entra por la fila que está a tu altura ────
+        //
+        // Acá sí importa de dónde se viene. Entrando siempre por arriba, si
+        // estabas en una categoría de abajo la lista se iba desplazando por
+        // todas las tarjetas hasta el principio, y eso desde el sillón se
+        // ve como que la pantalla se movió sola. Reportado en vivo: «cuando
+        // estoy en el panel y presiono la derecha me redirige abajo
+        // automáticamente con otras cards pasando; tiene que detectar en
+        // qué línea estoy y seguir por ahí».
+        //
+        // Entrando por lo que queda a la misma altura, la pantalla no se
+        // mueve: se entra justo enfrente. Y el caso de «al entrar a una
+        // zona, arriba del todo» se sigue cumpliendo solo, porque estando
+        // en las primeras categorías lo que queda enfrente ES la fila de
+        // arriba.
+        final desdeElPanel =
+            RegionDeFocoTv.de(antes.context) == RegionDeFocoTv.rail;
+        final primero = desdeElPanel
+            ? _loQueEstaEnfrente(antes)
+            : _primeroDeLaColumnaSiguiente(antes);
         if (primero != null) {
           _anotar('derecha: a la primera de la columna siguiente '
               '(${primero.debugLabel})');
@@ -674,6 +703,48 @@ class FocoConTopes extends DirectionalFocusAction {
       if (caja == null) continue;
       final distancia = (caja.center.dy - origen.center.dy).abs();
       if (mejorDistancia == null || distancia < mejorDistancia) {
+        mejorDistancia = distancia;
+        mejor = nodo;
+      }
+    }
+    return mejor;
+  }
+
+  /// Lo enfocable de la derecha que queda MÁS ENFRENTE de [antes].
+  ///
+  /// Se usa al salir del panel de categorías hacia el contenido: entrar por
+  /// lo que está a la misma altura evita que la lista se desplace hasta
+  /// otra parte, que es lo que se ve como «se movió solo».
+  ///
+  /// Entre los que empiezan a la derecha del origen, gana el de centro
+  /// vertical más parecido; a igual altura, el que esté más cerca.
+  static FocusNode? _loQueEstaEnfrente(FocusNode antes) {
+    final origen = _rectDe(antes);
+    if (origen == null) return null;
+    final ambito = antes.enclosingScope;
+    if (ambito == null) return null;
+    FocusNode? mejor;
+    double? mejorAltura;
+    double? mejorDistancia;
+    for (final nodo in ambito.traversalDescendants) {
+      if (identical(nodo, antes)) continue;
+      if (!nodo.canRequestFocus || nodo.skipTraversal) continue;
+      final ctx = nodo.context;
+      if (ctx == null || !ctx.mounted) continue;
+      // Solo CONTENIDO: ni otro botón del propio panel —eso no es «entrar
+      // a la zona»— ni la barra de arriba, que no pertenece a ninguna de
+      // las dos regiones y quedaba enganchada por estar a la derecha y a
+      // una altura parecida.
+      if (RegionDeFocoTv.de(ctx) != RegionDeFocoTv.contenido) continue;
+      final caja = _rectDe(nodo);
+      if (caja == null) continue;
+      if (caja.left < origen.right) continue;
+      final altura = (caja.center.dy - origen.center.dy).abs();
+      final distancia = caja.left - origen.right;
+      if (mejorAltura == null ||
+          altura < mejorAltura - 1 ||
+          ((altura - mejorAltura).abs() <= 1 && distancia < mejorDistancia!)) {
+        mejorAltura = altura;
         mejorDistancia = distancia;
         mejor = nodo;
       }
