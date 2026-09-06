@@ -278,8 +278,23 @@ class _FocusableCardState extends State<FocusableCard> {
     // cada apretón del mando. En un televisor viejo son los `raster=`
     // largos del registro. El borde nítido, que es lo que de verdad señala
     // dónde estás, no cuesta nada y se queda igual.
+    // ── Y no más ancho que el hueco real entre tarjetas ─────────────────
+    //
+    // 22 de desenfoque más 1,5 de expansión llegan, en la práctica, bastante
+    // más lejos que esos mismos puntos — y las filas de pósters (Inicio,
+    // zonas) dejan solo 10px entre una tarjeta y la siguiente (ver
+    // `_huecoPosterTv`). El resultado: el resplandor de la tarjeta enfocada
+    // se pintaba ENCIMA de la portada vecina, como una mancha oscura y
+    // pareja que ni se movía ni tapaba nada de verdad — reportado en vivo,
+    // con foto, varias veces, como «esa sombra estática en las cards».
+    //
+    // Con un desenfoque que sí entra en ese hueco, el resplandor se sigue
+    // viendo alrededor de la tarjeta elegida pero se apaga antes de llegar
+    // a pintar sobre la de al lado. El aviso de foco de verdad —el marco
+    // nítido de `_grosorDelMarco`, unos párrafos más abajo— no depende de
+    // este desenfoque y no cambia en nada.
     final blurDelHalo = esTv
-        ? (PrismHubMas.nivel == NivelDeAparato.bajo ? 10.0 : 22.0)
+        ? (PrismHubMas.nivel == NivelDeAparato.bajo ? 8.0 : 9.0)
         : (_tieneFoco ? 14.0 : 10.0);
     // ── En un aparato modesto, el marco y nada más ───────────────────────
     //
@@ -413,7 +428,10 @@ class _FocusableCardState extends State<FocusableCard> {
                         BoxShadow(
                           color: marco.withValues(alpha: intensidadDelHalo),
                           blurRadius: blurDelHalo,
-                          spreadRadius: esTv ? 1.5 : 0,
+                          // Ver el porqué del tope arriba, en `blurDelHalo`:
+                          // sumada al desenfoque, esta expansión también
+                          // tenía que entrar en el hueco entre tarjetas.
+                          spreadRadius: esTv ? 0.5 : 0,
                         ),
                       ],
                     ),
