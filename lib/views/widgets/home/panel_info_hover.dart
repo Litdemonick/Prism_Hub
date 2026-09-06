@@ -78,110 +78,156 @@ class PanelInfoHover extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(11),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: compacto ? MainAxisSize.min : MainAxisSize.max,
-          children: [
-            if (encabezado != null) ...[
-              Text(
-                encabezado!.toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 9.5,
-                  letterSpacing: 0.9,
-                  fontWeight: FontWeight.w700,
-                  color: HomeTheme.textMuted,
-                ),
-              ),
-              const SizedBox(height: 6),
-            ],
-            Text(
-              titulo,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12.5,
-                height: 1.25,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
+        // ── En TV, con margen si por poco no entra ──────────────────────
+        //
+        // El panel mide lo que necesita, pero en la tarjeta más chica de
+        // una fila (una portada angosta, un título de dos líneas) ese
+        // contenido puede pasarse del alto del póster por un puñado de
+        // píxeles — reportado en vivo con foto: «BOTTOM OVERFLOWED BY 2.0
+        // PIXELS» encima de una tarjeta pequeña, en varias zonas.
+        //
+        // Envolviendo en un scroll (sin barra, y que no se puede tocar
+        // para desplazar: no tiene sentido en un panel que se lee de un
+        // vistazo) lo que sobra por poco se recorta prolijo en vez de
+        // desbordar con el aviso de Flutter encima de la tarjeta. Fuera de
+        // TV el panel sigue igual: ahí `compacto` es false y la rama de
+        // abajo no se toca.
+        child: compacto
+            ? SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: _contenido(),
+              )
+            : _contenido(),
+      ),
+    );
+  }
+
+  Widget _contenido() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: compacto ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        if (encabezado != null) ...[
+          Text(
+            encabezado!.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 9.5,
+              letterSpacing: 0.9,
+              fontWeight: FontWeight.w700,
+              color: HomeTheme.textMuted,
             ),
-            if (fecha != null) ...[
-              const SizedBox(height: 5),
-              Row(
-                children: [
-                  Icon(Icons.calendar_today_rounded,
-                      size: 11, color: HomeTheme.textMuted),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      fecha!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: HomeTheme.textMuted),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (descripcion != null) ...[
-              const SizedBox(height: 8),
-              // Expanded y no un alto fijo: la descripción usa lo que sobre
-              // después del título y la fecha. Con alto fijo, un título de
-              // tres líneas la empujaba fuera del panel.
+          ),
+          const SizedBox(height: 6),
+        ],
+        Text(
+          titulo,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 12.5,
+            height: 1.25,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        if (fecha != null) ...[
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              Icon(Icons.calendar_today_rounded,
+                  size: 11, color: HomeTheme.textMuted),
+              const SizedBox(width: 5),
               Expanded(
                 child: Text(
+                  fecha!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: HomeTheme.textMuted),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (descripcion != null) ...[
+          const SizedBox(height: 8),
+          // ── `Expanded` solo fuera de TV ────────────────────────────────
+          //
+          // `Expanded`/`Spacer` reparten lo que SOBRA de un alto ya fijo —
+          // que es el caso normal, el panel entero del hover con mouse.
+          // En TV el panel ahora vive dentro de un `SingleChildScrollView`
+          // (ver el porqué en `build`), que da alto SIN LÍMITE a su
+          // contenido: pedirle a un `Expanded` que reparta "lo que sobra"
+          // de algo infinito no tiene con qué contestar, y Flutter lo
+          // corta con un error duro en vez del desborde chico que esto
+          // reemplaza.
+          //
+          // Con un tope de líneas en vez de `Expanded`, la descripción se
+          // acomoda como cualquier otro texto del panel: mide lo que
+          // necesita, hasta ese tope, y el `SingleChildScrollView` hace de
+          // colchón si por poco no entra.
+          compacto
+              ? Text(
                   descripcion!,
-                  overflow: TextOverflow.fade,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 11.5,
                     height: 1.35,
                     color: Color(0xFFC9C4D4),
                   ),
-                ),
-              ),
-            ] else
-              const Spacer(),
-            const SizedBox(height: 6),
-            // El ÚNICO que abre la ficha cuando el panel está abierto. Tocar
-            // en cualquier otro lado lo cierra, así el panel no es una
-            // trampa.
-            //
-            // GestureDetector propio y opaco: sin esto el toque se lo
-            // llevaba la tarjeta de atrás y el botón no hacía nada.
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onTap,
-              child: Padding(
-                // Aire de sobra alrededor del texto: es el objetivo más
-                // chico del panel y en un teléfono tiene que poder tocarse
-                // sin apuntar.
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Icon(Icons.play_arrow_rounded, size: 17, color: _acento),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'home.view-detail'.i18n.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          letterSpacing: 0.6,
-                          fontWeight: FontWeight.w800,
-                          color: _acento,
-                        ),
-                      ),
+                )
+              : Expanded(
+                  child: Text(
+                    descripcion!,
+                    overflow: TextOverflow.fade,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      height: 1.35,
+                      color: Color(0xFFC9C4D4),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+        ] else if (!compacto)
+          const Spacer(),
+        const SizedBox(height: 6),
+        // El ÚNICO que abre la ficha cuando el panel está abierto. Tocar
+        // en cualquier otro lado lo cierra, así el panel no es una
+        // trampa.
+        //
+        // GestureDetector propio y opaco: sin esto el toque se lo
+        // llevaba la tarjeta de atrás y el botón no hacía nada.
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
+            // Aire de sobra alrededor del texto: es el objetivo más
+            // chico del panel y en un teléfono tiene que poder tocarse
+            // sin apuntar.
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(Icons.play_arrow_rounded, size: 17, color: _acento),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'home.view-detail'.i18n.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      letterSpacing: 0.6,
+                      fontWeight: FontWeight.w800,
+                      color: _acento,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
