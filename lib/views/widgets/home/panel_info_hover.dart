@@ -107,7 +107,12 @@ class PanelInfoHover extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: compacto ? MainAxisSize.min : MainAxisSize.max,
       children: [
-        if (encabezado != null) ...[
+        // En TV el encabezado ya no va acá: sale aparte, en un
+        // `Positioned` fijo arriba de la tarjeta (ver `TarjetaDeCatalogo`)
+        // para que quede siempre en el mismo sitio sin importar cuántas
+        // líneas ocupe el título. Repetirlo también acá adentro se leía
+        // como el mismo dato dos veces.
+        if (encabezado != null && !compacto) ...[
           Text(
             encabezado!.toUpperCase(),
             maxLines: 1,

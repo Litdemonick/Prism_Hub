@@ -377,6 +377,51 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                           children: [
                             _portada(ancho, altoPortada),
                             if (widget.duracion != null) _insigniaDeDuracion(),
+                            // ── De qué extensión viene, fija arriba ─────────
+                            //
+                            // Vivía DENTRO del panel de abajo, arriba del
+                            // título — así que con un título de una línea
+                            // quedaba a una altura y con uno de dos, o
+                            // comparado con la tarjeta de al lado, a otra.
+                            // Y dependía solo del color de texto para
+                            // leerse, que contra una portada clara se lava.
+                            // Pedido explícito, con foto: «el name de la
+                            // extensión arriba, no importa el tamaño del
+                            // título, y que sea color sólido» — mismo
+                            // criterio que ya se aplicó en el destacado
+                            // grande de Inicio.
+                            //
+                            // Con un `Positioned` propio, aparte del panel,
+                            // la insignia queda siempre en el mismo sitio y
+                            // se lee sobre cualquier portada.
+                            if (PlatformTv.esTelevisionSync &&
+                                panelVisible &&
+                                widget.encabezado != null)
+                              Positioned(
+                                top: 8,
+                                left: 8,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: widget.acento ?? HomeTheme.accentPink,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    child: Text(
+                                      widget.encabezado!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.5,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             if (_hayPanel)
                               AnimatedOpacity(
                                 opacity: panelVisible ? 1 : 0,
