@@ -506,6 +506,12 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
     showPlatformSnackbar(context: context, content: 'common.copied'.i18n);
   }
 
+  Future<void> _copiarTodo() async {
+    await Clipboard.setData(ClipboardData(text: _lineas.join('\n')));
+    if (!mounted) return;
+    showPlatformSnackbar(context: context, content: 'common.copied'.i18n);
+  }
+
   /// Guarda o comparte el registro que llegó del televisor.
   ///
   /// Se marca de quién es: la ficha del aparato la arma quien exporta, y sin
@@ -698,6 +704,27 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
             icon: const Icon(Icons.ios_share),
             color: HomeTheme.textPrimary,
             onPressed: _lineas.isEmpty ? null : _exportar,
+          ),
+          // ── Copiar el registro entero, sin seleccionar nada a mano ──────
+          //
+          // En PC la selección con el mouse existe (ver SeleccionableSiSePuede),
+          // pero Ctrl+A no alcanza a todo el registro: la lista se arma de a
+          // poco (`ListView.builder`) y solo entra en la selección lo que ya
+          // se dibujó en pantalla, no lo que sigue más abajo sin construirse
+          // todavía. Reportado en vivo: «no me deja copiar todo con
+          // control+A». Y en el teléfono la selección con el dedo está
+          // apagada del todo —ver el porqué en SeleccionableSiSePuede—, así
+          // que ahí no había NINGUNA forma de sacar el registro salvo
+          // exportarlo a un archivo.
+          //
+          // Este botón no depende de qué esté dibujado: toma `_lineas`
+          // directo, la misma lista completa que ya usa `_exportar`, y la
+          // manda entera al portapapeles. Sirve igual en PC y en teléfono.
+          IconButton(
+            tooltip: 'settings.log-copiar-todo'.i18n,
+            icon: const Icon(Icons.copy_all_rounded),
+            color: HomeTheme.textPrimary,
+            onPressed: _lineas.isEmpty ? null : _copiarTodo,
           ),
           IconButton(
             tooltip: 'settings.log-copiar'.i18n,

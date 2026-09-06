@@ -528,6 +528,7 @@
         "log-en-red-sin-red": "Could not start: you need to be on a home network (Wi-Fi or cable).",
         "log-buscar": "View a TV’s log",
         "log-copiar": "Copy the address",
+        "log-copiar-todo": "Copy the whole log",
         "log-en-navegador": "Open in browser",
         "log-sin-navegador": "Could not open a browser. The address is copied: paste it by hand.",
         "log-buscar-subtitle": "Finds TVs on your network that are sharing their log and opens it here, with no address to type.",

@@ -524,6 +524,7 @@
         "log-en-red-sin-red": "No se pudo: hace falta estar conectado a una red de casa (wifi o cable).",
         "log-buscar": "Ver el registro de un televisor",
         "log-copiar": "Copiar la dirección",
+        "log-copiar-todo": "Copiar todo el registro",
         "log-en-navegador": "Abrir en el navegador",
         "log-sin-navegador": "No se pudo abrir el navegador. La dirección está copiada: pegala a mano.",
         "log-buscar-subtitle": "Busca en tu red los televisores que estén compartiendo su registro y lo abre acá, sin escribir ninguna dirección.",
