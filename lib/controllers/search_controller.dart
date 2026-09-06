@@ -61,20 +61,40 @@ class SearchPageController extends GetxController {
   @override
   void onInit() {
     _searchWorker = ever(search, (callback) {
-      // getRuntime y no getResult a secas: la lista de extensiones a consultar
-      // ahora depende TAMBIEN de lo que se escribio (ver el filtro por nombre
-      // ahi adentro), asi que hay que rearmarla en cada cambio. getRuntime
-      // reusa los SearchResult ya cargados por paquete, o sea que esto no tira
-      // a la basura lo que ya estaba en pantalla.
-      getRuntime(types: cuurentExtensionType.value);
+      // ── Con una pausa, no en cada tecla ─────────────────────────────
+      //
+      // `search.value` cambia una vez por letra tecleada, y `getRuntime`
+      // no es barato: rearma la lista de extensiones, filtra por tipo y
+      // por zona, busca coincidencias de NOMBRE contra cada una, reconstruye
+      // `searchResultList` entera (lo que remonta cada `SearchAllTile`) y
+      // recién ahí larga `getResult`, que abre el pool de búsquedas —una
+      // por extensión, cada una corriendo el motor de JavaScript de esa
+      // extensión—. Escribir "batman" de corrido son seis rondas completas
+      // de todo eso, una atrás de la otra.
+      //
+      // Reportado en vivo, en un televisor viejo: «cuando escribo, como que
+      // se comienza a laguear». En un aparato modesto ese trabajo por letra
+      // se nota como que el mando deja de responder mientras se escribe.
+      //
+      // Cada letra reinicia la espera: mientras se sigue tecleando no se
+      // busca nada, y recién cuando el usuario se detiene un instante se
+      // dispara la búsqueda de verdad. Lo que ya está en pantalla (ver el
+      // reuso por paquete en `getRuntime`) se queda quieto mientras tanto.
+      _debounceBusqueda?.cancel();
+      _debounceBusqueda = Timer(const Duration(milliseconds: 350), () {
+        getRuntime(types: cuurentExtensionType.value);
+      });
     });
     super.onInit();
   }
+
+  Timer? _debounceBusqueda;
 
   @override
   void onClose() {
     _searchWorker?.dispose();
     _debounceRefresco?.cancel();
+    _debounceBusqueda?.cancel();
     super.onClose();
   }
 
