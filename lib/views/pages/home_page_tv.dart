@@ -1294,7 +1294,7 @@ class _FilaMedianasTv extends StatelessWidget {
         // Solo el de la izquierda: el de la derecha lo pone `_aireDerechoTv`
         // para todo el contenido por igual, así las medianas quedan
         // alineadas con las filas de abajo.
-        padding: const EdgeInsets.only(left: 10),
+        padding: const EdgeInsets.only(left: HomeTheme.aireDeFocoTv),
         child: Row(
           children: [
             for (var i = 0; i < cuantas; i++) ...[
@@ -1549,7 +1549,9 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
                   // tarjeta, así que la primera necesita unos puntos antes
                   // del recorte o su lado izquierdo se ve más fino que los
                   // otros tres. Ver `_margenDeFilaTv`.
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: HomeTheme.aireDeFocoTv,
+                  ),
                   itemCount: widget.items.length,
                   separatorBuilder: (_, __) =>
                       const SizedBox(width: _huecoPosterTv),

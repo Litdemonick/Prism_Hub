@@ -425,4 +425,33 @@ class HomeTheme {
   /// más suave que el de PC/teléfono (8): a la distancia de un sillón, un
   /// radio chico casi no se distingue de una esquina recta.
   static const radioTv = 12.0;
+
+  /// El aire MÍNIMO que hay que dejar alrededor de cualquier cosa enfocable
+  /// en televisor.
+  ///
+  /// ── Por qué es un número con nombre y no uno suelto en cada sitio ──────
+  ///
+  /// El marco de selección NO se dibuja dentro de la tarjeta: sale unos
+  /// píxeles hacia afuera, y lleva encima un resplandor bastante más ancho.
+  /// Donde el contenido llega justo al filo —de la pantalla, del panel de
+  /// categorías, del recorte de una fila, del borde de una lista— ese marco
+  /// queda mordido y la tarjeta se ve cortada.
+  ///
+  /// Eso volvió del televisor una y otra vez, siempre igual y siempre en un
+  /// sitio distinto: la primera tarjeta de la fila, la última contra el
+  /// borde derecho, la de arriba contra el recorte de la lista, la de
+  /// abajo. Cada vez se arreglaba con un número puesto a mano ahí, y el
+  /// siguiente sitio volvía a nacer sin él.
+  ///
+  /// Con el mínimo acá, quien escriba una pantalla nueva tiene el número a
+  /// mano y no tiene que redescubrirlo. Regla del proyecto, dicha así:
+  /// «siempre debe haber aire para que los bordes se vean bien, que no se
+  /// corte nada, y que el usuario se dé cuenta de que hay más cosas a la
+  /// derecha y abajo».
+  ///
+  /// Doce: el marco mide tres y el resplandor se apaga solo, así que con
+  /// esto el borde entra entero y todavía se lee el degradado alrededor.
+  /// Los sitios que ya dan MÁS (el recorte de fila, el margen contra el
+  /// rail) se quedan como están: esto es un piso, no una medida exacta.
+  static const aireDeFocoTv = 12.0;
 }

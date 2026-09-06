@@ -239,7 +239,7 @@ double _anchoTarjetaTv(BuildContext context) => _anchoPosterTv(context);
 ///
 /// Sigue alineada con el título de la fila a ojo —ocho puntos no se leen
 /// como una sangría— y ahora el marco entra entero.
-double _margenDeFilaTv(BuildContext context) => 8;
+double _margenDeFilaTv(BuildContext context) => HomeTheme.aireDeFocoTv;
 
 double _altoFilaTv(BuildContext context) =>
     TarjetaDeCatalogo.altoDeUnaLineaDeAncho(_anchoTarjetaTv(context)) + 20;
