@@ -1,4 +1,4 @@
-## PrismHub v1.0.112 — Las tarjetas entran enteras, y el fondo es el mismo en todas partes
+## PrismHub v1.0.113 — La izquierda rápida, y el panel quieto al arrancar
 
 <!-- solo-plataforma: androidtv -->
 
@@ -12,28 +12,20 @@
 
 ### 📺 Android TV
 
-- **Las tarjetas de la primera fila ya no salen cortadas por abajo, y esta
-  vez de raíz.** El tamaño del póster salía solo del ancho de la pantalla:
-  se elegía lo que entraba a lo ancho, sin preguntarse si entraba a lo
-  alto. Por eso cada arreglo aguantaba hasta que cambiaba algo del reparto
-  de arriba. Ahora la cuenta mira cuánto alto queda libre debajo del
-  destacado y ajusta el póster a eso — si el destacado crece, los pósters
-  se achican lo justo para seguir entrando enteros.
+- **Yendo rápido con la flecha izquierda ya no se entra al panel a mitad de
+  fila.** Y esta vez con la causa real: una lista destruye las tarjetas que
+  salen de la vista, así que al volver rápido las del principio todavía no
+  se habían rehecho. No había vecina a la izquierda — pero tampoco era el
+  principio de la fila, y eso se leía como "se acabó".
 
-- **El fondo de "ver todo" de una extensión, igual que el resto.** Era la
-  única pantalla de televisor sin el gris carbón: armaba su fondo con un
-  color plano y encima el panel de la derecha traía otro, así que se veían
-  dos tonos partidos por la mitad.
+  Ahora se mira el desplazamiento de la fila, que sí sabe la verdad: si
+  queda recorrido hacia ese lado, hay más tarjetas aunque no estén puestas.
+  Se acerca la fila para que se construyan y la selección se queda donde
+  está. Queda cubierto por una prueba automática que, sin el arreglo, falla
+  en la décima pulsación.
 
-- **El difuminado de los bordes, arreglado.** Estaba medido en porcentaje
-  del ancho de la fila: en Inicio son unos pocos puntos y se ve como un
-  borde suave, pero en el panel angosto del buscador ese mismo porcentaje
-  se comía una tarjeta entera y quedaba como una sombra plana encima. Ahora
-  es una medida fija y se ve igual en cualquier fila.
-
-- **Aire entre las opciones del filtro**, que el marco de la enfocada
-  llegaba pisando la fila de abajo.
-
-- **El panel de categorías ya no salta al abrir la app.** La comprobación
-  del primer cuadro corría cuando todavía no había nada seleccionado, así
-  que el panel se contraía y volvía a abrirse un instante después.
+- **El panel de categorías ya no se mueve al abrir la app.** Nace
+  desplegado y se acomoda cuando se sabe dónde quedó la selección; ese
+  acomodo iba animado y se veía como que el panel se movía solo justo
+  mientras la app cargaba. Ahora aparece directamente donde va, y la
+  animación queda para cuando se abre y se cierra con el mando.
