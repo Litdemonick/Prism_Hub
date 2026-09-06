@@ -61,6 +61,12 @@ class FocoConTopes extends DirectionalFocusAction {
   /// un solape casi total dejaría fuera a su vecina justo cuando crece.
   static const _solapeMinimo = 0.34;
 
+  /// Cuánto se acerca la fila cuando la vecina todavía no está construida.
+  ///
+  /// Del orden de una tarjeta: lo justo para que la lista rehaga la que
+  /// sigue, sin dar un salto que se note.
+  static const _cuantoSeAcercaLaFila = 180.0;
+
   @override
   void invoke(DirectionalFocusIntent intent) {
     final horizontal = intent.direction == TraversalDirection.left ||
@@ -142,6 +148,32 @@ class FocoConTopes extends DirectionalFocusAction {
           // Es el final: se consume la tecla y no pasa nada.
           _anotar('derecha: fin de la fila, no se mueve nada');
           return;
+        }
+        // ── ¿O es que la vecina todavía no se construyó? ────────────────
+        //
+        // Una lista DESTRUYE lo que sale de la vista. Yendo rápido con la
+        // izquierda, las tarjetas del principio todavía no se rehicieron
+        // cuando llega la tecla siguiente: no hay vecina en el árbol, pero
+        // tampoco es el principio de la fila. Leerlo como «se acabó» era lo
+        // que mandaba al panel a mitad de camino. Reportado en vivo, dos
+        // veces: «yendo rápido me va directo al panel y no espera a llegar
+        // hasta la primera card».
+        //
+        // El desplazamiento de la fila sí sabe la verdad: si todavía queda
+        // recorrido hacia ese lado, hay más tarjetas aunque no estén
+        // puestas. Se acerca la fila para que se construyan y se deja el
+        // foco donde está; la pulsación siguiente ya las encuentra.
+        if (fila is ScrollPosition && fila.hasPixels) {
+          final quedaAtras = fila.pixels > fila.minScrollExtent + 2;
+          if (quedaAtras) {
+            _anotar('izquierda: la vecina todavía no está construida, '
+                'se acerca la fila');
+            fila.jumpTo(
+              (fila.pixels - _cuantoSeAcercaLaFila)
+                  .clamp(fila.minScrollExtent, fila.maxScrollExtent),
+            );
+            return;
+          }
         }
         // ── Y a la izquierda, al panel: también sin delegar ──────────────
         //

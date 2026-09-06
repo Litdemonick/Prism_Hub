@@ -749,6 +749,12 @@ class _SidebarTVState extends State<_SidebarTV> {
   /// Mientras no haya foco en ningún lado no se decide nada: se vuelve a
   /// mirar al cuadro siguiente. En cuanto hay alguien enfocado —sea una
   /// categoría o una tarjeta— la respuesta ya significa algo y se aplica.
+  /// Si el panel ya tomó su forma definitiva al menos una vez.
+  ///
+  /// Hasta entonces los cambios de ancho van sin animación — ver el
+  /// comentario en el `AnimatedContainer`.
+  bool _yaSeAcomodo = false;
+
   void _comprobarAlArrancar() {
     if (!mounted) return;
     final actual = FocusManager.instance.primaryFocus;
@@ -759,6 +765,11 @@ class _SidebarTVState extends State<_SidebarTV> {
       return;
     }
     _alCambiarElFoco();
+    // A partir del cuadro siguiente, el panel ya está donde va: lo que
+    // venga después sí se anima.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _yaSeAcomodo = true;
+    });
   }
 
   void _alCambiarElFoco() {
@@ -923,7 +934,23 @@ class _SidebarTVState extends State<_SidebarTV> {
       // borde recto.
       child: AnimatedContainer(
         width: anchoObjetivo,
-        duration: const Duration(milliseconds: 200),
+        // ── Al arrancar no se anima: se pone y ya ────────────────────────
+        //
+        // El panel nace desplegado dando por sentado que el foco inicial va
+        // a caer en una categoría, y se acomoda en cuanto se sabe la
+        // verdad. Ese acomodo, animado, se ve como que el panel «se mueve
+        // solo» justo mientras la app está cargando —y encima tapando el
+        // contenido a medio dibujar—. Reportado con foto: «al entrar al app
+        // el panel se mueve y luego, cuando carga, se acomoda; visualmente
+        // se ve feo».
+        //
+        // El primer acomodo va instantáneo: desde afuera, el panel
+        // sencillamente aparece como corresponde. De ahí en más la
+        // animación queda como estaba, que es la que hace que abrirlo y
+        // cerrarlo con el mando se sienta bien.
+        duration: _yaSeAcomodo
+            ? const Duration(milliseconds: 200)
+            : Duration.zero,
         curve: Curves.easeOutCubic,
         child: Focus(
           canRequestFocus: false,

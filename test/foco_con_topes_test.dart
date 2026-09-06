@@ -1049,6 +1049,46 @@ void main() {
     });
   });
 
+  group('apretando RÁPIDO, sin dejar que la lista se rehaga', () {
+    testWidgets('la izquierda no se escapa al panel a mitad de fila',
+        (t) async {
+      await t.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(arbol(porFila: 20, conRescate: true));
+      await t.pumpAndSettle();
+
+      // Hasta el fondo de la fila, con calma.
+      nodo('f0-c0').requestFocus();
+      await t.pumpAndSettle();
+      for (var i = 0; i < 19; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await t.pumpAndSettle();
+      }
+      expect(enfocado(), 'f0-c19');
+
+      // Y de vuelta RÁPIDO: un solo cuadro entre pulsación y pulsación, que
+      // no le alcanza a la lista para reconstruir lo que destruyó al
+      // desplazarse. Reportado en vivo: «yendo rápido me va directo al
+      // panel y no espera a llegar hasta la primera card».
+      for (var i = 0; i < 25; i++) {
+        await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await t.pump(const Duration(milliseconds: 16));
+        final donde = enfocado();
+        // Lo que NO puede pasar: terminar en el panel sin haber llegado a
+        // la primera tarjeta.
+        if (donde != null && donde.startsWith('rail')) {
+          expect(
+            nodos['f0-c0']!.hasFocus,
+            isTrue,
+            reason: 'entró al panel en la pulsación ${i + 1} sin haber '
+                'pasado por la primera tarjeta',
+          );
+        }
+      }
+      await t.pumpAndSettle();
+    });
+  });
+
   group('lo vertical sigue funcionando', () {
     testWidgets('abajo baja de fila', (t) async {
       await t.pumpWidget(arbol());
