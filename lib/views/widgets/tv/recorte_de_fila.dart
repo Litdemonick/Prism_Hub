@@ -102,9 +102,21 @@ class _DesvanecidoDeFilaState extends State<DesvanecidoDeFila> {
   ///
   /// Suficiente para que la tarjeta del costado se lea como «sigue» sin que
   /// llegue a apagarse: es un borde, no una sombra encima de la tarjeta.
-  /// Un poco más ancho que antes: con la curva suave, treinta y ocho
-  /// puntos se leen como un borde que se pierde, y no como una franja.
-  static const _anchoDelBorde = 38.0;
+  ///
+  /// ── Por qué bajó de 38 ──────────────────────────────────────────────
+  ///
+  /// Es una medida en PUNTOS, fija, y una tarjeta angosta —las del
+  /// buscador miden bastante menos que las de Inicio o una zona— se come
+  /// una porción mucho mayor de su propio ancho con el mismo borde.
+  /// Contra un póster con una cara o un detalle justo ahí, esos 38 puntos
+  /// se leían como una sombra negra encima de la imagen, no como un borde
+  /// que se pierde. Reportado en vivo con foto: «esa franja como una
+  /// sombra negra ahí al frente de la cara».
+  ///
+  /// Con un borde más angosto sigue notándose que la fila sigue —que es
+  /// para lo que existe— pero se lleva puesto mucho menos de cada
+  /// tarjeta, sea grande o chica.
+  static const _anchoDelBorde = 22.0;
 
   @override
   void initState() {
