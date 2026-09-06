@@ -872,6 +872,23 @@ class FocoConTopes extends DirectionalFocusAction {
       if (_identidadDeFila(ctx) == null) continue;
       final caja = _rectDe(nodo);
       if (caja == null) continue;
+      // ── Y de la MISMA columna de la pantalla ──────────────────────────
+      //
+      // Sin esto, «la fila más cercana» se decidía solo por distancia
+      // vertical, sin mirar si de verdad estaba del mismo lado. En el
+      // buscador de TV eso mezclaba dos columnas independientes —el
+      // teclado a la izquierda, los resultados a la derecha, ninguna
+      // marcada con `RegionDeFocoTv`— y subir desde una tarjeta de
+      // resultados podía terminar en una fila del teclado, si esa fila
+      // quedaba un poco más cerca en altura que "Mostrar todo" o el
+      // encabezado de la propia fila. Reportado en vivo: «quiero subir
+      // para darle a Mostrar todo y me manda al teclado».
+      //
+      // Exigiendo que comparta algo de ancho con el origen —mismo
+      // criterio que ya usa `_seSolapanEnHorizontal` para lo mismo, en
+      // otro punto de la decisión— una fila del todo del otro lado de la
+      // pantalla deja de contar como candidata, sea cual sea su altura.
+      if (!_seSolapanEnHorizontal(origen, caja)) continue;
       final salto = caja.center.dy - origen.center.dy;
       // Ocho puntos de margen para no contar como «otra fila» a una vecina
       // de la misma que quedó un poco más alta por el crecido del foco.
