@@ -49,7 +49,24 @@ class TecladoTv extends StatefulWidget {
     this.accent,
     this.ancho = 380,
     this.mostrarCampo = true,
+    this.alturaDisponible,
   });
+
+  /// Cuánto alto tiene de verdad para acomodarse, si quien lo usa lo sabe.
+  ///
+  /// ── Por qué no alcanza con medirlo acá adentro ────────────────────────
+  ///
+  /// Un `LayoutBuilder` puesto en el propio `build` serviría si el teclado
+  /// colgara de algo con alto acotado — pero la pantalla del buscador lo
+  /// pone dentro de un `SingleChildScrollView` (para no perder teclas en un
+  /// televisor de poca altura útil), y ESE widget le da a su hijo alto SIN
+  /// LÍMITE a propósito: así es como puede desplazarse. Puertas adentro,
+  /// el teclado nunca ve un tope real por más que pregunte.
+  ///
+  /// Por eso lo mide quien arma la pantalla, ANTES de entrar al scroll —
+  /// ahí el alto disponible es el de verdad— y se lo pasa. Null (el valor
+  /// de siempre) deja el teclado a tamaño completo, como hasta ahora.
+  final double? alturaDisponible;
 
   /// Si dibuja arriba su propio cartel con lo escrito.
   ///
@@ -88,93 +105,142 @@ class _TecladoTvState extends State<TecladoTv> {
     widget.onCambio('');
   }
 
+  /// Cuánto mide el teclado a tamaño completo, para saber si entra.
+  ///
+  /// Suma lo mismo que arma `build`: el campo (si va), la fila de
+  /// "123"/borrar y las filas de letras/números con sus huecos. No hace
+  /// falta que sea exacto al píxel — es para decidir CUÁNTO achicar, y
+  /// quedarse un poco corto solo dejaría un margen de sobra.
+  double _altoCompleto(List<List<String>> filas) {
+    const altoCampo = 50.0 + 14.0; // el cartel + su separación de abajo
+    const altoAccion = _anchoTecla + 12.0; // la fila "123"/borrar + separación
+    final altoFilas = filas.length * _anchoTecla + (filas.length - 1) * _hueco;
+    return (widget.mostrarCampo ? altoCampo : 0.0) + altoAccion + altoFilas;
+  }
+
   @override
   Widget build(BuildContext context) {
     final filas = _numeros ? _filasNumeros : _filasLetras;
-    return SizedBox(
-      width: widget.ancho,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // El "campo": muestra lo escrito, no se edita. Con el mando no hay
-          // cursor que mover, así que un TextField de verdad solo agregaría
-          // el teclado del sistema encima del nuestro.
-          if (widget.mostrarCampo) ...[
-            _CampoDeBusqueda(texto: widget.texto, accent: widget.accent),
-            const SizedBox(height: 14),
-          ],
-          // ── Cada fila, su propia franja fija ───────────────────────────
-          //
-          // Sin esto el mando la trata como un `Row` cualquiera, sin tope: al
-          // llegar al final de una fila —o al querer entrar a ella desde
-          // arriba o abajo— Flutter busca el foco más cercano en CUALQUIER
-          // parte de la pantalla, campo de búsqueda incluido. Reportado en
-          // vivo, con foto: «al navegar a la derecha sube arriba solo, al
-          // campo donde se escribe». Con la franja, cada fila se recorre
-          // como una unidad y el salto entre filas es siempre el de al lado,
-          // nunca uno de otra parte de la pantalla.
-          FranjaFijaTv(
-            child: Row(
-              children: [
-                _tecla(
-                  _numeros ? 'ABC' : '123',
-                  onTap: () => setState(() => _numeros = !_numeros),
-                  ancho: 74,
-                ),
-                const SizedBox(width: _hueco),
-                _teclaIcono(Icons.delete_outline_rounded, onTap: _borrarTodo),
-                const SizedBox(width: _hueco),
-                _teclaIcono(Icons.backspace_outlined, onTap: _borrarUno),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // ── El espacio, al final de la última fila ─────────────────
-          //
-          // Estuvo de dos maneras antes de esta. Primero como una barra ancha
-          // debajo del teclado: con un mando eso obliga a bajar todas las
-          // filas cada vez que hace falta un espacio y a volver a subir para
-          // la palabra siguiente. Después como una columna alta a la derecha,
-          // alcanzable desde cualquier fila con una sola pulsación — eso
-          // resolvía el recorrido pero se veía mal, reportado en vivo: una
-          // torre pegada al costado de las letras.
-          //
-          // Acá va donde queda lugar de verdad: la última fila tiene cinco
-          // teclas donde las otras tienen siete, así que el espacio ocupa
-          // justo el hueco que sobra. El teclado queda rectangular, el
-          // espacio queda ancho y fácil de acertar, y desde la fila de arriba
-          // se llega con una sola flecha abajo.
-          for (final (indice, fila) in filas.indexed) ...[
-            if (indice > 0) const SizedBox(height: _hueco),
+    return LayoutBuilder(builder: (context, caja) {
+      // ── Se achica para entrar, no se corta ni se desplaza ─────────────
+      //
+      // El teclado medía siempre lo mismo, sin mirar cuánto alto tenía de
+      // verdad disponible. En un televisor con menos alto útil —o con las
+      // últimas búsquedas ocupando lugar arriba— eso no entraba entero, y
+      // la única salida era desplazarse para llegar a las últimas filas.
+      // Pedido explícito: «adaptá el teclado que se vean todos los
+      // botones».
+      //
+      // Con un factor sacado de cuánto sobra o falta, las teclas y los
+      // huecos entre ellas se achican lo justo para que TODO el teclado
+      // entre de una — nunca por debajo de un 60%, que es donde una tecla
+      // deja de poder tocarse con comodidad.
+      // Lo que nos pasaron gana: es una medida de verdad, tomada afuera de
+      // cualquier scroll. Sin eso, lo que mida ESTE `LayoutBuilder` sirve
+      // igual para quien no cuelgue de un scroll.
+      final alturaDisponible = widget.alturaDisponible ?? caja.maxHeight;
+      final escala = alturaDisponible.isFinite
+          ? (alturaDisponible / _altoCompleto(filas)).clamp(0.6, 1.0)
+          : 1.0;
+      final anchoTecla = _anchoTecla * escala;
+      final hueco = _hueco * escala;
+      return SizedBox(
+        width: widget.ancho,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // El "campo": muestra lo escrito, no se edita. Con el mando no
+            // hay cursor que mover, así que un TextField de verdad solo
+            // agregaría el teclado del sistema encima del nuestro.
+            if (widget.mostrarCampo) ...[
+              _CampoDeBusqueda(texto: widget.texto, accent: widget.accent),
+              SizedBox(height: 14 * escala),
+            ],
+            // ── Cada fila, su propia franja fija ─────────────────────────
+            //
+            // Sin esto el mando la trata como un `Row` cualquiera, sin
+            // tope: al llegar al final de una fila —o al querer entrar a
+            // ella desde arriba o abajo— Flutter busca el foco más cercano
+            // en CUALQUIER parte de la pantalla, campo de búsqueda
+            // incluido. Reportado en vivo, con foto: «al navegar a la
+            // derecha sube arriba solo, al campo donde se escribe». Con la
+            // franja, cada fila se recorre como una unidad y el salto
+            // entre filas es siempre el de al lado, nunca uno de otra
+            // parte de la pantalla.
             FranjaFijaTv(
               child: Row(
                 children: [
-                  for (final letra in fila) ...[
-                    _tecla(
-                      letra,
-                      onTap: () => _escribir(letra),
-                      // La "A" arranca con el foco puesto — mismo criterio
-                      // que el "1" del teclado numérico del PIN: sin esto, al
-                      // abrir el buscador el mando no tenía dónde empezar.
-                      autofocus: indice == 0 && letra == fila.first,
-                    ),
-                    const SizedBox(width: _hueco),
-                  ],
-                  if (indice == filas.length - 1)
-                    _tecla(
-                      ' ',
-                      onTap: () => _escribir(' '),
-                      ancho: _anchoDelEspacio(fila.length),
-                      etiqueta: '␣',
-                    ),
+                  _tecla(
+                    _numeros ? 'ABC' : '123',
+                    onTap: () => setState(() => _numeros = !_numeros),
+                    ancho: 74 * escala,
+                    alto: anchoTecla,
+                    escala: escala,
+                  ),
+                  SizedBox(width: hueco),
+                  _teclaIcono(Icons.delete_outline_rounded,
+                      onTap: _borrarTodo, alto: anchoTecla, escala: escala),
+                  SizedBox(width: hueco),
+                  _teclaIcono(Icons.backspace_outlined,
+                      onTap: _borrarUno, alto: anchoTecla, escala: escala),
                 ],
               ),
             ),
+            SizedBox(height: 12 * escala),
+            // ── El espacio, al final de la última fila ─────────────────
+            //
+            // Estuvo de dos maneras antes de esta. Primero como una barra
+            // ancha debajo del teclado: con un mando eso obliga a bajar
+            // todas las filas cada vez que hace falta un espacio y a
+            // volver a subir para la palabra siguiente. Después como una
+            // columna alta a la derecha, alcanzable desde cualquier fila
+            // con una sola pulsación — eso resolvía el recorrido pero se
+            // veía mal, reportado en vivo: una torre pegada al costado de
+            // las letras.
+            //
+            // Acá va donde queda lugar de verdad: la última fila tiene
+            // cinco teclas donde las otras tienen siete, así que el
+            // espacio ocupa justo el hueco que sobra. El teclado queda
+            // rectangular, el espacio queda ancho y fácil de acertar, y
+            // desde la fila de arriba se llega con una sola flecha abajo.
+            for (final (indice, fila) in filas.indexed) ...[
+              if (indice > 0) SizedBox(height: hueco),
+              FranjaFijaTv(
+                child: Row(
+                  children: [
+                    for (final letra in fila) ...[
+                      _tecla(
+                        letra,
+                        onTap: () => _escribir(letra),
+                        ancho: anchoTecla,
+                        alto: anchoTecla,
+                        escala: escala,
+                        // La "A" arranca con el foco puesto — mismo
+                        // criterio que el "1" del teclado numérico del
+                        // PIN: sin esto, al abrir el buscador el mando no
+                        // tenía dónde empezar.
+                        autofocus: indice == 0 && letra == fila.first,
+                      ),
+                      SizedBox(width: hueco),
+                    ],
+                    if (indice == filas.length - 1)
+                      _tecla(
+                        ' ',
+                        onTap: () => _escribir(' '),
+                        ancho: _anchoDelEspacio(fila.length, escala),
+                        alto: anchoTecla,
+                        escala: escala,
+                        etiqueta: '␣',
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ],
-        ],
-      ),
-    );
+        ),
+      );
+    });
   }
 
   /// Cuánto le queda al espacio en la última fila.
@@ -183,10 +249,12 @@ class _TecladoTvState extends State<TecladoTv> {
   /// teclas, las de letras— y no la fila más larga de lo que se está
   /// mostrando. Si no, al pasar a los números (filas de cinco) el teclado
   /// entero se encogería y todo lo de al lado saltaría de sitio.
-  static double _anchoDelEspacio(int teclasEnLaFila) {
+  static double _anchoDelEspacio(int teclasEnLaFila, double escala) {
+    final anchoTecla = _anchoTecla * escala;
+    final hueco = _hueco * escala;
     final maximo =
         _filasLetras.map((f) => f.length).reduce((a, b) => a > b ? a : b);
-    final total = maximo * _anchoTecla + (maximo - 1) * _hueco;
+    final total = maximo * anchoTecla + (maximo - 1) * hueco;
     final usado = teclasEnLaFila * _anchoTecla + teclasEnLaFila * _hueco;
     // Nunca más angosto que una tecla y media: si algún día una última fila
     // llegara a llenarse, el espacio tiene que seguir siendo alcanzable.
@@ -199,6 +267,7 @@ class _TecladoTvState extends State<TecladoTv> {
     required VoidCallback onTap,
     double ancho = _anchoTecla,
     double alto = _anchoTecla,
+    double escala = 1.0,
     String? etiqueta,
     bool autofocus = false,
   }) {
@@ -218,7 +287,10 @@ class _TecladoTvState extends State<TecladoTv> {
         child: Text(
           etiqueta ?? letra,
           style: TextStyle(
-            fontSize: 17,
+            // Nunca por debajo de 12: una letra minúscula da igual, tiene
+            // que seguir leyéndose de lejos aunque el teclado se haya
+            // achicado para entrar.
+            fontSize: (17 * escala).clamp(12.0, 17.0),
             fontWeight: FontWeight.w600,
             color: HomeTheme.textPrimary,
           ),
@@ -227,20 +299,27 @@ class _TecladoTvState extends State<TecladoTv> {
     );
   }
 
-  Widget _teclaIcono(IconData icono, {required VoidCallback onTap}) {
+  Widget _teclaIcono(
+    IconData icono, {
+    required VoidCallback onTap,
+    double alto = 44,
+    double escala = 1.0,
+  }) {
     return FocusableCard(
       borderRadius: 8,
       accent: widget.accent,
       onTap: onTap,
       child: Container(
-        width: 52,
-        height: 44,
+        width: 52 * escala,
+        height: alto,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: HomeTheme.cardSurface,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icono, size: 20, color: HomeTheme.textPrimary),
+        child: Icon(icono,
+            size: (20 * escala).clamp(14.0, 20.0),
+            color: HomeTheme.textPrimary),
       ),
     );
   }
