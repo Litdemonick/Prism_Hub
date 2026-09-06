@@ -30,6 +30,7 @@ import 'package:prismhub/views/widgets/detail/detail_card_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_tracking_button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DetailPage extends StatefulWidget {
@@ -212,6 +213,7 @@ class _DetailPageState extends State<DetailPage> {
   /// Es la misma en Windows, Linux y Android: los tres llegan acá por el mismo
   /// camino y el problema es el mismo en los tres.
   Widget _pantallaDeError(BuildContext context) {
+    if (PlatformTv.esTelevisionSync) return _pantallaDeErrorTv(context);
     return ColoredBox(
       color: HomeTheme.bg,
       child: Stack(
@@ -265,6 +267,90 @@ class _DetailPageState extends State<DetailPage> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  /// La ficha no se pudo cargar, versión televisor.
+  ///
+  /// ── Por qué no alcanzaba con la de arriba ─────────────────────────────
+  ///
+  /// Es la misma pantalla que en Windows/Android, pero pensada para un
+  /// teléfono en la mano: el texto va en un `Column` sin ancho acotado y el
+  /// botón es un `PlatformFilledButton` común. En un televisor eso se
+  /// rompe de dos formas, las dos vistas en vivo con foto:
+  ///
+  ///  - El texto es más largo que el mensaje de un teléfono («No se pudo
+  ///    conectar. Revisá tu internet, o esperá...») y sin un ancho máximo se
+  ///    estira una sola línea hasta salirse de la pantalla por la derecha.
+  ///  - El botón nunca pide el foco (`autofocus`) y no es un `FocusableCard`:
+  ///    el mando llega a la pantalla sin nada seleccionado y no hay a dónde
+  ///    moverse ni qué apretar para reintentar.
+  ///
+  /// Se arma con el mismo lenguaje visual que ya usa el aviso de error del
+  /// reproductor en TV (tarjeta oscura, centrada, con su marco): el usuario
+  /// ya lo reconoce como "algo salió mal, así se soluciona".
+  Widget _pantallaDeErrorTv(BuildContext context) {
+    return ColoredBox(
+      color: HomeTheme.bg,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 28),
+          constraints: const BoxConstraints(maxWidth: 560),
+          decoration: BoxDecoration(
+            color: HomeTheme.oscuroSuperficie.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: HomeTheme.oscuroBorde),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Obx(() => Icon(
+                    c.errorEsDeConexion.value
+                        ? Icons.wifi_off_rounded
+                        : Icons.error_outline_rounded,
+                    size: 44,
+                    color: HomeTheme.textMuted,
+                  )),
+              const SizedBox(height: 16),
+              Obx(() => Text(
+                    c.error.value,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      height: 1.4,
+                    ),
+                  )),
+              const SizedBox(height: 22),
+              FocusableCard(
+                borderRadius: 10,
+                // El mando llega acá sin que nada de la pantalla haya tenido
+                // el foco antes — un error corta la carga antes de que
+                // exista ninguna tarjeta. Sin autofoco, no hay a dónde
+                // moverse: el botón existe pero es inalcanzable.
+                autofocus: true,
+                onTap: c.reintentar,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 26, vertical: 13),
+                  decoration: BoxDecoration(
+                    color: HomeTheme.accentPink,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'common.retry'.i18n,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
