@@ -1583,21 +1583,61 @@ class _EsperaPermisoDeInstalacion with WidgetsBindingObserver {
   // seguida (pasa en algunas transiciones de actividad).
   bool _procesando = false;
 
-  void empezar() => WidgetsBinding.instance.addObserver(this);
+  /// ── La red de seguridad: no depender SOLO de «volví a la app» ─────────
+  ///
+  /// Todo esto colgaba de un único evento: el `resumed` que Android manda al
+  /// volver de Ajustes. Y ese evento no siempre llega. En varias cajas de
+  /// Android TV la pantalla de permisos no se abre como una actividad
+  /// aparte —o el sistema no manda el ciclo completo— así que la app nunca
+  /// se enteró de que volvió: el reintento no corría nunca, y desde afuera
+  /// se veía como «me sacó de la actualización y tuve que darle otra vez a
+  /// Actualizar». Esa segunda pasada funcionaba porque para entonces el
+  /// permiso ya estaba dado y se comprueba de una.
+  ///
+  /// Con el reloj, el permiso se consulta igual cada tanto pase lo que pase
+  /// con el ciclo de vida. Si el evento llega, mejor: se atiende en el acto
+  /// y el reloj no llega a hacer nada. Si no llega, la instalación arranca
+  /// sola unos segundos después de conceder el permiso, que es justo lo que
+  /// el usuario espera.
+  Timer? _reloj;
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_terminado || _procesando || state != AppLifecycleState.resumed) {
-      return;
-    }
+  /// Cada cuánto se vuelve a preguntar. Un segundo y medio: lo bastante
+  /// seguido para que no se note la espera, y lo bastante espaciado para no
+  /// castigar a un aparato modesto con una consulta al canal nativo
+  /// permanentemente.
+  static const _cadaCuanto = Duration(milliseconds: 1500);
+
+  void empezar() {
+    WidgetsBinding.instance.addObserver(this);
+    _reloj = Timer.periodic(_cadaCuanto, (_) => _revisar());
+  }
+
+  void _revisar() {
+    if (_terminado || _procesando) return;
     _procesando = true;
     unawaited(_alVolver().then((listo) {
       _procesando = false;
-      if (listo) {
-        _terminado = true;
-        WidgetsBinding.instance.removeObserver(this);
-      }
+      if (listo) _parar();
+    }).catchError((Object e) {
+      // Que un fallo consultando el permiso no deje el reloj latiendo para
+      // siempre: se anota y se sigue intentando hasta el límite de tiempo,
+      // que es quien corta.
+      _procesando = false;
+      logger.info('Actualización: fallo al revisar el permiso: $e');
     }));
+  }
+
+  void _parar() {
+    _terminado = true;
+    _reloj?.cancel();
+    _reloj = null;
+    WidgetsBinding.instance.removeObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    _revisar();
   }
 }
 

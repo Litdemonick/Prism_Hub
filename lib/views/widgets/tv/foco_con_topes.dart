@@ -1013,13 +1013,15 @@ class FocoConTopes extends DirectionalFocusAction {
   ) {
     final resultado = <(ScrollPosition, double)>[];
     if (ctx == null || !ctx.mounted) return resultado;
+    // De solo lectura, igual que en `_scrollHorizontalDe`: ver el porqué
+    // allá.
     var contexto = ctx;
-    var scroll = Scrollable.maybeOf(contexto);
+    var scroll = contexto.findAncestorStateOfType<ScrollableState>();
     while (scroll != null) {
       final posicion = scroll.position;
       if (posicion.hasPixels) resultado.add((posicion, posicion.pixels));
       contexto = scroll.context;
-      scroll = Scrollable.maybeOf(contexto);
+      scroll = contexto.findAncestorStateOfType<ScrollableState>();
     }
     return resultado;
   }
@@ -1100,14 +1102,31 @@ class FocoConTopes extends DirectionalFocusAction {
 
   /// El scroll horizontal más cercano por encima de [ctx], o null si no hay
   /// ninguno (el widget no está dentro de ninguna fila que deslice).
+  /// ── Por qué NO se usa `Scrollable.maybeOf` ──────────────────────────
+  ///
+  /// Porque **suscribe**: por dentro hace `dependOnInheritedWidgetOfExactType`,
+  /// que registra al widget que pregunta como dependiente del scroll. Eso
+  /// tiene sentido en un `build`, pero acá se pregunta por CADA nodo
+  /// enfocable de la pantalla y en CADA pulsación del mando — o sea que se
+  /// iban sembrando dependencias por todo el árbol, y cada desplazamiento
+  /// las despertaba a todas.
+  ///
+  /// Reportado en vivo, en un televisor de 0,9 GB: «en el buscador va
+  /// fluido, pero en Inicio y en las zonas se laguea al ir a la derecha».
+  /// Cuadra: el buscador tiene una fila y pocas tarjetas; Inicio tiene el
+  /// destacado, las medianas y una fila por extensión, así que el mismo
+  /// recorrido cuesta muchísimo más.
+  ///
+  /// `findAncestorStateOfType` hace la misma búsqueda hacia arriba pero de
+  /// solo lectura: no suscribe a nadie.
   static ScrollPosition? _scrollHorizontalDe(BuildContext? ctx) {
     if (ctx == null || !ctx.mounted) return null;
     var contexto = ctx;
-    var scroll = Scrollable.maybeOf(contexto);
+    var scroll = contexto.findAncestorStateOfType<ScrollableState>();
     while (scroll != null) {
       if (scroll.position.axis == Axis.horizontal) return scroll.position;
       contexto = scroll.context;
-      scroll = Scrollable.maybeOf(contexto);
+      scroll = contexto.findAncestorStateOfType<ScrollableState>();
     }
     return null;
   }

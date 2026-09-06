@@ -391,7 +391,7 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
     RenderObject? objetivo = ctx.findRenderObject();
     if (objetivo == null) return;
     var contexto = ctx;
-    var scroll = Scrollable.maybeOf(contexto);
+    var scroll = contexto.findAncestorStateOfType<ScrollableState>();
     while (scroll != null) {
       final posicion = scroll.position;
       // Este scroll no es del eje en el que el usuario se movió: no se
@@ -407,7 +407,7 @@ class _RescateDeFocoState extends State<RescateDeFoco> {
       final siguiente = contexto.findRenderObject();
       if (siguiente == null) return;
       objetivo = siguiente;
-      scroll = Scrollable.maybeOf(contexto);
+      scroll = contexto.findAncestorStateOfType<ScrollableState>();
     }
   }
 
