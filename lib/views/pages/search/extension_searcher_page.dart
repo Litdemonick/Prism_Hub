@@ -745,6 +745,37 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     }
   }
 
+  /// Dispara `_onSearch` desde el teclado de TV, con una pausa — y sin
+  /// amontonar una búsqueda pesada encima de otra que todavía no terminó.
+  ///
+  /// ── Por qué no alcanzaba con la pausa sola ────────────────────────────
+  ///
+  /// `_onLoad` no es una búsqueda liviana: además de llamar a la extensión,
+  /// reintenta hasta CUATRO veces si una página vuelve toda repetida —cada
+  /// intento corre el motor de JavaScript de la extensión de nuevo—. Con
+  /// un mando, cada letra se elige a su ritmo (moverse hasta la tecla,
+  /// confirmar), más lento que escribir con el dedo, así que casi todas
+  /// las letras terminaban esperando su propia pausa Y disparando su
+  /// propia búsqueda pesada: la pausa sola no alcanzaba a agruparlas.
+  /// Reportado en vivo: «cada letra que pongo me bloquea hasta que carga y
+  /// luego me deja».
+  ///
+  /// Si la búsqueda anterior TODAVÍA está en curso (`_isLoading`), esta
+  /// no se dispara todavía: se reintenta un poco más tarde, en vez de
+  /// arrancar una segunda búsqueda pesada encima de la primera y duplicar
+  /// la espera.
+  void _dispararBusquedaTv(String texto) {
+    _tvBusquedaDemorada?.cancel();
+    _tvBusquedaDemorada = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      if (_isLoading) {
+        _dispararBusquedaTv(texto);
+        return;
+      }
+      _onSearch(texto);
+    });
+  }
+
   /// ¿Hay algún filtro cambiado respecto de como viene?
   ///
   /// Para el puntito del botón: metido dentro de la hoja, uno se olvida de que
@@ -1934,13 +1965,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                       text: texto,
                       selection: TextSelection.collapsed(offset: texto.length),
                     );
-                    _tvBusquedaDemorada?.cancel();
-                    _tvBusquedaDemorada = Timer(
-                      const Duration(milliseconds: 350),
-                      () {
-                        if (mounted) _onSearch(texto);
-                      },
-                    );
+                    _dispararBusquedaTv(texto);
                   },
                 ),
               ),
