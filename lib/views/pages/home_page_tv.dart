@@ -1557,18 +1557,48 @@ class _FilaDensaTvState extends State<_FilaDensaTv> {
     }
   }
 
+  /// La petición de más contenido, esperando a que el mando se quede quieto.
+  Timer? _esperaAntesDePaginar;
+
+  /// Cuánto se espera desde el último movimiento antes de pedir la página
+  /// siguiente.
+  ///
+  /// ── Por qué no se pide en el acto ─────────────────────────────────────
+  ///
+  /// Pedirle más a una extensión no es solo una petición de red: levanta su
+  /// motor de JavaScript y lo corre, y eso ocupa el MISMO hilo que dibuja.
+  /// Disparado mientras el usuario mantiene la flecha, el recorrido se
+  /// clava: hay que esperar a que llegue el contenido para poder seguir.
+  ///
+  /// Reportado en vivo, con la comparación que lo delató: «en el buscador
+  /// presioné las cards hacia la derecha y se sintió súper rápido y fluido,
+  /// sin petarse; en Inicio y las zonas se congela y hay que esperar que
+  /// cargue». El buscador no pagina al moverse; las zonas sí.
+  ///
+  /// Esperando a que el mando se detenga, recorrer la fila no dispara nada:
+  /// la página se pide cuando el usuario para, que es cuando puede
+  /// absorberse sin que se note. Lo que ya está cargado se sigue
+  /// recorriendo sin trabas.
+  static const _calmaAntesDePaginar = Duration(milliseconds: 450);
+
   void _alAcercarseAlFinal() {
     if (!_scroll.hasClients) return;
     final restante = _scroll.position.maxScrollExtent - _scroll.offset;
     // Dos tarjetas de margen: alcanza para que la página nueva llegue antes
     // de que el usuario toque el final, sin pedirla apenas empieza a mover.
-    if (restante < _anchoPosterTv(context) * 2) {
-      widget.alLlegarAlFinal!();
-    }
+    if (restante >= _anchoPosterTv(context) * 2) return;
+    // Cada movimiento reinicia la espera: mientras se siga apretando, no se
+    // pide nada.
+    _esperaAntesDePaginar?.cancel();
+    _esperaAntesDePaginar = Timer(_calmaAntesDePaginar, () {
+      if (!mounted) return;
+      widget.alLlegarAlFinal?.call();
+    });
   }
 
   @override
   void dispose() {
+    _esperaAntesDePaginar?.cancel();
     _scroll.removeListener(_alAcercarseAlFinal);
     _scroll.dispose();
     super.dispose();
