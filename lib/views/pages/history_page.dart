@@ -67,9 +67,33 @@ class HistoryPage extends StatefulWidget {
 }
 
 class _HistoryPageState extends State<HistoryPage> {
-  late final HomePageController _c = Get.find<HomePageController>(
-    tag: widget.zone ? HomePageController.zoneTag : null,
-  );
+  /// El controller de la zona a la que pertenece esta pantalla.
+  ///
+  /// ── Por qué se registra acá si hace falta ─────────────────────────────
+  ///
+  /// `Get.find` a secas da por hecho que alguien lo registró antes. En el
+  /// teléfono siempre pasa: Inicio y Biblioteca están abiertos debajo. En el
+  /// televisor no: Historial y Favoritos se abren DIRECTO desde la barra de
+  /// arriba, sin haber pasado por Biblioteca, y ahí `Get.find` reventaba con
+  /// «"HomePageController" not found» apenas se entraba — pantalla de error
+  /// en vez de la lista.
+  ///
+  /// Se usa el mismo patrón que ya traen Biblioteca y la Zona +18: reusar el
+  /// que exista y, si no hay, registrarlo. Así la pantalla se sostiene sola,
+  /// venga de donde venga, y sigue compartiendo instancia (y por lo tanto
+  /// caché y refrescos) con el resto cuando ya está creada.
+  late final HomePageController _c = _buscarOCrearElController();
+
+  HomePageController _buscarOCrearElController() {
+    final tag = widget.zone ? HomePageController.zoneTag : null;
+    if (Get.isRegistered<HomePageController>(tag: tag)) {
+      return Get.find<HomePageController>(tag: tag);
+    }
+    return Get.put(
+      HomePageController(nsfwOnly: widget.zone),
+      tag: tag,
+    );
+  }
   late final Color _accent =
       widget.zone ? HomeTheme.accentRed : HomeTheme.accentPink;
 
