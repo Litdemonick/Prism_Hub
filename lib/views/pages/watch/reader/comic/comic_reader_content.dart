@@ -1298,6 +1298,32 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                             url,
                             width: double.infinity,
                             fit: BoxFit.fitWidth,
+                            // ── Nunca decodificar más de lo que se puede ver ──
+                            //
+                            // Sin esto, una página de cómic —a menudo un scan
+                            // de 2000, 3000 píxeles de ancho o más— se
+                            // decodifica a su tamaño ORIGINAL así se vaya a
+                            // mostrar en una columna de 900 o menos: bitmaps
+                            // varias veces más pesados de lo que hace falta,
+                            // uno atrás de otro mientras se entra al capítulo
+                            // y mientras se scrollea. El resto del app (las
+                            // portadas de Inicio, Buscar, las Zonas) ya limita
+                            // esto con `cacheWidth`; acá, en la imagen más
+                            // pesada de toda la app, faltaba.
+                            //
+                            // `maxWidth` —el ancho real de la columna, no
+                            // `effectiveWidth`— porque no se achica con el
+                            // "alejar" (factorAlejado) ni con el pellizco:
+                            // sigue siendo el techo real de lo que se puede
+                            // llegar a ver. El ×4 es el mismo tope que
+                            // `InteractiveViewer.maxScale` le pone al
+                            // pellizco unas líneas más abajo — así una página
+                            // pellizcada al máximo sigue viéndose nítida.
+                            cacheWidth: (maxWidth *
+                                    MediaQuery.devicePixelRatioOf(context) *
+                                    4)
+                                .ceil()
+                                .clamp(1, 4096),
                             placeholder:
                                 _buildPlaceholder(context, effectiveWidth),
                             headers: _c.watchData.value?.headers,
@@ -2147,6 +2173,15 @@ class _PagedPageState extends State<_PagedPage> {
                       // ComicController.llenarPantalla.
                       fit:
                           widget.llenarPantalla ? BoxFit.cover : BoxFit.contain,
+                      // Mismo motivo que en la cascada (ver el comentario
+                      // largo ahí): sin tope, una página se decodifica a su
+                      // resolución original así la pantalla sea más chica.
+                      // ×5 porque acá el pellizco llega a `maxScale: 5`.
+                      cacheWidth: (constraints.maxWidth *
+                              MediaQuery.devicePixelRatioOf(context) *
+                              5)
+                          .ceil()
+                          .clamp(1, 4096),
                       placeholder: widget.placeholder,
                       fallback: const _PagedLoadError(),
                       headers: widget.headers,
@@ -2216,6 +2251,15 @@ class _PagedPageState extends State<_PagedPage> {
                               widget.url,
                               width: double.infinity,
                               fit: BoxFit.fitWidth,
+                              // Mismo motivo que en la cascada. `fullWidth`
+                              // y no `stripWidth`: no se achica con "alejar",
+                              // sigue siendo el techo real. ×5 por el mismo
+                              // `maxScale` del pellizco de acá abajo.
+                              cacheWidth: (fullWidth *
+                                      MediaQuery.devicePixelRatioOf(context) *
+                                      5)
+                                  .ceil()
+                                  .clamp(1, 4096),
                               placeholder: widget.placeholder,
                               fallback: const _PagedLoadError(),
                               headers: widget.headers,
