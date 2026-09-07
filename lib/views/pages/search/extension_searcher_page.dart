@@ -1529,7 +1529,28 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               child: GridView.builder(
                 // Ver el mismo caso arriba: en TV la tarjeta enfocada crece
                 // y necesita aire para no quedar cortada.
-                padding: EdgeInsets.all(relleno),
+                //
+                // ── Y abajo, más que a los costados ────────────────────
+                //
+                // El margen de pantalla (`HomeTheme.margenTv`) deja abajo a
+                // propósito casi nada: en una pantalla de FILAS, cada punto
+                // que se le da es un punto menos de la fila siguiente
+                // asomándose. Pero esto es una GRILLA que se desplaza: al
+                // llegar al final no queda nada abajo que asomar, y la
+                // última fila terminaba pegada contra el filo del
+                // televisor, con su marco de foco al ras. Reportado en vivo
+                // con foto: «abajo del todo no da aire y el borde rosado de
+                // la selección se corta».
+                //
+                // El relleno va DENTRO del desplazamiento, así que este aire
+                // solo aparece al final del recorrido: mientras se baja no
+                // roba nada de pantalla.
+                padding: EdgeInsets.fromLTRB(
+                  relleno,
+                  relleno,
+                  relleno,
+                  PlatformTv.esTelevisionSync ? relleno * 3 : relleno,
+                ),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: rejilla.columnas,
                   childAspectRatio: rejilla.proporcion,
@@ -2352,7 +2373,28 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
             thumbVisibility: true,
             child: SingleChildScrollView(
               controller: _scrollController,
-              padding: const EdgeInsets.only(right: 14),
+              // ── Aire por los CUATRO lados en televisor ────────────────
+              //
+              // Un `SingleChildScrollView` RECORTA contra sus bordes, y el
+              // marco de foco de cada opción se dibuja por FUERA de ella
+              // (tres puntos el marco, unos nueve más el resplandor). Acá
+              // solo había relleno a la derecha —para que la barra de
+              // desplazamiento no pisara el texto—, así que la opción de la
+              // primera columna quedaba con el marco mordido contra el
+              // borde izquierdo, y la de arriba y la de abajo contra los
+              // suyos. Reportado en vivo con foto, sobre el panel de
+              // filtros: «no hay aire y se corta lo que se está
+              // seleccionando, a los lados izquierdo y abajo».
+              //
+              // A la derecha se conservan los 14 de la barra, que ya
+              // alcanzan de sobra para el marco.
+              padding: EdgeInsets.only(
+                right: 14,
+                left: PlatformTv.esTelevisionSync ? HomeTheme.aireDeFocoTv : 0,
+                top: PlatformTv.esTelevisionSync ? HomeTheme.aireDeFocoTv : 0,
+                bottom:
+                    PlatformTv.esTelevisionSync ? HomeTheme.aireDeFocoTv : 0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
