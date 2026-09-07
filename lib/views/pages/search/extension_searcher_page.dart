@@ -639,14 +639,50 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       if (_nsfwBlocked) _nsfwBlocked = false;
       if (_data.isEmpty) _ultimoError = null;
       setState(() {});
+      // ── Que se pinte la letra ANTES de bloquear por la búsqueda ───────
+      //
+      // Lo que viene ahora corre el motor de JavaScript de la extensión de
+      // forma sincrónica: mientras dura, Flutter no puede pintar nada,
+      // aunque el `setState` de arriba ya haya dejado la letra recién
+      // tecleada lista para mostrarse. Sin ceder acá, esa letra podía
+      // quedar calculada pero sin llegar a pintarse hasta que la búsqueda
+      // terminara — se sentía como que el campo se congelaba en vez de
+      // mostrar lo que se acababa de escribir. Reportado en vivo: «que se
+      // vaya mostrando cada letra, no que se quede congelado».
+      //
+      // Con este cedido, el cuadro que ya tiene la letra nueva llega a
+      // pintarse antes de que arranque el trabajo pesado.
+      await SchedulerBinding.instance.endOfFrame;
+      if (!mounted || myGen != _requestGen) return;
       // Algunas fuentes (ej. jk) tienen páginas que se solapan con la
       // anterior — una sola página toda duplicada NO significa que no haya
       // más contenido, solo que esa página puntual no trajo nada nuevo.
       // Se insiste unas páginas más antes de recién ahí avisar "sin más datos".
+      //
+      // ── Salvo en TV, letra por letra ─────────────────────────────────
+      //
+      // Con el mando, cada letra dispara una búsqueda de página 1 nueva
+      // (ver `_dispararBusquedaTv`). Si el término todavía no encuentra
+      // nada —lo normal a mitad de escribir una palabra: "o", "on",
+      // "one"—, insistir CUATRO páginas de la nada corre el motor de
+      // JavaScript de la extensión cuatro veces seguidas, bloqueando el
+      // hilo el tiempo de las cuatro. Reportado en vivo: «si pongo o o o
+      // o, no me deja, tengo que esperar que cargue para la próxima o».
+      //
+      // Esto solo importa para paginar de verdad (bajar y pedir más), no
+      // para la primera página de una búsqueda nueva: ahí no hay nada
+      // "solapado" todavía —la lista se vació recién—, así que insistir
+      // no iba a encontrar nada distinto. Una sola pasada alcanza para
+      // saber si hay resultados o no, y deja escribir la letra siguiente
+      // sin esperar.
+      final soloUnIntento =
+          PlatformTv.esTelevisionSync && _page == 1 && _keyWord.isNotEmpty;
       final existingUrls = _data.map((e) => e.url).toSet();
       final fresh = <ExtensionListItem>[];
       var gotAnyThisCall = false;
-      for (var attempts = 0; attempts < 4 && fresh.isEmpty; attempts++) {
+      for (var attempts = 0;
+          attempts < (soloUnIntento ? 1 : 4) && fresh.isEmpty;
+          attempts++) {
         List<ExtensionListItem> data;
         try {
           data = _keyWord.isEmpty && !_hasActiveFilters
@@ -832,8 +868,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           child: Material(
             color: HomeTheme.cardSurface,
             child: SizedBox(
-              width: (MediaQuery.sizeOf(context).width * 0.42)
-                  .clamp(380.0, 620.0),
+              width:
+                  (MediaQuery.sizeOf(context).width * 0.42).clamp(380.0, 620.0),
               height: double.infinity,
               child: SafeArea(
                 child: Padding(
@@ -1097,8 +1133,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.no_adult_content,
-                color: HomeTheme.accentPink, size: 40),
+            Icon(Icons.no_adult_content, color: HomeTheme.accentPink, size: 40),
             const SizedBox(height: 12),
             Text(
               'extension-searcher.nsfw-blocked'.i18n,
@@ -1230,7 +1265,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.cloud_off_rounded, color: HomeTheme.textMuted, size: 40),
+              Icon(Icons.cloud_off_rounded,
+                  color: HomeTheme.textMuted, size: 40),
               const SizedBox(height: 12),
               Text(
                 friendlyError(_ultimoError),
@@ -1426,10 +1462,9 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                                         PlatformTv.esTelevisionSync
                                             ? HomeTheme.aireDeFocoTv * 2
                                             : 16,
-                                    mainAxisSpacing:
-                                        PlatformTv.esTelevisionSync
-                                            ? HomeTheme.aireDeFocoTv * 2
-                                            : 16,
+                                    mainAxisSpacing: PlatformTv.esTelevisionSync
+                                        ? HomeTheme.aireDeFocoTv * 2
+                                        : 16,
                                   ),
                                   itemCount: _data.length,
                                   itemBuilder: (context, index) {
@@ -1472,11 +1507,9 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     // marco de la enfocada llegaba pisando a su vecina y se leía como si
     // estuviera cortado. Reportado en vivo: «aire en el borde rosado de las
     // cards». Fuera de televisor no cambia nada: ahí no hay marco.
-    final separacion = PlatformTv.esTelevisionSync
-        ? HomeTheme.aireDeFocoTv * 2
-        : 12.0;
-    final relleno =
-        PlatformTv.esTelevisionSync ? HomeTheme.aireDeFocoTv : 8.0;
+    final separacion =
+        PlatformTv.esTelevisionSync ? HomeTheme.aireDeFocoTv * 2 : 12.0;
+    final relleno = PlatformTv.esTelevisionSync ? HomeTheme.aireDeFocoTv : 8.0;
     return LayoutBuilder(
       builder: (ctx, constraints) {
         // El aviso llega cuando se descubre qué forma tienen las portadas de
@@ -1877,7 +1910,9 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         FlutterI18n.translate(
           context,
           disabled ? 'common.extension-disabled' : 'common.extension-missing',
-          translationParams: {'package': ExtensionUtils.nombreDe(widget.package)},
+          translationParams: {
+            'package': ExtensionUtils.nombreDe(widget.package)
+          },
         ),
       );
       return PlatformWidget(
@@ -1907,72 +1942,88 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           children: [
             const Positioned.fill(child: FondoTv()),
             SafeArea(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 0, 16),
-                child: TecladoTv(
-                  // Sin cartel propio: el texto ya se ve en la barra de
-                  // arriba de esta pantalla.
-                  mostrarCampo: false,
-                  // La flecha de volver, al lado de "123" — ver el
-                  // porqué largo en `TecladoTv.accionIzquierda`.
-                  accionIzquierda: FocusableCard(
-                    borderRadius: 8,
-                    onTap: () => Get.back<void>(),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: HomeTheme.cardSurface,
-                        borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                // ── El margen de overscan, acá también ────────────────────
+                //
+                // `SafeArea` sola solo cubre lo que el SISTEMA OPERATIVO
+                // recorta (una barra de estado, un notch) — no el overscan
+                // de un televisor, que es harina de otro costal y lo cubre
+                // `HomeTheme.margenTv` en el resto de las pantallas de TV
+                // (ver `PantallaTv`). Esta pantalla se armó su Scaffold a
+                // mano y se quedó afuera de ese margen: la última fila de la
+                // grilla terminaba pegada contra el borde de VERDAD de la
+                // pantalla, con su marco de foco mordido y sin ningún aire.
+                // Reportado en vivo con foto: «el borde rosado se corta
+                // porque ahí está el borde ya del televisor».
+                padding: HomeTheme.margenTv(context),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 0, 16),
+                      child: TecladoTv(
+                        // Sin cartel propio: el texto ya se ve en la barra de
+                        // arriba de esta pantalla.
+                        mostrarCampo: false,
+                        // La flecha de volver, al lado de "123" — ver el
+                        // porqué largo en `TecladoTv.accionIzquierda`.
+                        accionIzquierda: FocusableCard(
+                          borderRadius: 8,
+                          onTap: () => Get.back<void>(),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: HomeTheme.cardSurface,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.arrow_back_rounded,
+                                color: HomeTheme.textPrimary),
+                          ),
+                        ),
+                        texto: _keyWord,
+                        onCambio: (texto) {
+                          _typedText = '';
+                          _ghostBase = null;
+                          // ── Lo escrito, ya; la búsqueda, con una pausa ──────
+                          //
+                          // `_onSearch` no solo guarda el texto: dispara el
+                          // refresco de la extensión, que corre su motor de
+                          // JavaScript. Llamándolo en cada tecla, mantener
+                          // apretada una letra (o escribir rápido) encolaba un
+                          // refresco atrás de otro y el mando se sentía
+                          // trabado. Reportado en vivo: «cuando quiero spamear
+                          // letras no me deja, se actualiza todo el rato».
+                          //
+                          // El campo de texto se actualiza YA —lo escrito se ve
+                          // al instante, sin esperar nada— y la búsqueda de
+                          // verdad recién se dispara cuando el mando se queda
+                          // quieto un momento.
+                          //
+                          // Con `.text =` a secas el cursor queda en -1 ("sin
+                          // selección"): sin un cursor de verdad, el campo no
+                          // tiene ningún motivo para desplazarse y se queda
+                          // mostrando el PRINCIPIO de lo escrito, no el final —
+                          // que es justo lo que se está tecleando. Reportado en
+                          // vivo con foto: «no se ve, se corta y no sigue lo que
+                          // estoy escribiendo». Con el cursor puesto al final a
+                          // mano, el campo se desplaza solo para mantenerlo a
+                          // la vista, como cualquier campo de texto de verdad.
+                          _textEditingController.value = TextEditingValue(
+                            text: texto,
+                            selection:
+                                TextSelection.collapsed(offset: texto.length),
+                          );
+                          _dispararBusquedaTv(texto);
+                        },
                       ),
-                      child: Icon(Icons.arrow_back_rounded,
-                          color: HomeTheme.textPrimary),
                     ),
-                  ),
-                  texto: _keyWord,
-                  onCambio: (texto) {
-                    _typedText = '';
-                    _ghostBase = null;
-                    // ── Lo escrito, ya; la búsqueda, con una pausa ──────
-                    //
-                    // `_onSearch` no solo guarda el texto: dispara el
-                    // refresco de la extensión, que corre su motor de
-                    // JavaScript. Llamándolo en cada tecla, mantener
-                    // apretada una letra (o escribir rápido) encolaba un
-                    // refresco atrás de otro y el mando se sentía
-                    // trabado. Reportado en vivo: «cuando quiero spamear
-                    // letras no me deja, se actualiza todo el rato».
-                    //
-                    // El campo de texto se actualiza YA —lo escrito se ve
-                    // al instante, sin esperar nada— y la búsqueda de
-                    // verdad recién se dispara cuando el mando se queda
-                    // quieto un momento.
-                    //
-                    // Con `.text =` a secas el cursor queda en -1 ("sin
-                    // selección"): sin un cursor de verdad, el campo no
-                    // tiene ningún motivo para desplazarse y se queda
-                    // mostrando el PRINCIPIO de lo escrito, no el final —
-                    // que es justo lo que se está tecleando. Reportado en
-                    // vivo con foto: «no se ve, se corta y no sigue lo que
-                    // estoy escribiendo». Con el cursor puesto al final a
-                    // mano, el campo se desplaza solo para mantenerlo a
-                    // la vista, como cualquier campo de texto de verdad.
-                    _textEditingController.value = TextEditingValue(
-                      text: texto,
-                      selection: TextSelection.collapsed(offset: texto.length),
-                    );
-                    _dispararBusquedaTv(texto);
-                  },
+                    const SizedBox(width: 16),
+                    Expanded(child: _buildAndroid(context)),
+                  ],
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(child: _buildAndroid(context)),
-            ],
-          ),
             ),
           ],
         ),
@@ -2092,6 +2143,7 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
         if (!_esOpcionDeAdultos(o.value)) o.key: o.value,
     };
   }
+
   late Map<String, List<String>> _selectedFilters = widget.selectedFilters;
   final _scrollController = ScrollController();
 
@@ -2275,20 +2327,20 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                   ),
                 )
               : GestureDetector(
-            onTap: _onReset,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: Text(
-                'search.reset-filters'.i18n,
-                style: TextStyle(
-                  color: HomeTheme.textMuted,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  decoration: TextDecoration.underline,
+                  onTap: _onReset,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Text(
+                      'search.reset-filters'.i18n,
+                      style: TextStyle(
+                        color: HomeTheme.textMuted,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
         ),
         const SizedBox(height: 8),
         Flexible(
