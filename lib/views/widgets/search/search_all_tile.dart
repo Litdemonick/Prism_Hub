@@ -17,18 +17,36 @@ import 'package:prismhub/views/widgets/tv/recorte_de_fila.dart';
 ///
 /// Corta a los costados y deja pasar arriba y abajo, que es por donde sale
 /// el marco de selección. Ver `RecorteDeFila`.
-/// Y el mismo desvanecido de los bordes que el resto de las filas: la
-/// tarjeta del costado se ve atenuada en vez de cortarse en seco, que es lo
-/// que dice «esto sigue para el lado». Solo se atenúa el lado por donde de
-/// verdad queda fila (ver `DesvanecidoDeFila`).
-Widget _envolverParaTv(bool tv, ScrollController scroll, Widget fila) {
+///
+/// ── Acá NO va el desvanecido de bordes ──────────────────────────────────
+///
+/// Las filas de Inicio y de las zonas se difuminan en los costados
+/// (`DesvanecidoDeFila`) para que la tarjeta del borde se lea como que
+/// «sigue para el lado» en vez de cortarse en seco. Acá se hacía lo mismo,
+/// y en el buscador estaba mal por dos motivos, los dos medidos:
+///
+/// · **Se ve como una mancha, no como un borde.** Esta fila no llega al
+///   filo del televisor: a su izquierda está el teclado en pantalla. Un
+///   degradado ahí no dice «esto sigue», dice «esta tarjeta tiene una
+///   sombra negra encima» — reportado en vivo una y otra vez, con fotos,
+///   sobre esta pantalla en particular. Se intentó ajustarlo muchas veces
+///   (más angosto, con paradas intermedias, solo del lado donde de verdad
+///   queda fila) y en esta pantalla nunca terminó de verse bien.
+///
+/// · **Cuesta caro de pintar.** `DesvanecidoDeFila` es un `ShaderMask` con
+///   `BlendMode.dstIn`, y eso obliga a un búfer aparte en la GPU por CADA
+///   fila y en CADA cuadro. Con varias extensiones a la vez son varios
+///   búferes por cuadro. En el registro del televisor eso salía como
+///   `FRAME LENTO: build=0ms raster=53..88ms` en /SearchPage — cuadros sin
+///   nada que reconstruir, con el costo entero en el pintado.
+///
+/// El recorte sí se queda: es lo que evita que una tarjeta que sale de la
+/// fila se dibuje encima del teclado, y es barato (no arma ningún búfer).
+Widget _envolverParaTv(bool tv, Widget fila) {
   if (!tv) return fila;
-  return DesvanecidoDeFila(
-    scroll: scroll,
-    child: ClipRect(
-      clipper: const RecorteDeFila(aireLateral: 24),
-      child: fila,
-    ),
+  return ClipRect(
+    clipper: const RecorteDeFila(aireLateral: 24),
+    child: fila,
   );
 }
 
@@ -328,7 +346,6 @@ class _SearchAllTileState extends State<SearchAllTile> {
           // televisor todo queda como estaba.
           child: _envolverParaTv(
             tv,
-            controller,
             ListView.builder(
             scrollDirection: Axis.horizontal,
             clipBehavior: tv ? Clip.none : Clip.hardEdge,
