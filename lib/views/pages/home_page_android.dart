@@ -2085,6 +2085,23 @@ class _ConPanelDeHover extends StatefulWidget {
 class _ConPanelDeHoverState extends State<_ConPanelDeHover> {
   bool _encima = false;
 
+  // ── En TV, el foco ES el hover ────────────────────────────────────────
+  //
+  // Este widget nació para el mouse: `activo` solo decía "esta tarjeta
+  // TIENE panel", y `_encima` (que solo cambia con `MouseRegion.onEnter/
+  // onExit`) decidía si se veía. Para el destacado de TV se empezó a
+  // pasar `activo: _enfocado` con la idea de que enfocar con el mando
+  // mostrara el panel — pero un mando nunca dispara `onEnter`, así que
+  // `_encima` se quedaba en `false` para siempre y el panel no aparecía.
+  // Reportado: «en las cards grandes del inicio, al seleccionar no sale
+  // el nombre de la extensión como en las otras» — llegó a arreglarse la
+  // insignia aparte, pero la descripción y "Ver detalles" del panel
+  // seguían sin mostrarse nunca en un televisor.
+  //
+  // En TV no hay mouse que hacer de intermediario: `activo` (que ya es
+  // "está enfocada") alcanza para decidir solo.
+  bool get _visible => PlatformTv.esTelevisionSync ? widget.activo : _encima;
+
   @override
   Widget build(BuildContext context) {
     if (!widget.activo) return widget.child;
@@ -2096,12 +2113,12 @@ class _ConPanelDeHoverState extends State<_ConPanelDeHover> {
         children: [
           widget.child,
           AnimatedOpacity(
-            opacity: _encima ? 1 : 0,
+            opacity: _visible ? 1 : 0,
             duration: const Duration(milliseconds: 160),
             // Sin esto, el panel invisible se sigue comiendo los toques de
             // la tarjeta de atrás — mismo criterio que TarjetaDeCatalogo.
             child: IgnorePointer(
-              ignoring: !_encima,
+              ignoring: !_visible,
               // El panel queda ENCIMA de _TarjetaGrande en el Stack, así
               // que mientras está visible se lleva el toque él —el fondo
               // con degradado de PanelInfoHover no es transparente para el
@@ -2117,12 +2134,28 @@ class _ConPanelDeHoverState extends State<_ConPanelDeHover> {
                 onTap: widget.onTap,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: PanelInfoHover(
-                    titulo: widget.titulo,
-                    encabezado: widget.encabezado,
-                    fecha: widget.fecha,
-                    onTap: widget.onTap,
-                  ),
+                  // En TV, pegado abajo y del tamaño justo — igual que
+                  // TarjetaDeCatalogo: cubrir la tarjeta entera esconde la
+                  // portada que se está mirando, y sin un tope de alto
+                  // ("compacto") el texto puede pasarse del alto del
+                  // destacado y Flutter lo avisa con su cartel de overflow.
+                  child: PlatformTv.esTelevisionSync
+                      ? Align(
+                          alignment: Alignment.bottomCenter,
+                          child: PanelInfoHover(
+                            titulo: widget.titulo,
+                            encabezado: widget.encabezado,
+                            fecha: widget.fecha,
+                            onTap: widget.onTap,
+                            compacto: true,
+                          ),
+                        )
+                      : PanelInfoHover(
+                          titulo: widget.titulo,
+                          encabezado: widget.encabezado,
+                          fecha: widget.fecha,
+                          onTap: widget.onTap,
+                        ),
                 ),
               ),
             ),

@@ -1305,33 +1305,45 @@ class _HeroSecundarioTv extends StatelessWidget {
                       ),
                     ),
                   ),
-                Align(
-                  alignment: Alignment.bottomLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            height: 1.2,
-                            fontWeight: FontWeight.w800,
-                            color: HomeTheme.sobrePortada,
-                            shadows: [
-                              Shadow(blurRadius: 3, color: Color(0xE6000000)),
-                              Shadow(blurRadius: 12, color: Color(0x99000000)),
-                            ],
-                          ),
+                // ── Sin foco: solo el título; con foco: el panel completo ──
+                //
+                // Este destacado se quedaba con el título nomás, aunque el
+                // resto de las tarjetas del Inicio (el carrusel principal,
+                // los pósters de las filas de abajo) ya muestran fecha y
+                // "Ver detalles" al enfocarse. Pedido explícito: el mismo
+                // panel acá también.
+                if (!tieneFoco)
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                      child: Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          height: 1.2,
+                          fontWeight: FontWeight.w800,
+                          color: HomeTheme.sobrePortada,
+                          shadows: [
+                            Shadow(blurRadius: 3, color: Color(0xE6000000)),
+                            Shadow(blurRadius: 12, color: Color(0x99000000)),
+                          ],
                         ),
-                      ],
+                      ),
+                    ),
+                  )
+                else
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: PanelInfoHover(
+                      titulo: item.title,
+                      fecha: item.update,
+                      onTap: () => _abrir(context, item, package),
+                      compacto: true,
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -1367,7 +1379,7 @@ class _MedianaTv extends StatelessWidget {
       return FocusableCard(
         borderRadius: _radioGrandeTv,
         onTap: () => _abrir(context, item, package),
-        child: ClipRRect(
+        builder: (tieneFoco) => ClipRRect(
           borderRadius: BorderRadius.circular(_radioGrandeTv),
           child: Stack(
             fit: StackFit.expand,
@@ -1409,25 +1421,70 @@ class _MedianaTv extends StatelessWidget {
                   ),
                 ),
               ),
-              Align(
-                alignment: Alignment.bottomLeft,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                  child: Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: HomeTheme.sobrePortada,
-                      shadows: [
-                        Shadow(blurRadius: 4, color: Color(0xE6000000)),
-                      ],
+              // De qué extensión viene, igual que el resto de las tarjetas
+              // de TV — esta era la única fila del Inicio sin la insignia.
+              if (tieneFoco)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: HomeTheme.accentPink,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      child: Text(
+                        ExtensionUtils.runtimes[package]?.extension.name ??
+                            '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              // ── Sin foco: solo el título; con foco: el panel completo ──
+              //
+              // Mismo criterio que el destacado de al lado (ver
+              // `_HeroSecundarioTv`) y que el resto del Inicio: pedido
+              // explícito de aplicar el mismo panel de "Ver detalles" acá.
+              if (!tieneFoco)
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                    child: Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: HomeTheme.sobrePortada,
+                        shadows: [
+                          Shadow(blurRadius: 4, color: Color(0xE6000000)),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: PanelInfoHover(
+                    titulo: item.title,
+                    fecha: item.update,
+                    onTap: () => _abrir(context, item, package),
+                    compacto: true,
+                  ),
+                ),
             ],
           ),
         ),
