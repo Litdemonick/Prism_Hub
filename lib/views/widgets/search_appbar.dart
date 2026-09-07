@@ -139,31 +139,45 @@ class _SearchAppBarState extends State<SearchAppBar> {
                 )
               : widget.leading),
       title: _showSearch
-          ? PopScope(
-              canPop: false,
-              onPopInvokedWithResult: (_, __) async {
-                if (_showSearch) {
-                  setState(() {
-                    widget.textEditingController.clear();
-                    widget.onSubmitted?.call('');
-                    _showSearch = false;
-                  });
-                  return;
-                }
-              },
-              child: PlatformTv.esTelevisionSync
-                  ? _campoDeTv()
-                  : TextField(
-                      controller: widget.textEditingController,
-                      decoration: InputDecoration(
-                        hintText: widget.hintText ?? widget.title,
-                        border: InputBorder.none,
-                      ),
-                      autofocus: true,
-                      onChanged: widget.onChanged,
-                      onSubmitted: widget.onSubmitted,
+          // ── En TV, el botón de atrás del mando VUELVE, no borra ─────
+          //
+          // Este `PopScope` existe para el teléfono: ahí la lupa abre la
+          // búsqueda encima del título, y el primer "atrás" tiene que
+          // cerrar ESO antes de salir de la pantalla — dos pasos
+          // distintos. En TV `_showSearch` es SIEMPRE true (el campo
+          // nunca se cierra, ver más arriba), así que con este mismo
+          // `PopScope` puesto, la tecla de atrás del control remoto
+          // JAMÁS llegaba a salir de la pantalla: solo borraba el campo,
+          // una y otra vez. Reportado en vivo con foto: «cuando quiero
+          // ir para atrás, borra el campo de texto en vez de salir de
+          // esta zona». En TV ya hay una flecha propia para salir (junto
+          // al botón "123" del teclado); la tecla de atrás del mando
+          // tiene que hacer lo que su nombre promete.
+          ? (PlatformTv.esTelevisionSync
+              ? _campoDeTv()
+              : PopScope(
+                  canPop: false,
+                  onPopInvokedWithResult: (_, __) async {
+                    if (_showSearch) {
+                      setState(() {
+                        widget.textEditingController.clear();
+                        widget.onSubmitted?.call('');
+                        _showSearch = false;
+                      });
+                      return;
+                    }
+                  },
+                  child: TextField(
+                    controller: widget.textEditingController,
+                    decoration: InputDecoration(
+                      hintText: widget.hintText ?? widget.title,
+                      border: InputBorder.none,
                     ),
-            )
+                    autofocus: true,
+                    onChanged: widget.onChanged,
+                    onSubmitted: widget.onSubmitted,
+                  ),
+                ))
           : Text(
               widget.title,
               maxLines: 1,
@@ -223,45 +237,56 @@ class _SearchAppBarState extends State<SearchAppBar> {
   /// Fuera de TV no cambia nada: ahí el campo ya se distingue solo, con
   /// el cursor parpadeando apenas se lo toca.
   Widget _campoDeTv() {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: HomeTheme.cardSurface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: HomeTheme.accentPink.withValues(alpha: 0.75),
-          width: 1.6,
+    return SizedBox(
+      // ── Ancho de verdad, no el que le pida el texto ─────────────────
+      //
+      // Sin esto, la caja se achicaba hasta lo que ocupara el texto
+      // escrito —o el de la sugerencia—, así que crecía y se achicaba
+      // con cada letra en vez de ocupar el lugar entero de la barra.
+      // Pedido explícito, con foto: «hacé que llegue hasta un poquito
+      // antes del botón del filtro».
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: HomeTheme.accentPink.withValues(alpha: 0.75),
+            width: 1.6,
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        // `ListenableBuilder` porque el texto lo cambia OTRO widget,
-        // mutando `widget.textEditingController` desde afuera — sin
-        // escucharlo acá, este `Text` se quedaría mostrando lo que había
-        // cuando se construyó, aunque el scroll sí se moviera.
-        child: ListenableBuilder(
-          listenable: widget.textEditingController,
-          builder: (context, _) {
-            final texto = widget.textEditingController.text;
-            if (texto.isEmpty) {
-              return Text(
-                widget.hintText ?? widget.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 17, color: HomeTheme.textPlaceholder),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          // `ListenableBuilder` porque el texto lo cambia OTRO widget,
+          // mutando `widget.textEditingController` desde afuera — sin
+          // escucharlo acá, este `Text` se quedaría mostrando lo que había
+          // cuando se construyó, aunque el scroll sí se moviera.
+          child: ListenableBuilder(
+            listenable: widget.textEditingController,
+            builder: (context, _) {
+              final texto = widget.textEditingController.text;
+              if (texto.isEmpty) {
+                return Text(
+                  widget.hintText ?? widget.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      TextStyle(fontSize: 17, color: HomeTheme.textPlaceholder),
+                );
+              }
+              return SingleChildScrollView(
+                controller: _scrollTv,
+                scrollDirection: Axis.horizontal,
+                physics: const NeverScrollableScrollPhysics(),
+                child: Text(
+                  texto,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(fontSize: 17),
+                ),
               );
-            }
-            return SingleChildScrollView(
-              controller: _scrollTv,
-              scrollDirection: Axis.horizontal,
-              physics: const NeverScrollableScrollPhysics(),
-              child: Text(
-                texto,
-                maxLines: 1,
-                softWrap: false,
-                style: const TextStyle(fontSize: 17),
-              ),
-            );
-          },
+            },
+          ),
         ),
       ),
     );
