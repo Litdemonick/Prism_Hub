@@ -149,6 +149,27 @@ class _DesvanecidoDeFilaState extends State<DesvanecidoDeFila> {
       viejo.scroll?.removeListener(_alDesplazarse);
       widget.scroll?.addListener(_alDesplazarse);
     }
+    // ── Y también cuando cambia el CONTENIDO, no solo cuando se mueve ──
+    //
+    // `_alDesplazarse` solo lo dispara el propio ScrollController cuando
+    // la POSICIÓN cambia — pero una fila de resultados de búsqueda puede
+    // cambiar de CONTENIDO (una letra nueva trae una lista distinta, más
+    // corta o más larga) mientras el scroll se queda clavado en el mismo
+    // punto, típicamente el 0. Con menos ítems que antes, `_quedaAdelante`
+    // seguía en `true` de la búsqueda anterior aunque la nueva lista
+    // completa ya entrara sin necesidad de desplazarse; con más ítems,
+    // podía quedar en `false` aunque ahora sí sobrara para el lado
+    // contrario. En los dos casos el difuminado quedaba mostrando algo
+    // que no correspondía a lo que hay ahora. Reportado en vivo con foto,
+    // en el buscador: «sigue estando esa franja negra en la card, cuando
+    // algo se escribe en el search».
+    //
+    // El mismo remedio que ya usa `initState` para la primera medición:
+    // esperar al cuadro siguiente (para que el nuevo contenido ya esté
+    // dispuesto, con su `maxScrollExtent` real) y volver a medir.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _alDesplazarse();
+    });
   }
 
   @override
