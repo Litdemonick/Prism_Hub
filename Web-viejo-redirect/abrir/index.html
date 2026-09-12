@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Abrir en PrismHub</title>
+<!--
+  Una versión VIEJA de la app (antes de compartir.dart apuntar al repo
+  nuevo) pudo haber generado un enlace con esta dirección — ese enlace ya
+  está compartido, en un chat de alguien, y no se puede editar. Sin este
+  redirect, abrirlo hoy daría una página muerta.
+
+  Con meta-refresh no alcanza acá: hace falta llevarse la query
+  (?package=...&url=...) tal cual venía, y eso solo se puede armar con
+  JavaScript leyendo location.search.
+-->
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center;
+    justify-content: center; background: #0d0d12; color: #ececf1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 24px; box-sizing: border-box; text-align: center;
+  }
+  a { color: #e0409a; }
+</style>
+</head>
+<body>
+  <p id="detalle">Redirigiendo…</p>
+  <script>
+    var destino = 'https://litdemonick.github.io/PrismHub/abrir' + location.search;
+    document.getElementById('detalle').innerHTML =
+      'Si no saltás solo, <a href="' + destino + '">entrá acá</a>.';
+    location.replace(destino);
+  </script>
+</body>
+</html>

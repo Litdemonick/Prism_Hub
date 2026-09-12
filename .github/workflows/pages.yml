@@ -1,0 +1,59 @@
+name: Deploy to GitHub Pages
+
+# ── Por qué esto ya no compila nada ────────────────────────────────────────
+#
+# El sitio de verdad se mudó a Litdemonick/PrismHub (repo público sin
+# código, ver el comentario grande en release.yml). Este repositorio quedó
+# privado con el código, pero su GitHub Pages seguía sirviendo la web
+# VIEJA — que decía "código abierto, AGPL-3.0" y ya dejó de ser cierto.
+#
+# En vez de mantener dos copias de la misma web sincronizadas, esto ahora
+# publica un simple redirect: quien entre a un link viejo salta solo a
+# litdemonick.github.io/PrismHub/. Incluye /abrir/, la página puente para
+# compartir contenido — una versión vieja de la app pudo haber generado un
+# enlace con esta dirección antes de que se actualizara, y ese enlace ya
+# está compartido en algún chat sin forma de editarlo.
+#
+# Nada de esto toca cómo la app busca actualizaciones (eso usa la API de
+# GitHub Releases, no esta web) ni las releases que ya viven acá — ver
+# application.dart y release.yml.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Web-viejo-redirect/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Web-viejo-redirect
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
